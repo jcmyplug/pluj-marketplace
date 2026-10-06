@@ -1,2 +1,2 @@
-# plug-marketplace
-PLUG Event Marketplace
+# pluj-marketplace
+PLUJ Event Marketplace

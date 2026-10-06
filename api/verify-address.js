@@ -1,6 +1,6 @@
 import { rateLimit } from "./_rate-limit.js";
 
-/* PLUG - address verification.  Repo location: api/verify-address.js
+/* PLUJ - address verification.  Repo location: api/verify-address.js
 
    WHY THIS EXISTS
    The autocomplete used Photon and Nominatim, both built on OpenStreetMap. OSM

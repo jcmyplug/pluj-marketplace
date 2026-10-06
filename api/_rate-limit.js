@@ -1,4 +1,4 @@
-/* PLUG — shared rate limiter for the API routes.  Repo location: api/_rate-limit.js
+/* PLUJ — shared rate limiter for the API routes.  Repo location: api/_rate-limit.js
 
    WHY THE COUNTER IS IN POSTGRES AND NOT IN MEMORY
    Vercel runs these handlers as serverless functions: many instances, each

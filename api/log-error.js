@@ -1,6 +1,6 @@
 import { rateLimit } from "./_rate-limit.js";
 
-/* PLUG - error reporting and alerting.  Repo location: api/log-error.js
+/* PLUJ - error reporting and alerting.  Repo location: api/log-error.js
 
    Checklist items 32 and 33. Until now the only way you learned the site was
    broken was a customer telling you, and your transactional mail has no
@@ -37,8 +37,8 @@ import { rateLimit } from "./_rate-limit.js";
    Env vars - all already set, nothing to add:
      RESEND_API_KEY, REACT_APP_SUPABASE_URL, REACT_APP_SUPABASE_ANON_KEY
    Optional:
-     ALERT_EMAIL   where alerts go. Defaults to info@my-plug.com.
-     RESEND_FROM   defaults to noreply@my-plug.com.
+     ALERT_EMAIL   where alerts go. Defaults to info@pluj.us.
+     RESEND_FROM   defaults to noreply@pluj.us.
 
    Written without regular expressions or escape sequences on purpose, so the
    file survives being moved by tools that treat backslashes as escapes. */
@@ -155,19 +155,19 @@ export default async function handler(req, res) {
   }
 
   /* Fixed recipient. Never from the request body. */
-  const to   = process.env.ALERT_EMAIL || "info@my-plug.com";
-  const from = process.env.RESEND_FROM || "PLUG Marketplace <noreply@my-plug.com>";
+  const to   = process.env.ALERT_EMAIL || "info@pluj.us";
+  const from = process.env.RESEND_FROM || "PLUJ Marketplace <noreply@pluj.us>";
   const occurrences = Number(decision.occurrences || 1);
   const isNew = decision.is_new === true;
 
-  const subject = (isNew ? "New error on PLUG: " : "Error still happening on PLUG: ") +
+  const subject = (isNew ? "New error on PLUJ: " : "Error still happening on PLUJ: ") +
                   message.slice(0, 80);
 
   const html = "<!DOCTYPE html><html><body style=" +
     '"margin:0;padding:24px;background:#F5F5F4;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">' +
     '<div style="max-width:640px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;">' +
     '<div style="background:#0A0A0A;padding:16px 22px;">' +
-    '<span style="color:#fff;font-size:16px;font-weight:800;">plug</span>' +
+    '<span style="color:#fff;font-size:16px;font-weight:800;">pluj</span>' +
     '<span style="color:#A8A29E;font-size:12px;float:right;">error alert</span></div>' +
     '<div style="padding:22px;">' +
     '<p style="margin:0 0 4px;font-size:11px;color:#A8A29E;text-transform:uppercase;letter-spacing:.05em;">' +

@@ -1,5 +1,5 @@
-/* Extracted from PlugMarketplace.jsx on 23 September 2026 so it can be loaded
-   on demand. See the note on the lazy import in PlugMarketplace.jsx for why
+/* Extracted from PlujMarketplace.jsx on 23 September 2026 so it can be loaded
+   on demand. See the note on the lazy import in PlujMarketplace.jsx for why
    the import points back at that file rather than at a shared module.
    Nothing here was rewritten - the moved code is byte-identical to what it
    replaced, so any behaviour change would be a bug, not a decision. */
@@ -17,7 +17,7 @@ import {
   MAX_PHOTOS,
   MessagesPanel,
   PhotoManager,
-  PlugMark,
+  PlujMark,
   RLS,
   Stars,
   TIME_BLOCKS,
@@ -49,7 +49,7 @@ import {
   sb,
   submitReviewDB,
   uploadVendorPhoto,
-} from "../PlugMarketplace.jsx";
+} from "../PlujMarketplace.jsx";
 
 function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
   const [mine,   setMine]   = useState(undefined);   // undefined = loading
@@ -952,7 +952,7 @@ function VendorDashboard({ user, onLogout }) {
   const unread = notifs.filter(n => !n.read).length;
 
   /* The three things a new vendor has to do, in order. Business details are
-     what PLUG approves; a listing is what hosts book. */
+     what PLUJ approves; a listing is what hosts book. */
   const detailsDone = !!(listing?.business_name && listing?.description && listing?.biz_phone &&
                          listing?.biz_city && listing?.biz_zip && listing?.service_areas);
   const hasListing  = (svcCount || 0) > 0;
@@ -973,7 +973,7 @@ function VendorDashboard({ user, onLogout }) {
                 ["account","Account settings"]];
 
   return (
-    <div className="plug" style={{ minHeight:"100vh", background:"#F7F8FA" }}>
+    <div className="pluj" style={{ minHeight:"100vh", background:"#F7F8FA" }}>
       <style>{GLOBAL_CSS}</style>
       {showGuide && <InfoPageModal page="Vendor guide" onClose={()=>setShowGuide(false)} />}
 
@@ -984,7 +984,7 @@ function VendorDashboard({ user, onLogout }) {
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <button onClick={() => window.location.reload()} className="btn" title="Refresh"
             style={{ border:"none", background:"none", padding:0, cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <PlugMark size={26} />
+            <PlujMark size={26} />
           </button>
           <span style={{ fontSize:12, fontWeight:800, background:C.black, color:"#fff",
                          padding:"3px 9px", borderRadius:99 }}>VENDOR</span>
@@ -1015,7 +1015,7 @@ function VendorDashboard({ user, onLogout }) {
         {svcCount !== null && !setupDone && (
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14,
                         padding:"16px 18px", marginBottom:14 }}>
-            <p style={{ margin:0, fontSize:15, fontWeight:800 }}>Get your business live on PLUG</p>
+            <p style={{ margin:0, fontSize:15, fontWeight:800 }}>Get your business live on PLUJ</p>
             <p style={{ margin:"3px 0 12px", fontSize:12, color:C.midGray }}>
               Three steps. Your listings go live as soon as step 3 is done.{" "}
               <span onClick={()=>setShowGuide(true)} style={{ color:C.orange, fontWeight:700, cursor:"pointer" }}>
@@ -1029,7 +1029,7 @@ function VendorDashboard({ user, onLogout }) {
               { done: hasListing, n: 2, title: "Create your first listing",
                 text: "One listing per service you offer — a DJ set, a taco truck, a venue. Each has its own price, photos and availability.",
                 cta: "Create a listing", go: () => setTab("listings") },
-              { done: isApproved, n: 3, title: "PLUG approves your business",
+              { done: isApproved, n: 3, title: "PLUJ approves your business",
                 text: isApproved ? "Approved — you're live." :
                       detailsDone ? "We're reviewing your details, usually within 1–2 business days. You'll get a notification here." :
                                     "Starts once your business details are in.",
@@ -1241,7 +1241,7 @@ function VendorDashboard({ user, onLogout }) {
                           const hrs = when && !isNaN(when.getTime()) ? (when.getTime() - Date.now())/3600000 : null;
                           const soon = hrs != null && hrs < 48;
                           const msg = soon
-                            ? "Cancel this confirmed booking?\n\n⚠️ The event is less than 48 hours away. The customer will be refunded in full and we'll help them find a replacement. Late vendor cancellations affect your standing on PLUG."
+                            ? "Cancel this confirmed booking?\n\n⚠️ The event is less than 48 hours away. The customer will be refunded in full and we'll help them find a replacement. Late vendor cancellations affect your standing on PLUJ."
                             : "Cancel this confirmed booking?\n\nThe customer will be refunded in full and notified so they can rebook.";
                           if (window.confirm(msg)) respond(r.id, "cancelled");
                         }}
@@ -1269,7 +1269,7 @@ function VendorDashboard({ user, onLogout }) {
               <p style={{ margin:"0 0 12px", fontSize:12, color:C.midGray, lineHeight:1.55 }}>
                 A listing is one service hosts can book. Offer a DJ set and a photo booth? That's two
                 listings — each with its own price, photos and availability.
-                {!isApproved && " They go live when PLUG approves your business."}
+                {!isApproved && " They go live when PLUJ approves your business."}
               </p>
               <ServicesManager vendorId={user.id} />
             </div>

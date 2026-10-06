@@ -1,14 +1,14 @@
 import { rateLimit } from "./_rate-limit.js";
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   PLUG — email verification code
+   PLUJ — email verification code
    Repo location:  api/send-verification.js
 
    SECURITY REWRITE (Aug 2026)
    The previous version accepted { email, code } from anyone on the internet and
    interpolated both into the email HTML with no escaping and no authentication.
    That made it an open relay: a stranger could send arbitrary HTML — phishing
-   links, fake "your payout is on hold" notices — from noreply@my-plug.com,
+   links, fake "your payout is on hold" notices — from noreply@pluj.us,
    passing your SPF and DKIM, to any address they chose.
 
    Three changes close it:
@@ -24,7 +24,7 @@ import { rateLimit } from "./_rate-limit.js";
                                    publishable key and is already in the client
                                    bundle; it is used here only to ask GoTrue
                                    "who does this token belong to?"
-     RESEND_FROM                   optional, default noreply@my-plug.com
+     RESEND_FROM                   optional, default noreply@pluj.us
 
    Note there is deliberately no service-role key in this file. It never needs
    to read anything the caller could not read themselves.
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Email service not configured" });
   }
 
-  const FROM = process.env.RESEND_FROM || "PLUG Marketplace <noreply@my-plug.com>";
+  const FROM = process.env.RESEND_FROM || "PLUJ Marketplace <noreply@pluj.us>";
 
   const html = `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#F5F5F4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
@@ -118,12 +118,12 @@ export default async function handler(req, res) {
              style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;
                     box-shadow:0 1px 3px rgba(0,0,0,0.08);">
         <tr><td style="background:#0A0A0A;padding:22px 28px;">
-          <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-0.02em;">plug</span>
+          <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-0.02em;">pluj</span>
         </td></tr>
         <tr><td style="padding:32px 28px 8px;">
           <h1 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#0A0A0A;">Confirm your email</h1>
           <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#57534E;">
-            Enter this code in PLUG to finish creating your account.
+            Enter this code in PLUJ to finish creating your account.
           </p>
           <div style="background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:12px;
                       padding:20px;text-align:center;margin-bottom:24px;">
@@ -138,7 +138,7 @@ export default async function handler(req, res) {
           </p>
         </td></tr>
         <tr><td style="padding:18px 28px;border-top:1px solid #E7E5E4;">
-          <p style="margin:0;font-size:11px;color:#A8A29E;">PLUG Marketplace · Houston, TX</p>
+          <p style="margin:0;font-size:11px;color:#A8A29E;">PLUJ Marketplace · Houston, TX</p>
         </td></tr>
       </table>
     </td></tr>
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: FROM,
         to: [to],
-        subject: `${code} is your PLUG verification code`,
+        subject: `${code} is your PLUJ verification code`,
         html,
       }),
     });

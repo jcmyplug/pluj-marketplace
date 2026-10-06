@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import PlugApp from './PlugMarketplace';
+import PlujApp from './PlujMarketplace';
 
 /* ─── ERROR BOUNDARY ──────────────────────────────────────────────────────────
-   PlugMarketplace is a single ~12,200-line component tree. Without a boundary,
+   PlujMarketplace is a single ~12,200-line component tree. Without a boundary,
    any render-time throw — one undefined.map on a vendor with no photos — unmounts
    the entire application and leaves a blank white page, with nothing logged
    anywhere you would see it.
@@ -23,7 +23,7 @@ function report(error, info) {
 
   /* Still log locally — this is what you read when you are sitting in front of
      the browser with devtools open. */
-  console.error('[PLUG]', message, stack);
+  console.error('[PLUJ]', message, stack);
 
   const key = message + '|' + stack.slice(0, 120);
   if (reported.has(key)) return;
@@ -94,7 +94,7 @@ class ErrorBoundary extends React.Component {
       <div style={wrap}>
         <div style={card}>
           <p style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
-            plug
+            pluj
           </p>
           <h1 style={{ margin: '0 0 10px', fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>
             Something broke on our end.
@@ -148,6 +148,6 @@ window.addEventListener('error', (e) => {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <ErrorBoundary>
-    <PlugApp />
+    <PlujApp />
   </ErrorBoundary>
 );

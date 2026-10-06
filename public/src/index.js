@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import PlugApp from './PlugMarketplace';
+import PlujApp from './PlujMarketplace';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<PlugApp />);
+root.render(<PlujApp />);

@@ -1,5 +1,5 @@
-/* Extracted from PlugMarketplace.jsx on 23 September 2026 so it can be loaded
-   on demand. See the note on the lazy import in PlugMarketplace.jsx for why
+/* Extracted from PlujMarketplace.jsx on 23 September 2026 so it can be loaded
+   on demand. See the note on the lazy import in PlujMarketplace.jsx for why
    the import points back at that file rather than at a shared module.
    Nothing here was rewritten - the moved code is byte-identical to what it
    replaced, so any behaviour change would be a bug, not a decision. */
@@ -23,7 +23,7 @@ import {
   sendMessage,
   setVendorStatus,
   startConversation,
-} from "../PlugMarketplace.jsx";
+} from "../PlujMarketplace.jsx";
 
 function SecurityConfigPanel() {
   const [plat, setPlat] = useState("nginx");
@@ -171,7 +171,7 @@ function AdminAccounts({ adminId, onChanged }) {
          only the admin can end. */
       const conv = await startConversation({
         otherId: msgFor.id, kind: "admin", selfId: adminId,
-        subject: msgSubject.trim() || "PLUG Support",
+        subject: msgSubject.trim() || "PLUJ Support",
       });
       if (!conv.ok) { setBusyId(null); setErr(conv.error); return; }
       const sent = await sendMessage(conv.id, adminId, msgBody.trim());

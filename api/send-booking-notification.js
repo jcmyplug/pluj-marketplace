@@ -1,13 +1,13 @@
 import { rateLimit } from "./_rate-limit.js";
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   PLUG — booking lifecycle email
+   PLUJ — booking lifecycle email
    Repo location:  api/send-booking-notification.js
 
    SECURITY REWRITE (Aug 2026)
    The previous version took `to` and every display field straight from the
    request body, with no authentication and no HTML escaping. Anyone could POST
-   arbitrary HTML and have it delivered from noreply@my-plug.com, passing SPF
+   arbitrary HTML and have it delivered from noreply@pluj.us, passing SPF
    and DKIM — a phishing channel aimed at your own users, plus an unbounded
    Resend bill and near-certain domain blocklisting.
 
@@ -27,7 +27,7 @@ import { rateLimit } from "./_rate-limit.js";
      RESEND_API_KEY
      REACT_APP_SUPABASE_URL        also accepts SUPABASE_URL
      REACT_APP_SUPABASE_ANON_KEY   also accepts SUPABASE_ANON_KEY
-     RESEND_FROM                   optional, default noreply@my-plug.com
+     RESEND_FROM                   optional, default noreply@pluj.us
    ───────────────────────────────────────────────────────────────────────────── */
 
 const esc = (s) =>
@@ -146,7 +146,7 @@ export default async function handler(req, res) {
   }[status];
 
   const message = {
-    requested: isVendor ? "Review the details below and approve or decline it in your PLUG dashboard. The customer is waiting to hear back."
+    requested: isVendor ? "Review the details below and approve or decline it in your PLUJ dashboard. The customer is waiting to hear back."
                         : `We've sent your request to ${vendorName}. You'll get another email the moment they respond.`,
     confirmed: isVendor ? "This date is now reserved on your calendar. The full event details are below."
                         : "You're all set — the vendor has approved your event. Keep this confirmation number for your records.",
@@ -186,7 +186,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Email service not configured" });
-  const FROM = process.env.RESEND_FROM || "PLUG Marketplace <noreply@my-plug.com>";
+  const FROM = process.env.RESEND_FROM || "PLUJ Marketplace <noreply@pluj.us>";
 
   try {
     const r = await fetch("https://api.resend.com/emails", {
@@ -212,7 +212,7 @@ export default async function handler(req, res) {
                 </tr>`).join("")}
             </table>
             ${footerNote ? `<p style="margin:18px 0 0;padding:12px 14px;background:#F9FAFB;border-radius:10px;color:#555;font-size:12px;line-height:1.6">${esc(footerNote)}</p>` : ""}
-            <p style="margin:22px 0 0;color:#999;font-size:12px">Sent by PLUG · my-plug.com</p>
+            <p style="margin:22px 0 0;color:#999;font-size:12px">Sent by PLUJ · pluj.us</p>
           </div>`,
       }),
     });

@@ -18,7 +18,7 @@ import {
   fmtTimeRange,
   matchesEventType,
   parseEventTypes,
-} from "../PlugMarketplace.jsx";
+} from "../PlujMarketplace.jsx";
 
 /* Far enough ahead that the past-date and minimum-notice checks never fire. */
 const FUTURE = "2030-06-14";
