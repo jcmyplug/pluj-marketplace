@@ -487,6 +487,14 @@ textarea:focus:not(:focus-visible) { outline: none !important; }
 select:focus-visible { outline: 2px solid rgba(39,110,241,0.35); outline-offset: 1px; }
 select:focus:not(:focus-visible) { outline: none; }
 
+/* ── Password show/hide eye (PasswordInput) ──
+   Edge draws its own reveal button inside password boxes; hide it so there is
+   only one eye. */
+input::-ms-reveal, input::-ms-clear { display: none; }
+.pw-eye { opacity: 0.85; transition: opacity 150ms ease, background 150ms ease; }
+.pw-eye:hover { opacity: 1; background: rgba(127,127,127,0.12) !important; }
+.pw-eye:focus-visible { outline: 2px solid rgba(39,110,241,0.6); outline-offset: 0; opacity: 1; }
+
 /* ── Buttons: 200ms cubic-bezier(0,0,1,1) — Uber Eats exact timing ── */
 .btn {
   transition: background 200ms cubic-bezier(0,0,1,1), color 200ms cubic-bezier(0,0,1,1),
@@ -3775,6 +3783,62 @@ function Tag({ children }) {
 }
 
 /* ─── AUTH MODAL ─────────────────────────────────────────────────────────────── */
+/* ── Password box with a show/hide eye ───────────────────────────────────────
+   Used by every password field: sign in (customers, vendors and the admin all
+   sign in through AuthModal), sign up, and both password-reset screens.
+   Starts hidden. The eye switches it to plain text and back, so people can
+   check what they typed. Any margin in `style` moves to the wrapper, which
+   keeps the eye centred on the box. autoComplete stays a password hint while
+   the text is visible, so browsers and password managers still treat it as a
+   password and don't save it to ordinary form history. */
+function EyeIcon({ open }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {open ? (
+        <>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </>
+      ) : (
+        <>
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+          <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+          <line x1="1" y1="1" x2="23" y2="23" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function PasswordInput({ style = {}, iconColor = "#6B7280",
+                                autoComplete = "current-password", ...props }) {
+  const [show, setShow] = useState(false);
+  const { margin, marginTop, marginBottom, marginLeft, marginRight, ...inputStyle } = style;
+  const label = show ? "Hide password" : "Show password";
+  return (
+    <div style={{ position:"relative", width:"100%",
+                  margin, marginTop, marginBottom, marginLeft, marginRight }}>
+      <input {...props} type={show ? "text" : "password"} autoComplete={autoComplete}
+        autoCapitalize="none" autoCorrect="off" spellCheck={false}
+        style={{ ...inputStyle, display:"block", width:"100%", paddingRight:46 }} />
+      <button type="button" className="pw-eye" aria-label={label} title={label}
+        aria-pressed={show}
+        /* Keep the cursor in the password box when the eye is clicked. */
+        onMouseDown={e => e.preventDefault()}
+        onClick={() => setShow(s => !s)}
+        style={{ position:"absolute", top:"50%", right:4, transform:"translateY(-50%)",
+                 width:38, height:38, display:"flex", alignItems:"center",
+                 justifyContent:"center", padding:0, border:"none", borderRadius:8,
+                 background:"transparent", color:iconColor, cursor:"pointer" }}>
+        {/* Open eye = "show it"; crossed-out eye = "hide it again". */}
+        <EyeIcon open={!show} />
+      </button>
+    </div>
+  );
+}
+
 function AuthModal({ onClose, onAuth }) {
   const [tab,          setTab]         = useState("login");
   const [role,         setRole]        = useState("user");
@@ -4123,7 +4187,14 @@ function AuthModal({ onClose, onAuth }) {
 
   function continueGuest() { onAuth({ type:"guest", name:"Guest", id: uid() }); onClose(); }
 
-  const inp = (placeholder, key, type="text", required=false) => (
+  const inp = (placeholder, key, type="text", required=false) => type === "password" ? (
+    <PasswordInput placeholder={placeholder + (required?" *":"")}
+           value={form[key]} onChange={e=>upd(key,e.target.value)}
+           autoComplete={tab === "login" ? "current-password" : "new-password"}
+      style={{ height:44, padding:"0 14px", border:`1px solid ${C.border}`,
+               borderRadius:10, fontSize:14, color:C.black, background:"#fff",
+               transition:"border-color 200ms cubic-bezier(0,0,1,1)" }} />
+  ) : (
     <input type={type} placeholder={placeholder + (required?" *":"")}
            value={form[key]} onChange={e=>upd(key,e.target.value)}
       style={{ width:"100%", height:44, padding:"0 14px", border:`1px solid ${C.border}`,
@@ -9738,11 +9809,11 @@ function ResetPasswordScreen({ token, onDone }) {
                 ⚠ {err}
               </div>
             )}
-            <input type="password" placeholder="New password" value={pw}
+            <PasswordInput placeholder="New password" value={pw} autoComplete="new-password"
               onChange={e=>{ setPw(e.target.value); setErr(""); }}
               style={{ width:"100%", padding:"11px 12px", borderRadius:10, border:`1px solid ${C.border}`,
                        fontSize:14, marginBottom:10, boxSizing:"border-box" }} />
-            <input type="password" placeholder="Confirm new password" value={pw2}
+            <PasswordInput placeholder="Confirm new password" value={pw2} autoComplete="new-password"
               onChange={e=>{ setPw2(e.target.value); setErr(""); }}
               onKeyDown={e=>{ if (e.key==="Enter") submit(); }}
               style={{ width:"100%", padding:"11px 12px", borderRadius:10, border:`1px solid ${C.border}`,
@@ -10583,9 +10654,11 @@ export function EmailLinkScreen({ link, onSession, onFinish, onRequestNew }) {
     body = "At least 12 characters, with an uppercase letter, a lowercase letter, a number and a symbol.";
     action = (
       <>
-        <input type="password" placeholder="New password" value={pw} autoFocus
+        <PasswordInput placeholder="New password" value={pw} autoFocus autoComplete="new-password"
+          iconColor="rgba(255,255,255,0.7)"
           onChange={e=>{ setPw(e.target.value); setErr(""); }} style={field} />
-        <input type="password" placeholder="Confirm new password" value={pw2}
+        <PasswordInput placeholder="Confirm new password" value={pw2} autoComplete="new-password"
+          iconColor="rgba(255,255,255,0.7)"
           onChange={e=>{ setPw2(e.target.value); setErr(""); }}
           onKeyDown={e=>{ if (e.key === "Enter") savePassword(); }} style={field} />
         {err && <div style={{ color:"#FCA5A5", fontSize:13, margin:"2px 0 12px" }}>{err}</div>}
