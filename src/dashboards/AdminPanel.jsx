@@ -333,8 +333,10 @@ function AdminAccounts({ adminId, onChanged }) {
   );
 }
 
-function AdminPanel({ user, onClose }) {
-  const [atab,       setAtab]      = useState("accounts");
+function AdminPanel({ user, onClose, initialTab }) {
+  /* initialTab lets a notification open the panel on the right tab, e.g. the
+     "new vendor waiting for approval" alert opens straight onto Vendors. */
+  const [atab,       setAtab]      = useState(initialTab || "accounts");
   const [vendorApps, setVendorApps]= useState([]);
   const [busy,       setBusy]      = useState(false);
   const [actionErr,  setActionErr] = useState("");

@@ -6267,10 +6267,13 @@ export function PhotoManager({ photos, onChange, size = 78 }) {
    tab away.
 
    Types come from the notifications table: message, inquiry, inquiry_reply and
-   conversation_closed are all conversation events; everything else (new_request,
-   request_update, request_sent, booking_cancelled, review) hangs off a booking. */
+   conversation_closed are all conversation events; vendor_application (sent to
+   admins when a vendor confirms their email) opens the admin panel on Vendors;
+   everything else (new_request, request_update, request_sent,
+   booking_cancelled, review) hangs off a booking. */
 function notifTarget(n) {
   const t = String((n && n.type) || "");
+  if (t === "vendor_application") return { admin: true, adminTab: "vendors" };
   const id = (n && (n.convId || n.conversation_id || n.inquiry_id)) || null;
   const bookingId = (n && (n.reqId || n.request_id)) || null;
   if (t === "message" || t === "admin_message" || t === "inquiry" ||
@@ -10909,6 +10912,7 @@ export default function PlujApp() {
   /* Which conversation a notification asked us to open, if any. */
   const [accountConvId,  setAccountConvId]  = useState(null);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [adminPanelTab,  setAdminPanelTab]  = useState("accounts");
   const [notifOpen,      setNotifOpen]      = useState(false);
   const [originBlocked,  setOriginBlocked]  = useState(false);
 
@@ -11729,7 +11733,8 @@ export default function PlujApp() {
       {/* ── ADMIN PANEL ─────────────────────────────────────────────────────── */}
       {adminPanelOpen && user?.type === "admin" && (
         <Suspense fallback={<DashboardLoading label="the admin panel" />}>
-          <AdminPanel user={user} onClose={()=>setAdminPanelOpen(false)} />
+          <AdminPanel user={user} initialTab={adminPanelTab}
+            onClose={()=>{ setAdminPanelOpen(false); setAdminPanelTab("accounts"); }} />
         </Suspense>
       )}
 
@@ -11832,8 +11837,16 @@ export default function PlujApp() {
                   onClick={() => { setNotifOpen(o=>!o); setAccountOpen(false); }}
                   /* Close the bell and open the account panel on the tab that
                      actually holds the thing they tapped. */
-                  onOpenTarget={(t) => { setAccountTab(t.tab); setAccountConvId(t.id);
-                                         setNotifOpen(false); setAccountOpen(true); }} />
+                  onOpenTarget={(t) => {
+                    setNotifOpen(false);
+                    if (t.admin) {
+                      if (user.type === "admin") {
+                        setAdminPanelTab(t.adminTab || "accounts");
+                        setAccountOpen(false); setAdminPanelOpen(true);
+                      }
+                      return;
+                    }
+                    setAccountTab(t.tab); setAccountConvId(t.id); setAccountOpen(true); }} />
               )}
               <button onClick={() => { setAccountOpen(o=>!o); setNotifOpen(false); }}
                 className="btn"
@@ -11856,7 +11869,7 @@ export default function PlujApp() {
                   {user.status==="approved" ? "✓ Vendor" : user.status==="rejected" ? "✗ Vendor" : "⏳ Vendor"}
                 </span>}
                 {user.type==="admin" && (
-                  <button onClick={e=>{e.stopPropagation();setAdminPanelOpen(true);}} className="btn"
+                  <button onClick={e=>{e.stopPropagation();setAdminPanelTab("accounts");setAdminPanelOpen(true);}} className="btn"
                     style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:99,
                              padding:"2px 8px", fontSize:10, color:"#fff", fontWeight:700, marginLeft:2 }}>
                     Panel
