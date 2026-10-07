@@ -675,3 +675,47 @@ select cron.schedule('payments-scheduler', '*/10 * * * *', $cron$
                                         where bp.booking_id = booking_payment_plans.booking_id
                                           and bp.status = 'paid' and bp.transferred_at is null)));
 $cron$);
+
+-- ── 11. Cost recovery (migration "payments_cost_recovery") ─────────────────
+/* PLUJ never pays Stripe out of pocket (7 Oct 2026). Every Stripe cost is
+   recovered from the vendor's payouts:
+     - card fee of each charge (already), including when a charge is fully refunded
+     - payout costs: payout_cost_percent (0.5%) + payout_cost_fixed_cents (25¢) per transfer
+     - Stripe's $2 per vendor per month with payouts (payout_account_fee_cents, first payout each month)
+     - Stripe's 1099 tax forms (tax_form_fee_cents, first payout each calendar year)
+     - chargebacks: the $15 fee (dispute_fee_cents) and any disputed amount already paid out
+   Anything that can't be taken from the payment it belongs to becomes
+   vendor_profiles.pluj_balance_due_cents and comes out of the next payout. */
+insert into public.platform_settings (key, value, is_public) values
+  ('payout_cost_percent',       '0.5', true),
+  ('payout_cost_fixed_cents',   '25',  true),
+  ('payout_account_fee_cents',  '200', true),
+  ('tax_form_fee_cents',        '750', true),
+  ('dispute_fee_cents',         '1500', true)
+on conflict (key) do nothing;
+
+alter table public.vendor_profiles
+  add column if not exists pluj_balance_due_cents integer not null default 0,
+  add column if not exists stripe_fee_month text,     -- 'YYYY-MM' the monthly account fee was last recovered
+  add column if not exists stripe_fee_year  integer;  -- year the tax-form fee was last recovered
+
+alter table public.booking_payments
+  add column if not exists payout_costs_cents integer not null default 0,
+  add column if not exists disputed_cents     integer not null default 0;
+
+create or replace function public.guard_vendor_profile_update()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+begin
+  if public.is_privileged_context() then return new; end if;
+  if (new.verification_status, new.verified_at, new.rejection_reason)
+     is distinct from (old.verification_status, old.verified_at, old.rejection_reason) then
+    raise exception 'verification status is set by PLUJ, not the vendor';
+  end if;
+  if (new.stripe_account_id, new.stripe_details_submitted, new.stripe_transfers_enabled, new.stripe_payouts_enabled,
+      new.pluj_balance_due_cents, new.stripe_fee_month, new.stripe_fee_year)
+     is distinct from (old.stripe_account_id, old.stripe_details_submitted, old.stripe_transfers_enabled, old.stripe_payouts_enabled,
+      old.pluj_balance_due_cents, old.stripe_fee_month, old.stripe_fee_year) then
+    raise exception 'payout settings are managed by PLUJ and Stripe';
+  end if;
+  return new;
+end $function$;

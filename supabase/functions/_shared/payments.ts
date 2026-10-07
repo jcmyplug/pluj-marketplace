@@ -315,9 +315,10 @@ export async function runPendingRefund(plan: any) {
         : Math.round(charged * Number(plan.refund_percent || 0) / 100);
       want = Math.min(want, charged - (p.refunded_cents || 0));
       if (want <= 0 || !p.stripe_payment_intent_id) continue;
+      let back = 0;
       if (p.transferred_cents > 0 && p.stripe_transfer_id && p.stripe_transfer_id !== "none") {
         // Already sent to the vendor (early release): take back the share first.
-        const back = Math.min(p.transferred_cents, want);
+        back = Math.min(p.transferred_cents, want);
         await stripe("POST", `/transfers/${p.stripe_transfer_id}/reversals`, { amount: back,
           metadata: { booking_id: plan.booking_id, reason: "cancellation" } }, `pluj-reverse-${p.id}-${back}`);
         await db().from("booking_payments").update({ transferred_cents: p.transferred_cents - back }).eq("id", p.id);
@@ -327,6 +328,7 @@ export async function runPendingRefund(plan: any) {
         `pluj-refund-${p.id}-${want}`);
       await db().from("booking_payments").update({ refunded_cents: (p.refunded_cents || 0) + want,
         updated_at: new Date().toISOString() }).eq("id", p.id);
+      await recoverRefundCost(p, plan.vendor_id, want, back);
       total += want;
     }
     await db().from("booking_payment_plans").update({ refund_state: "done", last_error: null,
@@ -347,9 +349,38 @@ export async function runPendingRefund(plan: any) {
   return total;
 }
 
+/* Add to (or, with a negative amount, take off) what a vendor owes PLUJ.
+   Recovered from their next payouts by releaseBooking. */
+export async function addVendorDebt(vendorId: string, cents: number) {
+  if (!cents) return;
+  const { data: v } = await db().from("vendor_profiles").select("pluj_balance_due_cents").eq("id", vendorId).single();
+  const next = Math.max(0, (v?.pluj_balance_due_cents || 0) + Math.round(cents));
+  await db().from("vendor_profiles").update({ pluj_balance_due_cents: next }).eq("id", vendorId);
+}
+
+/* A refund on a payment the vendor was already paid for. Stripe doesn't
+   give back its card fee or payout costs, so whatever the refund takes beyond
+   what came back from the vendor and PLUJ's own service fee on that part is
+   put on the vendor's balance due. */
+export async function recoverRefundCost(p: any, vendorId: string, refunded: number, reversed: number) {
+  if (!p.transferred_at || refunded <= 0) return 0;
+  const charged = chargedCents(p) || 1;
+  const serviceShare = Math.round((p.platform_fee_cents || 0) * Math.min(1, refunded / charged));
+  const loss = refunded - reversed - serviceShare;
+  if (loss > 0) await addVendorDebt(vendorId, loss);
+  return Math.max(0, loss);
+}
+
 /* Send a booking's released money to the vendor: one transfer per paid
    payment, tied to that payment's charge (source_transaction), so Stripe
-   moves it as soon as the charge's funds are available. Returns cents sent. */
+   moves it as soon as the charge's funds are available. Returns cents sent.
+
+   PLUJ never pays Stripe out of pocket. From each payment it keeps: Stripe's
+   card fee, PLUJ's service fees, and the cost of paying the vendor (payout
+   fee, Stripe's monthly fee for an active vendor, the yearly tax-form fee).
+   Anything that payment can't cover (a full refund still costs the card fee,
+   a chargeback costs $15) is added to the vendor's balance due and taken from
+   their next payout. */
 export async function releaseBooking(bookingId: string, opts: { force?: boolean } = {}) {
   const s = await settings();
   const { data: plan } = await db().from("booking_payment_plans").select("*").eq("booking_id", bookingId).single();
@@ -367,61 +398,106 @@ export async function releaseBooking(bookingId: string, opts: { force?: boolean 
   if (!due.length) return 0;
 
   const { data: vendor } = await db().from("vendor_profiles")
-    .select("id, created_at, stripe_account_id, stripe_transfers_enabled, business_name").eq("id", plan.vendor_id).single();
-  if (!vendor?.stripe_account_id) {
-    if (plan.last_error !== "vendor_not_connected") {
-      await db().from("booking_payment_plans").update({ last_error: "vendor_not_connected" }).eq("booking_id", bookingId);
-      await notify(plan.vendor_id, "payout_setup", "💳 Set up payouts to get paid",
-        "You have money waiting on PLUJ. Open your dashboard and press Set up payouts with Stripe so we can send it to you.", bookingId);
+    .select("id, created_at, stripe_account_id, stripe_transfers_enabled, business_name, pluj_balance_due_cents, stripe_fee_month, stripe_fee_year")
+    .eq("id", plan.vendor_id).single();
+  if (!vendor) return 0;
+
+  const costPct   = Number(s.payout_cost_percent ?? 0.5);
+  const costFixed = Number(s.payout_cost_fixed_cents ?? 25);
+  const monthKey  = now.toISOString().slice(0, 7);
+  const year      = now.getUTCFullYear();
+  let monthlyDue  = vendor.stripe_fee_month !== monthKey ? Number(s.payout_account_fee_cents ?? 200) : 0;
+  let yearlyDue   = vendor.stripe_fee_year !== year ? Number(s.tax_form_fee_cents ?? 750) : 0;
+  let debt        = vendor.pluj_balance_due_cents || 0;
+  let monthlyTaken = false, yearlyTaken = false, tookFees = false;
+
+  // Work everything out first; touch Stripe only if something is actually owed.
+  const rows = due.map((p: any) => {
+    const charged = chargedCents(p);
+    const kept = Math.max(0, charged - (p.refunded_cents || 0) - (p.disputed_cents || 0));
+    const cardFee = p.stripe_fee_cents || 0;
+    if (kept <= cardFee) {
+      // Nothing left for the vendor; whatever the card fee isn't covered by is owed.
+      return { p, net: 0, serviceFees: 0, costs: 0, shortfall: cardFee - kept };
     }
-    return 0;
+    const keptShare = kept / charged;
+    const vendorFee = Math.round(p.amount_cents * keptShare * vendorFeePercent(s, vendor.created_at, p.paid_at) / 100);
+    const hostService = Math.round((p.host_service_fee_cents || 0) * keptShare);
+    const base = kept - cardFee - vendorFee - hostService;
+    const costs = Math.round(Math.max(0, base) * costPct / 100) + costFixed;
+    let net = base - costs;
+    let extra = 0;
+    if (net > 0 && (monthlyDue || yearlyDue)) tookFees = true;
+    if (net > 0 && monthlyDue) { const t = Math.min(net, monthlyDue); net -= t; extra += t; monthlyDue -= t; monthlyTaken = monthlyDue === 0; }
+    if (net > 0 && yearlyDue)  { const t = Math.min(net, yearlyDue);  net -= t; extra += t; yearlyDue  -= t; yearlyTaken  = yearlyDue === 0; }
+    if (net > 0 && debt)       { const t = Math.min(net, debt);       net -= t; debt -= t; }
+    let shortfall = 0;
+    if (net < 0) { shortfall = -net; net = 0; }
+    return { p, net, serviceFees: vendorFee + hostService, costs: costs + extra, shortfall };
+  });
+  const toSend = rows.reduce((n: number, r: any) => n + r.net, 0);
+  /* Stripe bills the monthly/yearly fees once there is a payout. If this
+     payout couldn't cover them in full, the rest goes on the balance due so
+     they are never charged twice or left unpaid. */
+  if (toSend > 0 || tookFees) {
+    if (vendor.stripe_fee_month !== monthKey) { debt += monthlyDue; monthlyDue = 0; monthlyTaken = true; }
+    if (vendor.stripe_fee_year !== year)      { debt += yearlyDue;  yearlyDue = 0;  yearlyTaken = true; }
   }
-  let transfersOn = vendor.stripe_transfers_enabled;
-  if (!transfersOn) transfersOn = (await refreshVendorAccount(vendor.id, vendor.stripe_account_id)).transfers_enabled;
-  if (!transfersOn) {
-    if (plan.last_error !== "vendor_not_verified") {
-      await db().from("booking_payment_plans").update({ last_error: "vendor_not_verified" }).eq("booking_id", bookingId);
-      await notify(plan.vendor_id, "payout_setup", "💳 Finish your Stripe setup to get paid",
-        "Stripe still needs a few details before PLUJ can send you money. Open your dashboard and press Finish Stripe setup.", bookingId);
+
+  if (toSend > 0) {
+    if (!vendor.stripe_account_id) {
+      if (plan.last_error !== "vendor_not_connected") {
+        await db().from("booking_payment_plans").update({ last_error: "vendor_not_connected" }).eq("booking_id", bookingId);
+        await notify(plan.vendor_id, "payout_setup", "💳 Set up payouts to get paid",
+          "You have money waiting on PLUJ. Open your dashboard and press Set up payouts with Stripe so we can send it to you.", bookingId);
+      }
+      return 0;
     }
-    return 0;
+    let transfersOn = vendor.stripe_transfers_enabled;
+    if (!transfersOn) transfersOn = (await refreshVendorAccount(vendor.id, vendor.stripe_account_id)).transfers_enabled;
+    if (!transfersOn) {
+      if (plan.last_error !== "vendor_not_verified") {
+        await db().from("booking_payment_plans").update({ last_error: "vendor_not_verified" }).eq("booking_id", bookingId);
+        await notify(plan.vendor_id, "payout_setup", "💳 Finish your Stripe setup to get paid",
+          "Stripe still needs a few details before PLUJ can send you money. Open your dashboard and press Finish Stripe setup.", bookingId);
+      }
+      return 0;
+    }
   }
 
   let sent = 0;
-  for (const p of due) {
-    /* What PLUJ holds for this payment, less: Stripe's card fee, PLUJ's
-       vendor fee on the vendor's part, and the host's service fee (which
-       PLUJ keeps), each reduced in proportion to anything refunded. */
-    const charged = chargedCents(p);
-    const keptShare = charged > 0 ? Math.max(0, charged - (p.refunded_cents || 0)) / charged : 0;
-    const kept = charged - (p.refunded_cents || 0);
-    const pct = vendorFeePercent(s, vendor.created_at, p.paid_at);
-    const platformFee = Math.round(p.amount_cents * keptShare * pct / 100);
-    const hostServiceKept = Math.round((p.host_service_fee_cents || 0) * keptShare);
-    const net = kept - (p.stripe_fee_cents || 0) - platformFee - hostServiceKept;
+  for (const r of rows) {
+    const p = r.p;
     let transferId = "none";
-    if (net > 0) {
+    if (r.net > 0) {
       const tr = await stripe("POST", "/transfers", {
-        amount: net, currency: plan.currency || "usd", destination: vendor.stripe_account_id,
+        amount: r.net, currency: plan.currency || "usd", destination: vendor.stripe_account_id,
         source_transaction: p.stripe_charge_id || undefined, transfer_group: bookingId,
         description: `PLUJ booking ${bookingId} — ${KIND_LABEL[p.kind]}`,
         metadata: { booking_id: bookingId, payment_id: p.id, kind: p.kind },
       }, `pluj-transfer-${p.id}`);
       transferId = tr.id;
-      sent += net;
+      sent += r.net;
     }
+    debt += r.shortfall;
     await db().from("booking_payments").update({
-      transferred_cents: Math.max(0, net), stripe_transfer_id: transferId, platform_fee_cents: platformFee + hostServiceKept,
-      transferred_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      transferred_cents: r.net, stripe_transfer_id: transferId, platform_fee_cents: r.serviceFees,
+      payout_costs_cents: r.costs, transferred_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq("id", p.id);
   }
+  await db().from("vendor_profiles").update({
+    pluj_balance_due_cents: debt,
+    ...(monthlyTaken ? { stripe_fee_month: monthKey } : {}),
+    ...(yearlyTaken ? { stripe_fee_year: year } : {}),
+  }).eq("id", vendor.id);
 
   // Everything settled? Then the plan is done.
   const { data: rest } = await db().from("booking_payments").select("status, transferred_at").eq("booking_id", bookingId);
   const open = (rest || []).some((p: any) => p.status === "scheduled" || p.status === "processing" || p.status === "failed"
                                          || (p.status === "paid" && !p.transferred_at));
   await db().from("booking_payment_plans").update({
-    status: open ? plan.status : "released", released_at: open ? plan.released_at : new Date().toISOString(),
+    status: open ? plan.status : (plan.status === "cancelled" ? "cancelled" : "released"),
+    released_at: open ? plan.released_at : new Date().toISOString(),
     last_error: null, updated_at: new Date().toISOString(),
   }).eq("booking_id", bookingId);
 

@@ -21,7 +21,7 @@
 
 import {
   CORS, json, PaymentsError, StripeError, db, settings, stripe, stripeKey, stripeMode, notify, money, SITE,
-  KIND_LABEL, refreshVendorAccount, releaseBooking, runPendingRefund, markPaid, prepareCharge, chargedCents,
+  KIND_LABEL, refreshVendorAccount, releaseBooking, runPendingRefund, markPaid, prepareCharge, chargedCents, recoverRefundCost,
 } from "../_shared/payments.ts";
 
 const ALLOWED_RETURN = /^https:\/\/(www\.pluj\.us|pluj\.us|pluj-marketplace(-[a-z0-9-]+)?\.vercel\.app)$/;
@@ -213,8 +213,9 @@ Deno.serve(async (req) => {
           const charged = chargedCents(p) - (p.refunded_cents || 0);
           const take = Math.min(charged, left);
           if (take <= 0 || !p.stripe_payment_intent_id) continue;
+          let back = 0;
           if (p.transferred_cents > 0 && p.stripe_transfer_id && p.stripe_transfer_id !== "none") {
-            const back = Math.min(p.transferred_cents, take);
+            back = Math.min(p.transferred_cents, take);
             await stripe("POST", `/transfers/${p.stripe_transfer_id}/reversals`, { amount: back,
               metadata: { booking_id: body.booking_id, reason: "admin refund" } }, `pluj-reverse-${p.id}-${p.refunded_cents}-${back}`);
             await db().from("booking_payments").update({ transferred_cents: p.transferred_cents - back }).eq("id", p.id);
@@ -223,6 +224,7 @@ Deno.serve(async (req) => {
             metadata: { booking_id: body.booking_id, payment_id: p.id, reason: "admin refund" } },
             `pluj-adminrefund-${p.id}-${p.refunded_cents}-${take}`);
           await db().from("booking_payments").update({ refunded_cents: (p.refunded_cents || 0) + take, updated_at: now }).eq("id", p.id);
+          await recoverRefundCost(p, plan.vendor_id, take, back);
           left -= take; refunded += take;
         }
         const full = refunded >= refundable;
