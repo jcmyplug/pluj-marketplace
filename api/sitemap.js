@@ -9,8 +9,12 @@
    sitemap never 500s. */
 
 const SITE = "https://www.pluj.us";
-const SB_URL  = process.env.SUPABASE_URL      || process.env.REACT_APP_SUPABASE_URL;
-const SB_ANON = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+/* Same public defaults the app itself uses (src/PlujMarketplace.jsx); the anon
+   key is public and already shipped in the browser bundle. */
+const SB_URL  = process.env.SUPABASE_URL      || process.env.REACT_APP_SUPABASE_URL
+  || "https://btmqghudfakpbbplrqhf.supabase.co";
+const SB_ANON = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
+  || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bXFnaHVkZmFrcGJicGxycWhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNjA1NTgsImV4cCI6MjA5NDczNjU1OH0.t3GgjjKy--BPMJ7Z5wPWB1UamG71F6FGzR_N2cfJpWw";
 
 const CATEGORIES = ["food", "music", "production", "logistics", "places", "rentals", "av", "other"];
 
