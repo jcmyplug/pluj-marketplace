@@ -206,10 +206,10 @@ function VendorReview({ vendorId, onDecided }) {
   const phone  = v.biz_phone || p.phone || "";
   const siteHref = safeHref(v.biz_website);
   const status = v.verification_status || "pending";
-  const photos = [
+  const photos = [...new Set([
     ...parsePhotos(v.photos),
     ...listings.flatMap(l => parsePhotos(l.photos)),
-  ].filter(u => typeof u === "string" && /^https:\/\//i.test(u));
+  ])].filter(u => typeof u === "string" && /^https:\/\//i.test(u));
 
   const checks = [
     [!!p.responsibility_accepted_at, "Confirmed their information is true",
