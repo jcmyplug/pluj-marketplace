@@ -20,6 +20,12 @@ import {
   adminSetBlocked,
   getVendorApplication,
   getVendorApps,
+  paymentsCall,
+  paymentsOn,
+  adminLoadPayments,
+  setPaymentsEnabled,
+  fmtUSD,
+  sb,
   isOriginAllowed,
   maskEmail,
   parsePhotos,
@@ -398,6 +404,259 @@ function VendorReview({ vendorId, onDecided }) {
   );
 }
 
+/* ── Payments: Stripe status, the on/off switch, reported problems, and every
+   booking's held money. Server side: supabase/functions/payments. ───────── */
+const PROBLEM_LABEL = {
+  no_show: "Vendor didn't show up", not_as_described: "Not what was promised",
+  scam: "Possible scam", other: "Something else",
+};
+const KIND_SHORT = { retainer: "Retainer", event_day: "Event day", final: "Final" };
+
+function planMoney(plan) {
+  const pays = plan.booking_payments || [];
+  const paid = pays.filter(p => p.status === "paid");
+  const charged = p => (p.amount_cents || 0) + (p.host_fee_cents || 0) + (p.host_service_fee_cents || 0);
+  const collected = paid.reduce((n, p) => n + charged(p), 0);
+  const refunded  = paid.reduce((n, p) => n + (p.refunded_cents || 0), 0);
+  const sent      = paid.reduce((n, p) => n + (p.transferred_cents || 0), 0);
+  const held      = paid.filter(p => !p.transferred_at).reduce((n, p) => n + charged(p) - (p.refunded_cents || 0), 0);
+  return { collected, refunded, sent, held, pays };
+}
+
+function AdminPayments({ onChanged }) {
+  const [st, setSt]         = useState(null);
+  const [data, setData]     = useState({ plans: [], problems: [] });
+  const [names, setNames]   = useState({});
+  const [busy, setBusy]     = useState("");
+  const [err, setErr]       = useState("");
+  const [ok, setOk]         = useState("");
+  const [amt, setAmt]       = useState({});   // partial refund, dollars, per booking
+  const [note, setNote]     = useState({});   // note to host/vendor, per booking
+  const [loading, setLoad]  = useState(true);
+
+  const load = React.useCallback(async () => {
+    const [s, d, accts] = await Promise.all([paymentsCall("status"), adminLoadPayments(), adminListAccounts()]);
+    setSt(s); setData(d);
+    const m = {};
+    (accts || []).forEach(a => { m[a.id] = a.businessName || a.displayName || a.email; });
+    setNames(m); setLoad(false);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function act(label, fn, okText) {
+    setBusy(label); setErr(""); setOk("");
+    const r = await fn();
+    setBusy("");
+    if (r && r.error) { setErr(r.error); return; }
+    if (okText) setOk(typeof okText === "function" ? okText(r) : okText);
+    await load();
+    if (onChanged) onChanged();
+  }
+
+  const on = paymentsOn();
+  const plansById = Object.fromEntries((data.plans || []).map(p => [p.booking_id, p]));
+  const openProblems = (data.problems || []).filter(p => p.status === "open");
+  const card = { background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:10 };
+  const sbtn = (bg, fg, bd) => ({ padding:"6px 11px", borderRadius:8, fontSize:11.5, fontWeight:700, cursor:"pointer",
+                                  background:bg, color:fg, border: bd ? `1px solid ${bd}` : "none" });
+
+  return (
+    <div>
+      {err && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C", borderRadius:9,
+                            padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
+      {ok && <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:C.green, borderRadius:9,
+                           padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:700 }}>✓ {ok}</div>}
+
+      {/* Stripe + switch */}
+      <div style={{ ...card, background:"#fff" }}>
+        <p style={{ margin:0, fontSize:13, fontWeight:800 }}>Stripe</p>
+        {!st ? <p style={{ margin:"4px 0 0", fontSize:12, color:C.midGray }}>Checking…</p> : st.error ? (
+          <p style={{ margin:"4px 0 0", fontSize:12, color:"#B91C1C" }}>⚠ {st.error}</p>
+        ) : (
+          <>
+            <p style={{ margin:"4px 0 0", fontSize:12, color: st.configured ? C.green : "#B45309", fontWeight:700 }}>
+              {st.configured ? `✓ Connected · ${st.mode === "live" ? "LIVE (real money)" : "TEST mode (no real money)"}` : "Not connected yet"}
+            </p>
+            {!st.configured && (
+              <p style={{ margin:"4px 0 0", fontSize:11.5, color:C.midGray, lineHeight:1.6 }}>
+                In Supabase → Edge Functions → Secrets, add <strong>STRIPE_SECRET_KEY</strong> with your Stripe secret key.
+                Start with the test key (sk_test_…), then come back here.
+              </p>
+            )}
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, flexWrap:"wrap" }}>
+              {st.webhook_connected ? (
+                <span style={{ fontSize:12, color:C.green, fontWeight:700 }}>✓ Stripe webhook connected</span>
+              ) : (
+                <button className="btn" disabled={!st.configured || !!busy} style={sbtn(C.black, "#fff")}
+                  onClick={() => act("wh", () => paymentsCall("admin_connect_webhook"), "Stripe webhook connected.")}>
+                  {busy === "wh" ? "Connecting…" : "Connect Stripe webhook"}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginTop:10,
+                      paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+          <div>
+            <p style={{ margin:0, fontSize:12.5, fontWeight:800 }}>Payments are {on ? "ON" : "OFF"}</p>
+            <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray }}>
+              {on ? "New confirmed bookings get the 30 / 50 / 20 schedule." : "Bookings work as before: no payment is taken through PLUJ."}
+            </p>
+          </div>
+          <button className="btn" disabled={!!busy} style={sbtn(on ? "#FEF2F2" : C.green, on ? "#B91C1C" : "#fff", on ? "#FCA5A5" : null)}
+            onClick={() => {
+              if (!on && st && !st.configured) { setErr("Connect Stripe first (add the secret key), then turn payments on."); return; }
+              const q = on
+                ? "Turn payments OFF?\n\nNew bookings won't be charged. Payments already scheduled still run, and held money is still released."
+                : `Turn payments ON${st && st.mode === "live" ? " with REAL money" : " (Stripe TEST mode)"}?\n\nFrom now on, when a vendor confirms a booking the host pays 30% to secure it, 50% on the event morning and 20% the day after.`;
+              if (!window.confirm(q)) return;
+              act("sw", () => setPaymentsEnabled(!on), on ? "Payments turned off." : "Payments turned on.");
+            }}>
+            {busy === "sw" ? "Saving…" : on ? "Turn off" : "Turn on"}
+          </button>
+        </div>
+      </div>
+
+      {loading && <p style={{ fontSize:12, color:C.midGray }}>Loading payments…</p>}
+
+      {/* Problems first: money is frozen until one of these is decided */}
+      <h3 style={{ margin:"16px 0 8px", fontSize:14, fontWeight:800 }}>
+        Problems reported {openProblems.length > 0 && <span style={{ color:"#B91C1C" }}>({openProblems.length})</span>}
+      </h3>
+      {openProblems.length === 0 ? (
+        <p style={{ fontSize:12, color:C.midGray, margin:"0 0 6px" }}>None open.</p>
+      ) : openProblems.map(pr => {
+        const plan = plansById[pr.booking_id] || {};
+        const m = plan.booking_id ? planMoney(plan) : { held: 0 };
+        const b = plan.booking_requests || {};
+        return (
+          <div key={pr.id} style={{ ...card, background:"#FEF2F2", borderColor:"#FCA5A5" }}>
+            <p style={{ margin:0, fontSize:12.5, fontWeight:800, color:"#991B1B" }}>
+              🚩 {PROBLEM_LABEL[pr.kind] || pr.kind} · {b.service_name || "Booking"} · {b.event_date || ""}
+            </p>
+            <p style={{ margin:"3px 0 0", fontSize:11.5, color:C.midGray }}>
+              Host {names[plan.host_id] || "—"} → vendor {names[plan.vendor_id] || "—"} · held {fmtUSD(m.held)} ·
+              reported {new Date(pr.created_at).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })}
+            </p>
+            <p style={{ margin:"6px 0 0", fontSize:12.5, color:C.black, whiteSpace:"pre-wrap", lineHeight:1.55 }}>{pr.details}</p>
+            <input value={note[pr.booking_id] || ""} onChange={e => setNote(n => ({ ...n, [pr.booking_id]: e.target.value }))}
+              placeholder="Note to host and vendor (optional)"
+              style={{ width:"100%", height:34, marginTop:8, borderRadius:8, border:`1px solid ${C.border}`, padding:"0 9px",
+                       fontSize:12, boxSizing:"border-box" }} />
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+              <button className="btn" disabled={!!busy} style={sbtn(C.green, "#fff")}
+                onClick={() => window.confirm("Release the held money to the vendor and close this report?")
+                  && act("pr" + pr.id, () => paymentsCall("admin_release", { booking_id: pr.booking_id, note: note[pr.booking_id] }),
+                         r => `Released ${fmtUSD(r.sent_cents || 0)} to the vendor.`)}>
+                Release to vendor
+              </button>
+              <button className="btn" disabled={!!busy} style={sbtn("#B91C1C", "#fff")}
+                onClick={() => window.confirm("Refund everything the host paid and cancel the rest of the schedule?")
+                  && act("pr" + pr.id, () => paymentsCall("admin_refund", { booking_id: pr.booking_id, note: note[pr.booking_id] }),
+                         r => `Refunded ${fmtUSD(r.refunded_cents || 0)} to the host.`)}>
+                Refund host in full
+              </button>
+              <button className="btn" disabled={!!busy} style={sbtn("#fff", C.midGray, C.border)}
+                onClick={() => window.confirm("Dismiss this report? The money goes back to the normal release rules.")
+                  && act("pr" + pr.id, () => paymentsCall("admin_dismiss", { problem_id: pr.id, note: note[pr.booking_id] }), "Report dismissed.")}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Every booking with payments */}
+      <h3 style={{ margin:"16px 0 8px", fontSize:14, fontWeight:800 }}>Bookings with payments ({(data.plans || []).length})</h3>
+      {(data.plans || []).length === 0 && !loading && (
+        <p style={{ fontSize:12, color:C.midGray }}>None yet. They appear here when a vendor confirms a booking while payments are on.</p>
+      )}
+      {(data.plans || []).map(plan => {
+        const m = planMoney(plan);
+        const b = plan.booking_requests || {};
+        const label = plan.status === "on_hold" ? ["On hold", "#FEF2F2", "#B91C1C"]
+          : plan.status === "released" ? ["Paid to vendor", C.greenSoft, C.green]
+          : plan.status === "cancelled" ? [plan.refund_state === "failed" ? "Cancelled · refund FAILED" : "Cancelled", "#F3F4F6", C.midGray]
+          : plan.host_approved_at ? ["Host released", C.greenSoft, C.green] : ["Held", "#EFF6FF", "#1D4ED8"];
+        return (
+          <div key={plan.booking_id} style={card}>
+            <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"flex-start" }}>
+              <div style={{ minWidth:0 }}>
+                <p style={{ margin:0, fontSize:12.5, fontWeight:800 }}>{b.service_name || "Booking"} · {b.event_date || ""}</p>
+                <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray }}>
+                  {names[plan.host_id] || "Host"} → {names[plan.vendor_id] || "Vendor"} ·{" "}
+                  <span style={{ fontFamily:"monospace" }}>{plan.booking_id}</span>
+                </p>
+              </div>
+              <span style={{ fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99, background:label[1], color:label[2], flexShrink:0 }}>
+                {label[0]}
+              </span>
+            </div>
+            <p style={{ margin:"6px 0 0", fontSize:11.5, color:C.black }}>
+              Total {fmtUSD(plan.total_cents)} · collected {fmtUSD(m.collected)} · held {fmtUSD(m.held)} ·
+              sent to vendor {fmtUSD(m.sent)}{m.refunded ? ` · refunded ${fmtUSD(m.refunded)}` : ""}
+            </p>
+            <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray }}>
+              {m.pays.map(p => `${KIND_SHORT[p.kind]} ${p.status}`).join(" · ")}
+              {" · auto-release "}{new Date(plan.release_at).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
+            </p>
+            {plan.hold_reason && <p style={{ margin:"2px 0 0", fontSize:11, color:"#B91C1C" }}>Hold: {plan.hold_reason}</p>}
+            {plan.last_error && <p style={{ margin:"2px 0 0", fontSize:11, color:"#B45309" }}>Last issue: {plan.last_error}</p>}
+            {plan.status !== "released" && (
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8, alignItems:"center" }}>
+                {plan.status === "active" && (
+                  <button className="btn" disabled={!!busy} style={sbtn("#fff", "#B91C1C", "#FCA5A5")}
+                    onClick={() => act("h" + plan.booking_id, () => paymentsCall("admin_hold", { booking_id: plan.booking_id, hold: true, reason: "Held by PLUJ" }), "On hold.")}>
+                    Hold
+                  </button>
+                )}
+                {plan.status === "on_hold" && !openProblems.some(p => p.booking_id === plan.booking_id) && (
+                  <button className="btn" disabled={!!busy} style={sbtn("#fff", C.black, C.border)}
+                    onClick={() => act("h" + plan.booking_id, () => paymentsCall("admin_hold", { booking_id: plan.booking_id, hold: false }), "Hold removed.")}>
+                    Remove hold
+                  </button>
+                )}
+                {m.held > 0 && plan.status !== "cancelled" && (
+                  <button className="btn" disabled={!!busy} style={sbtn(C.green, "#fff")}
+                    onClick={() => window.confirm("Send everything held to the vendor now?")
+                      && act("r" + plan.booking_id, () => paymentsCall("admin_release", { booking_id: plan.booking_id }),
+                             r => `Released ${fmtUSD(r.sent_cents || 0)} to the vendor.`)}>
+                    Release now
+                  </button>
+                )}
+                {m.collected - m.refunded > 0 && (
+                  <>
+                    <input type="number" min="0" step="0.01" placeholder="$ amount"
+                      value={amt[plan.booking_id] || ""} onChange={e => setAmt(a => ({ ...a, [plan.booking_id]: e.target.value }))}
+                      style={{ width:92, height:30, borderRadius:8, border:`1px solid ${C.border}`, padding:"0 7px", fontSize:12 }} />
+                    <button className="btn" disabled={!!busy} style={sbtn("#FEF2F2", "#B91C1C", "#FCA5A5")}
+                      onClick={() => {
+                        const dollars = Number(amt[plan.booking_id]);
+                        const cents = amt[plan.booking_id] ? Math.round(dollars * 100) : null;
+                        if (cents !== null && !(cents > 0)) { setErr("Enter a refund amount, or leave it empty to refund everything."); return; }
+                        if (!window.confirm(cents ? `Refund ${fmtUSD(cents)} to the host?` : "Refund everything the host paid?")) return;
+                        act("f" + plan.booking_id, () => paymentsCall("admin_refund", { booking_id: plan.booking_id, amount_cents: cents }),
+                            r => `Refunded ${fmtUSD(r.refunded_cents || 0)}.`);
+                      }}>
+                      Refund
+                    </button>
+                  </>
+                )}
+                {(plan.last_error || plan.refund_state === "failed") && (
+                  <button className="btn" disabled={!!busy} style={sbtn("#fff", C.black, C.border)}
+                    onClick={() => act("t" + plan.booking_id, () => paymentsCall("admin_retry", { booking_id: plan.booking_id }), "Retried.")}>
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* Admin moderation console: every user and vendor, with actions. */
 
 function AdminAccounts({ adminId, onChanged }) {
@@ -642,6 +901,13 @@ function AdminPanel({ user, onClose, initialTab }) {
      was closed and reopened. */
   const refreshVendorApps = React.useCallback(() => getVendorApps().then(setVendorApps), []);
   useEffect(() => { refreshVendorApps(); }, [atab, refreshVendorApps]);
+  /* Open payment problems, for the Payments tab badge. */
+  const [openProblems, setOpenProblems] = useState(0);
+  const refreshProblems = React.useCallback(() => {
+    sb.from("booking_problems").select("id").eq("status", "open").get()
+      .then(({ data }) => setOpenProblems((data || []).length)).catch(() => {});
+  }, []);
+  useEffect(() => { refreshProblems(); }, [atab, refreshProblems]);
 
   const pendingCount = vendorApps.filter(v => v.status === "pending").length;
 
@@ -664,6 +930,7 @@ function AdminPanel({ user, onClose, initialTab }) {
     ["accounts","👥 Accounts", 0],
     ["messages","💬 Messages", 0],
     ["vendors","🏪 Vendors", pendingCount],
+    ["payments","💳 Payments", openProblems],
     ["cors",   "🌐 CORS",   0],
     ["rls",    "🔒 RLS",    0],
     ["sec",    "🛡️ Headers",0],
@@ -695,7 +962,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                        display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
           </div>
           {/* Tab bar */}
-          <div style={{ display:"flex", gap:2, marginTop:12 }}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginTop:12 }}>
             {tabs.map(([k,l,badge]) => (
               <button key={k} onClick={()=>setAtab(k)} className="btn"
                 style={{ padding:"7px 12px", borderRadius:"8px 8px 0 0", fontSize:11, fontWeight:700,
@@ -718,6 +985,8 @@ function AdminPanel({ user, onClose, initialTab }) {
           {/* ── VENDOR APPLICATIONS ── */}
           {atab === "accounts" && <AdminAccounts adminId={user.id} onChanged={refreshVendorApps} />}
           {atab === "messages" && <MessagesPanel user={user} isAdmin />}
+
+          {atab === "payments" && <AdminPayments onChanged={refreshProblems} />}
 
           {atab === "vendors" && (
             <div>

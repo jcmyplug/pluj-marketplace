@@ -2620,6 +2620,85 @@ export async function getVendorApplication(vendorId) {
   };
 }
 
+/* ── Payments (Stripe; PLUJ holds every payment) ─────────────────────────────
+   Server side: supabase/functions/payments* and sql/2026-10-07-payments.sql.
+   Schedule: 30% retainer when the vendor confirms, 50% on the event morning,
+   20% the day after. PLUJ holds it all until the host releases it (or approves
+   a vendor's early-release request), or automatically 3 days after the event,
+   unless the host reports a problem. Everything here is hidden while
+   platform_settings.payments_enabled is not 'true'. */
+export function paymentsOn() {
+  return String(_platformSettings.payments_enabled) === "true";
+}
+
+export async function paymentsCall(action, payload = {}) {
+  const token = sb.getAuthToken ? sb.getAuthToken() : null;
+  if (!token) return { error: "Please sign in again." };
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON, Authorization: "Bearer " + token },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (r.status === 401) return { error: "Please sign out and sign in again, then try once more." };
+      return { error: j.error || j.message || `Payments error (${r.status}).` };
+    }
+    return j;
+  } catch {
+    return { error: "Couldn't reach PLUJ payments. Check your connection and try again." };
+  }
+}
+
+/* The schedule, release requests and problem reports for one booking, as the
+   signed-in host, vendor or admin is allowed to see them (RLS). */
+export async function getBookingPaymentInfo(bookingId) {
+  const [plan, problems] = await Promise.all([
+    sb.from("booking_payment_plans").select("*, booking_payments(*), payment_release_requests(*)")
+      .eq("booking_id", bookingId).get(),
+    sb.from("booking_problems").select("*").eq("booking_id", bookingId)
+      .order("created_at", { ascending: false }).get(),
+  ]);
+  const p = Array.isArray(plan.data) ? plan.data[0] : null;
+  if (!p) return null;
+  const order = { retainer: 0, event_day: 1, final: 2 };
+  return {
+    plan: p,
+    payments: [...(p.booking_payments || [])].sort((a, b) => order[a.kind] - order[b.kind]),
+    requests: [...(p.payment_release_requests || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+    problems: problems.data || [],
+  };
+}
+
+/* Host / vendor actions that live in the database (see the SQL file). */
+export async function paymentsRpc(fn, args) {
+  const { data, error } = await sb.rpc(fn, args);
+  if (error) return { error: (error.message || "That didn't work. Please try again.").replace(/^.*?ERROR:\s*/, "") };
+  return { ok: true, data };
+}
+
+/* Admin → Payments: every plan with its payments and booking, open problems. */
+export async function adminLoadPayments() {
+  const [plans, problems] = await Promise.all([
+    sb.from("booking_payment_plans")
+      .select("*, booking_payments(*), booking_requests(service_name, event_date, status)")
+      .order("created_at", { ascending: false }).limit(200).get(),
+    sb.from("booking_problems").select("*").order("created_at", { ascending: false }).limit(200).get(),
+  ]);
+  return { plans: plans.data || [], problems: problems.data || [] };
+}
+
+export async function setPaymentsEnabled(on) {
+  const { data, error } = await sb.from("platform_settings").eq("key", "payments_enabled")
+    .update({ value: on ? "true" : "false" });
+  if (error || (Array.isArray(data) && data.length === 0)) {
+    return { error: (error && error.message) || "Couldn't change the setting (admin only)." };
+  }
+  _platformSettings.payments_enabled = on ? "true" : "false";
+  return { ok: true };
+}
+
 async function getVendorStatus(vendorId) {
   const { data } = await sb.from("vendor_profiles")
     .select("verification_status").eq("id", vendorId).single().get();
@@ -2898,7 +2977,7 @@ async function notifyBookingDecision() {
   /* No-op. public.enqueue_booking_emails() queues these server-side. */
 }
 
-async function updateRequestStatus(reqId, status, note = "") {
+async function updateRequestStatus(reqId, status, note = "", extra = {}) {
   if (IS_PREVIEW) {
     const req = await _pGet("req:" + reqId);
     if (!req) return null;
@@ -2908,6 +2987,8 @@ async function updateRequestStatus(reqId, status, note = "") {
   }
   const { data, error } = await sb.from("booking_requests").eq("id", reqId).update({
     status, vendor_note: note || null, updated_at: new Date().toISOString(),
+    /* With payments on, a confirm carries the agreed total_price. */
+    ...(extra || {}),
   });
   if (error) {
     console.error("[PLUJ] updateRequestStatus failed:", error);
@@ -3434,7 +3515,7 @@ export const RLS = {
   /* ── POLICY: request_respond ─────────────────────────────────────────────────
      Only the vendor the request is addressed to may approve / decline it.
      WITH CHECK (session.type = 'vendor' AND session.userId = req.vendorId)        */
-  async respondToRequest(reqId, status, note, sessionUser) {
+  async respondToRequest(reqId, status, note, sessionUser, extra = {}) {
     if (!sessionUser || sessionUser.type !== "vendor") return false;
     const sid = await this._sid();
     if (!sid || sid !== sessionUser.id) return false;
@@ -3442,7 +3523,7 @@ export const RLS = {
     const { data: reqData } = await sb.from("booking_requests")
       .select("user_id, vendor_id, event_date").eq("id", reqId).single().get();
     if (!reqData || reqData.vendor_id !== sessionUser.id) return false;
-    const updated = await updateRequestStatus(reqId, status, note);
+    const updated = await updateRequestStatus(reqId, status, note, extra);
     /* Notification is handled automatically by notify_user_request_response trigger */
     /* Email both parties confirming the decision (non-blocking — a mail
        failure must never roll back a successful accept/decline). */
@@ -5467,10 +5548,19 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
     if (user.type === "vendor") getVendorStatus(user.id).then(s => s && setVstatus(s));
   }, []);
 
-  async function respond(reqId, status) {
-    const updated = await RLS.respondToRequest(reqId, status, "", user);
-    if (updated) setRequests(r => r.map(req => req.id === reqId ? updated : req));
+  async function respond(reqId, status, extra = {}) {
+    const updated = await RLS.respondToRequest(reqId, status, "", user, extra);
+    if (updated && updated.__error) {
+      setActionMsg((updated.__error || "").replace(/^.*?ERROR:\s*/, "") || "That didn't save. Please try again.");
+      return;
+    }
+    if (updated) setRequests(r => r.map(req => req.id === reqId ? { ...req, status: updated.status || status } : req));
+    if (status === "confirmed" && paymentsOn()) {
+      setActionMsg("Confirmed. The host has been asked to pay the 30% retainer to secure the date.");
+    }
   }
+  /* Total price a vendor types when confirming with payments on, per request. */
+  const [priceDraft, setPriceDraft] = useState({});
 
   /* Vendor cancels a booking they'd confirmed (48h+ before the event).
      Writes 'cancelled', frees the calendar date, and emails the customer. */
@@ -5882,10 +5972,22 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                           Reason: {req.note}
                         </p>
                       )}
+                      {/* Payment schedule, release and problem reports (payments on) */}
+                      <BookingPayments req={req} user={user} />
+
                       {/* Vendor approve / decline buttons */}
                       {user.type === "vendor" && req.status === "pending" && (
+                        <ConfirmPriceField req={req} value={priceDraft[req.id] ?? ""}
+                          onChange={v => setPriceDraft(d => ({ ...d, [req.id]: v }))} />
+                      )}
+                      {user.type === "vendor" && req.status === "pending" && (
                         <div style={{ display:"flex", gap:7, marginTop:6 }}>
-                          <button onClick={() => respond(req.id, "confirmed")} className="btn"
+                          <button onClick={e => {
+                              e.stopPropagation();
+                              const pp = confirmPricePayload(req, priceDraft[req.id]);
+                              if (pp.error) { setActionMsg(pp.error); return; }
+                              respond(req.id, "confirmed", pp.extra);
+                            }} className="btn"
                             style={{ flex:1, padding:"7px 0", borderRadius:9,
                                      background:C.green, color:"#fff",
                                      border:"none", fontSize:12, fontWeight:700 }}>
@@ -6408,9 +6510,13 @@ export function PhotoManager({ photos, onChange, size = 78 }) {
    admins when a vendor confirms their email) opens the admin panel on Vendors;
    everything else (new_request, request_update, request_sent,
    booking_cancelled, review) hangs off a booking. */
+function bookingIdOf(n) { return (n && (n.reqId || n.request_id)) || null; }
 function notifTarget(n) {
   const t = String((n && n.type) || "");
   if (t === "vendor_application") return { admin: true, adminTab: "vendors" };
+  /* Payment problems open Admin → Payments for admins; anyone else (e.g. the
+     host told their report was reviewed) lands on My Requests. */
+  if (t === "payment_problem") return { admin: true, adminTab: "payments", tab: "requests", id: bookingIdOf(n) };
   const id = (n && (n.convId || n.conversation_id || n.inquiry_id)) || null;
   const bookingId = (n && (n.reqId || n.request_id)) || null;
   if (t === "message" || t === "admin_message" || t === "inquiry" ||
@@ -8596,6 +8702,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                           marginTop:8, lineHeight:1.6 }}>
                 Requests go to each vendor individually. No payment is collected until
                 a vendor confirms your booking.
+                {paymentsOn() && " When a vendor confirms, you pay 30% to secure the date, 50% on the event morning and 20% the day after. PLUJ holds every payment until you release it, or 3 days after your event."}
               </p>
               {/* Host due diligence, as in the Terms ("Hosts: check vendors before
                   you book") and the box ticked at sign-up. */}
@@ -10227,7 +10334,7 @@ const INFO_CONTENT = {
     ["5. Send your requests", "In the cart press Send booking requests. A request is not a booking yet: each vendor reviews it and accepts or declines. You'll get a notification and an email either way."],
     ["6. Track and change requests", "Open your account (your initials at the top right) and go to My Requests. You can see each request's status, use Edit request to change the date, guests or venue while it's still pending, or cancel it. Cancelling a request that hasn't been accepted is always free."],
     ["7. Talk to your vendors", "Use Messages in your account to ask questions or share details. Conversations stay open until 3 days after the event."],
-    ["8. Paying", "PLUJ doesn't take payment today. Once a vendor accepts, agree the price, deposit and payment method directly with them. See Cancellations and refunds for what applies."],
+    ["8. Paying", "When online payment is on for your booking, you'll see Pay retainer in My Requests once the vendor confirms. You pay 30% then to secure the date, 50% is charged to the same card on the morning of the event, and 20% the day after. PLUJ holds every payment: the vendor only gets it when you press Release payment, or automatically 3 days after the event. If something goes wrong, press Report a problem before then and PLUJ keeps holding the money while we look into it. If online payment isn't on for a booking, agree the price, deposit and payment method directly with the vendor. See Cancellations and refunds for what applies."],
     ["9. After the event", "Leave a review for each vendor. It helps other hosts and helps good vendors get booked. You can choose to show your name or stay a Verified customer."],
     ["Forgot your password?", "Press Log in / Sign up, enter your email and press Forgot password?. Open the newest email, tap the link, type your new password twice and press Save new password. You'll be signed in straight away."],
   ],
@@ -10241,7 +10348,7 @@ const INFO_CONTENT = {
     ["6. Answer booking requests", "When a host sends a request it appears under Requests and in Notifications, and we email you. Open it to see the date, time, guest count, venue and message. Press Accept booking to confirm or Decline if you can't do it. Please answer quickly — hosts often send requests to several vendors and book whoever confirms first."],
     ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
     ["8. Messages", "Use Messages to answer host questions before and after you accept. Conversations stay open until 3 days after the event."],
-    ["9. Getting paid", "PLUJ doesn't take payment today. Once you accept, agree the price, deposit and payment method directly with the host, and put your cancellation terms in writing."],
+    ["9. Getting paid", "When online payment is on, press Set up payouts with Stripe in your dashboard first; Stripe checks your identity and bank account. When you confirm a booking you enter the total price. The host pays 30% then, 50% on the event morning and 20% the day after, and PLUJ holds it. You're paid when the host releases it, or automatically 3 days after the event, unless the host reports a problem. Need money sooner, for supplies? Press Ask the host to release early on the booking. Stripe's card fee comes out of each payment, and after your first 3 months PLUJ keeps 3%. If online payment isn't on, agree the price, deposit and payment method directly with the host, and put your cancellation terms in writing."],
     ["10. After the event", "Hosts can review you, and you can rate the host from the request. Reviews appear under Reviews."],
     ["Pausing or leaving", "Under Account settings you can pause your business (your listings come off the marketplace and come back when you log in again) or close your account for good."],
   ],
@@ -10275,6 +10382,11 @@ const INFO_CONTENT = {
     ["Reformation and savings", "If any limitation, disclaimer, release or waiver in these Terms is held unenforceable or overbroad, it will be modified and reformed to the minimum extent necessary to make it enforceable, and will otherwise remain in full force. It will not be struck out entirely, and its partial unenforceability will not affect any other provision. Nothing in these Terms excludes liability that cannot lawfully be excluded, including liability for fraud, gross negligence, willful misconduct, or death or personal injury caused by our negligence, and any such liability is limited to the maximum extent the law allows."],
     ["Vendor obligations and indemnity", "If you list services on PLUJ, you represent and warrant that you hold all licences, permits, certifications and registrations required for your services, including food handling, alcohol service and any venue or occupancy permits, and that you will perform the services safely, lawfully and as described in your listing. You agree to defend, indemnify and hold harmless PLUJ and its owners, officers, employees and suppliers from any claim, demand, investigation, loss, liability, damage, fine or expense, including reasonable legal fees, arising out of or relating to your services, your listings, your conduct, any injury to persons or damage to property connected with your services, your breach of these Terms, or your violation of any law or third-party right. This obligation survives termination of your account."],
     ["Vendors: you are responsible for what you post", "If you are a vendor, you are solely responsible and liable for every listing, photograph, description, price, availability, review response, message and any other content you post, and for the services you provide or fail to provide. Each time you post or update anything, you represent and warrant that all information you give PLUJ or hosts about yourself and your business is true, accurate, current, complete and not misleading; that you are the business or are authorized to act for it; that you actually offer, and are able to deliver, the services you list on the terms you list; and that every photograph shows your own work or work you have the right to use. You must keep this information up to date and correct anything that becomes untrue. You must not use PLUJ to defraud, deceive or scam anyone, including by taking a deposit or payment for services you do not intend to or cannot provide, impersonating another person or business, or posting fake listings. You are liable for any loss, damage or claim caused by information you provide that is false, misleading or inaccurate, and your indemnity in the section above covers it. PLUJ may remove any vendor it believes has provided false information, without notice, and may report suspected fraud to law enforcement and cooperate with any investigation. You confirm this statement separately when you create a vendor account."],
+    ["Payments through PLUJ", "When online payment is enabled for a booking, the host pays through PLUJ in three parts: 30% when the vendor confirms the booking, to secure the date; 50% on the morning of the event; and 20% the day after the event. By paying the first part, the host authorizes PLUJ to charge the same card for the remaining parts on those dates, and to retry a charge that fails. Payments are processed by Stripe. PLUJ collects payments as the vendor's limited payment collection agent: a payment received by PLUJ counts as payment to the vendor for that part of the booking, and the vendor may not ask the host to pay it again."],
+    ["How PLUJ holds payments", "PLUJ holds each payment and sends it to the vendor, less the fees below, when the first of these happens: the host releases it; the host approves the vendor's request to release payment early; or automatically three days after the event, if the host has not reported a problem. Holding payments is a service to protect hosts. It is not escrow, PLUJ is not an escrow agent, trustee or bank, and held amounts earn no interest. Vendors receive payouts through Stripe Connect, must complete Stripe's identity and bank verification, and agree to Stripe's Connected Account Agreement. PLUJ is not responsible for delays caused by Stripe, banks, or a vendor's incomplete Stripe account."],
+    ["Reporting a problem with a booking", "Until a payment is released, the host can report a problem, such as a vendor who did not show up, a service that was not what was promised, or suspected fraud. PLUJ then holds the payment and, after considering what both parties tell us, decides at its sole discretion whether to release it to the vendor, refund the host in whole or in part, or keep holding it while we review. Hosts and vendors agree to cooperate and give us accurate information. PLUJ's decision about held money is final as between PLUJ and the users, does not decide any other claim between them, and PLUJ is not liable for it. Reports that are knowingly false breach these Terms."],
+    ["Fees", "PLUJ currently charges no fees. Stripe's card processing fees are deducted from the vendor's payout unless the booking shows them added to the host's total. Starting three months after an account is created, PLUJ keeps 3% of each payment from the vendor's payout, and adds a 1% service fee to each payment a host makes; each is counted from that person's own sign-up date. Fees that apply are shown before payment. We may change our fees with notice; changes do not affect payments already made."],
+    ["Refunds, reversals and chargebacks", "Refunds follow the Cancellations and refunds page, or PLUJ's decision on a reported problem. If PLUJ refunds a host after money was already sent to the vendor (for example after an early release), the vendor authorizes PLUJ to reverse that transfer or recover the amount from the vendor's future payouts. If a host disputes a charge with their bank, PLUJ may hold related payouts until the dispute is resolved, and the vendor is responsible for any amount lost because of the vendor's services, conduct or information. Hosts agree to contact PLUJ before disputing a charge."],
     ["Insurance is between you and the other party", "PLUJ does not provide, arrange, broker, recommend or procure insurance of any kind, and nothing on the platform is an offer of insurance or a guarantee of payment. Vendors are solely responsible for deciding what insurance their business needs and for obtaining it, including any coverage a customer asks them to carry. Customers are solely responsible for deciding whether to obtain their own event or cancellation insurance. Any insurance requirement agreed between a customer and a vendor is a term of their own contract, not of these Terms, and PLUJ is not responsible for verifying that any policy exists, is in force, or covers any particular loss."],
     ["Customer indemnity", "You agree to defend, indemnify and hold harmless PLUJ from any claim arising out of your use of the platform, the content you post, your conduct at or in connection with an event, your breach of these Terms, or your violation of any law or third-party right."],
     ["Content posted by users", "Listings, photographs, descriptions, reviews and messages are created by users, not by PLUJ. We do not adopt, endorse or verify them, and we are not responsible for them. We may remove content at our discretion but are under no obligation to monitor it."],
@@ -10300,19 +10412,21 @@ const INFO_CONTENT = {
     ["Deleting your account", "You can permanently delete your account and its data at any time from your account menu, under Profile then Account settings. You do not need to contact us. Deletion removes your profile, listings, bookings, messages and reviews, and cannot be undone. If you only want to pause, deactivate instead — in the same place: your listings come down and bookings stop, but nothing is erased."],
     ["How long we keep things", "We keep your account data until you delete it. We may retain limited records where we are legally required to, such as transaction records for tax and accounting, and a record of your acceptance of our Terms."],
     ["Cookies and browser storage", "PLUJ stores your sign-in session, your cart, your saved vendors and your display preferences in your browser. These are needed for the site to work and are not used for advertising or shared with advertisers. Clearing your browser storage signs you out and empties your cart."],
-    ["Who processes data for us", "We use Supabase for our database and sign-in, Vercel for hosting, and Resend for sending email. Where online payment is enabled, Stripe processes payments and receives the information needed to do so. Each handles data on our behalf under its own terms. We do not sell your personal information, and we do not share it for cross-context behavioural advertising as those terms are defined under California law."],
+    ["Who processes data for us", "We use Supabase for our database and sign-in, Vercel for hosting, and Resend for sending email. Where online payment is enabled, Stripe processes payments and receives the information needed to do so, and Stripe Connect verifies vendors' identity and bank details so they can be paid. Each handles data on our behalf under its own terms. We do not sell your personal information, and we do not share it for cross-context behavioural advertising as those terms are defined under California law."],
     ["Staff access", "Our administrators can access account records and, where necessary to investigate a report or a dispute, the messages exchanged between users on the platform. We access messages only when there is a specific reason to."],
     ["Your rights", "Depending on where you live, you may have the right to access, correct, delete or export your personal information, and to object to certain processing. Use the deletion tool in your account menu, or contact us. We will not discriminate against you for exercising these rights."],
     ["If there is a breach", "If a security incident affects your personal information we will notify you, and any regulator required by law, as promptly as we reasonably can."],
   ],
   "Cancellations and refunds": [
-    ["What applies today", "PLUJ does not currently collect payment. Booking requests are free to send and free to cancel, and money changes hands directly between you and the vendor. The terms below govern payments made through PLUJ and apply from the moment online payment is enabled on a booking. Your booking screen always shows which terms apply to it."],
+    ["What applies today", "Booking requests are free to send and free to cancel. When online payment is enabled for a booking, your booking screen shows the payment schedule; otherwise money changes hands directly between you and the vendor. The terms below govern payments made through PLUJ."],
+    ["How payment works", "You pay 30% when the vendor confirms, to secure your date; 50% is charged to the same card on the morning of the event; and 20% the day after. PLUJ holds every payment. The vendor only gets it when you release it, when you approve the vendor's request for early release, or automatically 3 days after the event if you haven't reported a problem."],
     ["Before a vendor accepts", "A request that has not been accepted is not a booking. You can withdraw it at any time at no cost, and nothing is charged."],
+    ["What a refund applies to", "A refund applies to what you have paid so far. When a booking is cancelled, payments that weren't due yet are cancelled and never charged."],
     ["If you cancel a confirmed booking", "Refunds depend on how long before the event start time you cancel. More than 4 days before: refunded in full, less payment processing fees. Three to four days before: 50 percent. Two days before: 25 percent. Within 48 hours of the event: no refund. Vendors may set their own schedule within limits we publish, and venues commonly set stricter terms because they hold a date exclusively. The exact terms for your booking are shown before you pay and are recorded with the booking, so a vendor changing their policy later cannot change yours."],
     ["What less fees means", "Card processing fees, and any PLUJ service fee, are not returned on a refund. They are charged when the payment is taken and are not recoverable afterwards. A refund described as full means the booking amount less those fees, not the total you were charged."],
     ["If the vendor cancels", "You are refunded in full, including all fees, whatever the timing. Where we can, we will help you find a replacement vendor for your date."],
     ["Changing a confirmed booking", "Changing the date, guest count or location needs the vendor to approve it, and re-opens the request until they do. If they decline, the original booking stands and the schedule above continues to apply. Changes are not accepted within 48 hours of the event."],
-    ["If a vendor does not turn up", "Contact us within 7 days. Where payment was taken through PLUJ we will look into it with both parties and may refund you in full. PLUJ does not perform the services and is not the vendor, but no-shows are grounds for removal from the marketplace."],
+    ["If a vendor does not turn up, or something is wrong", "Press Report a problem on the booking in My Requests before the payment is released (up to 3 days after the event). PLUJ keeps holding the money while we look into it with both parties, and may refund you in full or in part. After money has been released, contact us within 7 days and we will still look into it. PLUJ does not perform the services and is not the vendor, but no-shows and misrepresentation are grounds for removal from the marketplace."],
     ["Before you contact your bank", "Contact us first. A chargeback raised without contacting us costs the vendor money and takes months to resolve, and we can usually settle it faster directly. Raising a chargeback does not remove your obligations under these terms."],
   ],
 
@@ -10327,6 +10441,357 @@ const INFO_CONTENT = {
     ["Consequences", "Breaking these rules can result in a warning, listing removal, suspension, or permanent removal from PLUJ. Serious violations may be reported to the relevant authorities."],
   ],
 };
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAYMENTS: what hosts and vendors see on a booking
+   ══════════════════════════════════════════════════════════════════════════ */
+const PAY_KIND = { retainer: "Retainer", event_day: "Event-day payment", final: "Final payment" };
+const PROBLEM_KINDS = [
+  ["no_show",          "The vendor didn't show up"],
+  ["not_as_described", "The service wasn't what was promised"],
+  ["scam",             "I think this vendor is a scam"],
+  ["other",            "Something else"],
+];
+export function fmtUSD(cents) {
+  return "$" + ((cents || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtHouston(iso, withTime = true) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric",
+    ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}) });
+}
+function chargedCentsOf(p) {
+  return (p.amount_cents || 0) + (p.host_fee_cents || 0) + (p.host_service_fee_cents || 0);
+}
+
+/* The payment schedule on one booking, with the actions the signed-in host or
+   vendor can take. Renders nothing for bookings without payments. */
+export function BookingPayments({ req, user, onChanged }) {
+  const [info, setInfo]       = useState(null);
+  const [busy, setBusy]       = useState("");
+  const [err, setErr]         = useState("");
+  const [msg, setMsg]         = useState("");
+  const [reporting, setRep]   = useState(false);
+  const [kind, setKind]       = useState("");
+  const [details, setDetails] = useState("");
+  const [asking, setAsking]   = useState(false);
+  const [note, setNote]       = useState("");
+
+  const reqId = req && req.id;
+  const load = React.useCallback(() => {
+    if (!reqId) return;
+    getBookingPaymentInfo(reqId).then(setInfo).catch(() => {});
+  }, [reqId]);
+  useEffect(() => { load(); }, [load]);
+  /* Payments change in the background (scheduler, webhook): refresh now and then. */
+  useEffect(() => {
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  if (!info) return null;
+  const { plan, payments, requests, problems } = info;
+  const isHost   = user && user.id === plan.host_id;
+  const isVendor = user && user.id === plan.vendor_id;
+  if (!isHost && !isVendor) return null;
+
+  const openProblem = problems.find(p => p.status === "open");
+  const pendingReq  = requests.find(r => r.status === "pending");
+  const anyPaid     = payments.some(p => p.status === "paid");
+  const heldCents   = payments.filter(p => p.status === "paid" && !p.transferred_at)
+                              .reduce((n, p) => n + p.amount_cents - Math.min(p.amount_cents, p.refunded_cents || 0), 0);
+  const releaseDay  = fmtHouston(plan.release_at, false);
+
+  async function run(label, fn) {
+    setBusy(label); setErr(""); setMsg("");
+    const r = await fn();
+    setBusy("");
+    if (r && r.error) { setErr(r.error); return false; }
+    if (r && r.url) { window.location.href = r.url; return true; }
+    load();
+    if (onChanged) onChanged();
+    return true;
+  }
+
+  const chip = (() => {
+    if (plan.status === "on_hold") return ["On hold", "#FEF2F2", "#B91C1C"];
+    if (plan.status === "cancelled") {
+      if (plan.refund_state === "pending") return ["Cancelled · refund in progress", "#FFFBEB", "#B45309"];
+      if (plan.refund_state === "done")    return ["Cancelled · refunded", "#F3F4F6", C.midGray];
+      return ["Cancelled", "#F3F4F6", C.midGray];
+    }
+    if (plan.status === "released") return ["Paid to vendor", C.greenSoft, C.green];
+    if (plan.host_approved_at)      return [isHost ? "Released by you" : "Released by the host", C.greenSoft, C.green];
+    return ["Held by PLUJ", "#EFF6FF", "#1D4ED8"];
+  })();
+
+  const btn = (bg, fg, bd) => ({ padding:"8px 12px", borderRadius:9, fontSize:12, fontWeight:800, cursor:"pointer",
+                                 background:bg, color:fg, border: bd ? `1px solid ${bd}` : "none" });
+
+  return (
+    <div onClick={e => e.stopPropagation()}
+      style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:"10px 12px" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6 }}>
+        <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.black }}>💳 Payments · {fmtUSD(plan.total_cents)}</p>
+        <span style={{ fontSize:10.5, fontWeight:800, padding:"2px 9px", borderRadius:99, background:chip[1], color:chip[2] }}>
+          {chip[0]}
+        </span>
+      </div>
+
+      {payments.map(p => {
+        const amount = isHost ? chargedCentsOf(p) : p.amount_cents;
+        let state;
+        if (p.status === "paid") {
+          state = "Paid " + fmtHouston(p.paid_at, false)
+            + (isVendor ? (p.transferred_at ? " · sent to you" : " · held by PLUJ") : (p.transferred_at ? " · released" : ""));
+        } else if (p.status === "processing") state = "Processing…";
+        else if (p.status === "failed")       state = "Didn't go through";
+        else if (p.status === "cancelled")    state = "Cancelled";
+        else state = p.kind === "retainer" ? "Due now" : "Charged " + fmtHouston(p.due_at);
+        const canPay = isHost && plan.status !== "cancelled"
+          && ((p.status === "scheduled" && p.kind === "retainer") || p.status === "failed");
+        return (
+          <div key={p.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0",
+                                   borderTop:`1px solid ${C.border}` }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>
+                {PAY_KIND[p.kind]} · {Number(p.percent)}%
+              </p>
+              <p style={{ margin:"1px 0 0", fontSize:11, color: p.status === "failed" ? "#B91C1C" : C.midGray }}>
+                {state}
+                {p.refunded_cents > 0 ? ` · ${fmtUSD(p.refunded_cents)} refunded` : ""}
+                {p.status === "failed" && p.last_error ? ` (${p.last_error})` : ""}
+              </p>
+            </div>
+            <span style={{ fontSize:12.5, fontWeight:800, color:C.black }}>{fmtUSD(amount)}</span>
+            {canPay && (
+              <button className="btn" disabled={!!busy}
+                onClick={() => run("pay" + p.id, () => paymentsCall("pay", { payment_id: p.id }))}
+                style={btn(C.orange, "#fff")}>
+                {busy === "pay" + p.id ? "Opening…" : p.kind === "retainer" && p.status === "scheduled" ? "Pay retainer" : "Pay now"}
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {/* What happens to the money, in plain words */}
+      <p style={{ margin:"8px 0 0", fontSize:11, color:C.midGray, lineHeight:1.55 }}>
+        {plan.status === "cancelled" ? (
+          plan.refund_percent != null
+            ? `This booking was cancelled. ${Number(plan.refund_percent) > 0 ? "Refunds follow PLUJ's cancellation policy." : "Under PLUJ's cancellation policy no refund is due."}`
+            : "This booking was cancelled."
+        ) : plan.status === "released" ? (
+          isHost ? "Everything you paid has been sent to the vendor." : "Everything has been sent to your Stripe account."
+        ) : openProblem ? (
+          isHost ? `You reported a problem on ${fmtHouston(openProblem.created_at, false)}. PLUJ is reviewing it, and nothing goes to the vendor until we decide.`
+                 : "The host reported a problem. PLUJ is holding the payment while we review it, and may message you for details."
+        ) : plan.host_approved_at ? (
+          isHost ? "You released this payment. Anything still to be charged goes to the vendor as soon as it's paid."
+                 : "The host released this payment. Anything still to be charged comes to you as soon as it's paid."
+        ) : isHost ? (
+          `PLUJ holds your payments. The vendor only gets them when you press Release payment, or automatically on ${releaseDay} if you haven't reported a problem.`
+        ) : (
+          `PLUJ holds the host's payments and sends them to your Stripe account when the host releases them, or automatically on ${releaseDay}. Stripe's card fee comes out of each payment.`
+        )}
+      </p>
+
+      {/* Host: answer an early-release request */}
+      {isHost && pendingReq && !openProblem && (
+        <div style={{ marginTop:8, background:"#FFF7ED", border:`1px solid ${C.orangeBorder || "#FED7AA"}`, borderRadius:10, padding:"9px 11px" }}>
+          <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>
+            The vendor asked you to release the {fmtUSD(heldCents)} paid so far, before the event.
+          </p>
+          {pendingReq.note && <p style={{ margin:"3px 0 0", fontSize:11.5, color:C.midGray, fontStyle:"italic" }}>“{pendingReq.note}”</p>}
+          <div style={{ display:"flex", gap:6, marginTop:7 }}>
+            <button className="btn" disabled={!!busy} style={btn(C.green, "#fff")}
+              onClick={() => run("rq", () => paymentsRpc("answer_release_request", { p_request_id: pendingReq.id, p_approve: true }))}>
+              Approve
+            </button>
+            <button className="btn" disabled={!!busy} style={btn("#fff", C.midGray, C.border)}
+              onClick={() => run("rq", () => paymentsRpc("answer_release_request", { p_request_id: pendingReq.id, p_approve: false }))}>
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Host: release, or report a problem */}
+      {isHost && !reporting && plan.status !== "cancelled" && plan.status !== "released" && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+          {plan.status === "active" && !plan.host_approved_at && !openProblem && anyPaid && (
+            <button className="btn" disabled={!!busy} style={btn(C.green, "#fff")}
+              onClick={() => {
+                if (!window.confirm("Release payment to the vendor now?\n\nEverything paid so far goes to them right away, and the rest goes to them as soon as it's paid. Only do this once you're happy with the service.")) return;
+                run("rel", () => paymentsRpc("approve_payment_release", { p_booking_id: plan.booking_id }))
+                  .then(ok => ok && setMsg("Released. The vendor will be paid shortly."));
+              }}>
+              {busy === "rel" ? "Releasing…" : "Release payment to vendor"}
+            </button>
+          )}
+          {anyPaid && !openProblem && (
+            <button className="btn" disabled={!!busy} style={btn("#FEF2F2", "#B91C1C", "#FCA5A5")}
+              onClick={() => { setRep(true); setErr(""); }}>
+              Report a problem
+            </button>
+          )}
+        </div>
+      )}
+      {isHost && reporting && (
+        <div style={{ marginTop:8, background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"9px 11px" }}>
+          <p style={{ margin:"0 0 6px", fontSize:12, fontWeight:800, color:"#991B1B" }}>
+            What went wrong? PLUJ holds the payment while we look into it.
+          </p>
+          <select value={kind} onChange={e => setKind(e.target.value)}
+            style={{ width:"100%", height:36, borderRadius:8, border:`1px solid ${C.border}`, fontSize:12.5, padding:"0 8px", marginBottom:6 }}>
+            <option value="">Choose one…</option>
+            {PROBLEM_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <textarea value={details} onChange={e => setDetails(e.target.value)} maxLength={2000}
+            placeholder="Tell us what happened: dates, what was promised, what you've tried."
+            style={{ width:"100%", minHeight:70, borderRadius:8, border:`1px solid ${C.border}`, fontSize:12.5,
+                     padding:"7px 9px", resize:"vertical", boxSizing:"border-box", fontFamily:"'Inter',sans-serif" }} />
+          <div style={{ display:"flex", gap:6, marginTop:6 }}>
+            <button className="btn" disabled={!!busy || !kind || details.trim().length < 10} style={btn("#B91C1C", "#fff")}
+              onClick={() => run("rep", () => paymentsRpc("report_booking_problem",
+                { p_booking_id: plan.booking_id, p_kind: kind, p_details: details.trim() }))
+                .then(ok => { if (ok) { setRep(false); setKind(""); setDetails("");
+                  setMsg("Reported. PLUJ is holding the payment and will contact you."); } })}>
+              {busy === "rep" ? "Sending…" : "Send report"}
+            </button>
+            <button className="btn" disabled={!!busy} style={btn("#fff", C.midGray, C.border)}
+              onClick={() => setRep(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor: ask for early release (e.g. the deposit, to buy supplies) */}
+      {isVendor && plan.status === "active" && !plan.host_approved_at && !openProblem && (
+        pendingReq ? (
+          <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B45309", fontWeight:600 }}>
+            You asked the host to release payment early. Waiting for their answer.
+          </p>
+        ) : heldCents > 0 && !asking ? (
+          <button className="btn" disabled={!!busy} style={{ ...btn("#fff", C.black, C.border), marginTop:8 }}
+            onClick={() => setAsking(true)}>
+            Ask the host to release {fmtUSD(heldCents)} early
+          </button>
+        ) : asking ? (
+          <div style={{ marginTop:8 }}>
+            <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={500}
+              placeholder="Why do you need it early? For example: to buy supplies for your event."
+              style={{ width:"100%", minHeight:56, borderRadius:8, border:`1px solid ${C.border}`, fontSize:12.5,
+                       padding:"7px 9px", resize:"vertical", boxSizing:"border-box", fontFamily:"'Inter',sans-serif" }} />
+            <div style={{ display:"flex", gap:6, marginTop:6 }}>
+              <button className="btn" disabled={!!busy} style={btn(C.orange, "#fff")}
+                onClick={() => run("ask", () => paymentsRpc("request_early_release", { p_booking_id: plan.booking_id, p_note: note.trim() }))
+                  .then(ok => { if (ok) { setAsking(false); setNote(""); setMsg("Sent. The host has been asked."); } })}>
+                {busy === "ask" ? "Sending…" : "Send request"}
+              </button>
+              <button className="btn" disabled={!!busy} style={btn("#fff", C.midGray, C.border)}
+                onClick={() => setAsking(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : null
+      )}
+
+      {err && <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+      {msg && <p style={{ margin:"8px 0 0", fontSize:11.5, color:C.green, fontWeight:700 }}>✓ {msg}</p>}
+    </div>
+  );
+}
+
+/* Vendor confirming a request while payments are on: they confirm the total
+   price, which the 30/50/20 schedule is built from. */
+export function ConfirmPriceField({ req, value, onChange }) {
+  if (!paymentsOn()) return null;
+  return (
+    <div onClick={e => e.stopPropagation()} style={{ marginTop:8 }}>
+      <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.midGray, marginBottom:3 }}>
+        Total price for this booking (USD)
+      </label>
+      <input type="number" min="10" step="0.01" inputMode="decimal" value={value}
+        placeholder={req.packagePrice != null ? String(req.packagePrice) : "e.g. 450"}
+        onChange={e => onChange(e.target.value)}
+        style={{ width:"100%", height:38, borderRadius:9, border:`1px solid ${C.border}`, padding:"0 10px",
+                 fontSize:14, fontWeight:700, boxSizing:"border-box" }} />
+      <p style={{ margin:"3px 0 0", fontSize:10.5, color:C.lightGray, lineHeight:1.5 }}>
+        The host pays 30% when you confirm, 50% on the event morning and 20% the day after. PLUJ holds it until
+        the host releases it, or 3 days after the event.
+      </p>
+    </div>
+  );
+}
+
+/* Checks the price before a vendor confirms; returns the update to send, or
+   an error message. */
+export function confirmPricePayload(req, draft) {
+  if (!paymentsOn()) return { extra: {} };
+  const raw = draft !== undefined && draft !== "" ? draft : (req.packagePrice != null ? String(req.packagePrice) : "");
+  const n = Math.round(Number(raw) * 100) / 100;
+  if (!isFinite(n) || n < 10) return { error: "Enter the total price for this booking (at least $10) before confirming." };
+  return { extra: { total_price: n } };
+}
+
+/* Vendor dashboard: connect Stripe so PLUJ can pay you. */
+export function VendorPayoutsCard({ user }) {
+  const [vp, setVp]     = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState("");
+  useEffect(() => {
+    sb.from("vendor_profiles")
+      .select("stripe_account_id, stripe_details_submitted, stripe_transfers_enabled, stripe_payouts_enabled")
+      .eq("id", user.id).single().get().then(({ data }) => setVp(data || {}));
+  }, [user.id]);
+  if (!paymentsOn() || !vp) return null;
+
+  const ready = !!vp.stripe_transfers_enabled;
+  const started = !!vp.stripe_account_id;
+  async function go(action) {
+    setBusy(true); setErr("");
+    const r = await paymentsCall(action);
+    setBusy(false);
+    if (r.error) { setErr(r.error); return; }
+    if (r.url) window.location.href = r.url;
+  }
+  return (
+    <div style={{ background: ready ? C.greenSoft : "#FFF7ED", border:`1px solid ${ready ? C.green + "55" : "#FED7AA"}`,
+                  borderRadius:14, padding:"14px 16px", marginBottom:14 }}>
+      <p style={{ margin:0, fontSize:14, fontWeight:800, color:C.black }}>
+        {ready ? "✓ Payouts set up" : "💳 Get paid with Stripe"}
+      </p>
+      <p style={{ margin:"4px 0 10px", fontSize:12, color:C.midGray, lineHeight:1.55 }}>
+        {ready
+          ? "Hosts pay through PLUJ. We hold each payment until the host releases it, or 3 days after the event, then send it to your Stripe account. Stripe pays it into your bank."
+          : started
+            ? "Stripe still needs a few details (identity and bank account) before PLUJ can send you money."
+            : "Hosts pay through PLUJ, and we send your money to your bank through Stripe. Stripe checks your identity and bank account, which also shows hosts you're a real business. It takes about 5 minutes."}
+      </p>
+      <button className="btn" disabled={busy} onClick={() => go(ready ? "vendor_dashboard" : "vendor_connect")}
+        style={{ padding:"9px 16px", borderRadius:10, border:"none", fontSize:13, fontWeight:800,
+                 background: ready ? "#fff" : C.orange, color: ready ? C.black : "#fff",
+                 boxShadow: ready ? `inset 0 0 0 1px ${C.border}` : "none" }}>
+        {busy ? "Opening Stripe…" : ready ? "Open Stripe dashboard" : started ? "Finish Stripe setup" : "Set up payouts with Stripe"}
+      </button>
+      {err && <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+    </div>
+  );
+}
+
+/* Coming back from Stripe Checkout or Stripe onboarding: /?payment=success…
+   or /?stripe=return. Read on the first render, like email links, because
+   the "URL follows the view" effect clears the query string right after. */
+function readPaymentReturnFromUrl() {
+  if (typeof window === "undefined") return null;
+  const q = new URLSearchParams(window.location.search || "");
+  const p = q.get("payment");
+  if (p === "success" || p === "cancelled") return { kind: "payment", result: p, booking: q.get("booking") || "" };
+  const s = q.get("stripe");
+  if (s === "return" || s === "refresh") return { kind: "stripe", result: s };
+  return null;
+}
 
 export function InfoPageModal({ page, onClose }) {
   /* Fetched on open so a changed address appears without a redeploy. */
@@ -10973,6 +11438,13 @@ export default function PlujApp() {
      during the first render — see readEmailLinkFromUrl for why it cannot wait
      for an effect. */
   const [emailLink, setEmailLink] = useState(readEmailLinkFromUrl);
+  /* Back from Stripe Checkout or Stripe onboarding (see readPaymentReturnFromUrl). */
+  const [payReturn, setPayReturn] = useState(readPaymentReturnFromUrl);
+  const [payBanner, setPayBanner] = useState(null);   // { tone: "ok" | "warn" | "info", text }
+  /* Site settings (payments on/off and the rest) load once; re-render when
+     they arrive so payment screens appear without a reload. */
+  const [, setSettingsTick] = useState(0);
+  useEffect(() => { loadPlatformSettings().then(() => setSettingsTick(t => t + 1)); }, []);
 
   /* ── MAINTENANCE MODE ──
      Starts at false — assume open — rather than null. Starting at "unknown"
@@ -11062,6 +11534,40 @@ export default function PlujApp() {
   const [accountConvId,  setAccountConvId]  = useState(null);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [adminPanelTab,  setAdminPanelTab]  = useState("accounts");
+
+  /* Finish a return from Stripe once we know who is signed in. */
+  useEffect(() => {
+    if (!payReturn || !user || user.type === "guest") return;
+    const pr = payReturn;
+    setPayReturn(null);
+    (async () => {
+      if (pr.kind === "payment") {
+        if (pr.result === "cancelled") {
+          setPayBanner({ tone: "info", text: "Payment cancelled. Nothing was charged." });
+          return;
+        }
+        setPayBanner({ tone: "info", text: "Confirming your payment with Stripe…" });
+        const r = pr.booking ? await paymentsCall("checkout_return", { booking_id: pr.booking }) : {};
+        setPayBanner(r && r.error
+          ? { tone: "warn", text: "We're still confirming your payment with Stripe. It will show in My Requests within a few minutes." }
+          : { tone: "ok", text: "✅ Payment received. PLUJ is holding it until you release it, or 3 days after your event." });
+        setAccountTab("requests");
+        setAccountOpen(true);
+      } else if (pr.kind === "stripe") {
+        if (pr.result === "refresh") {
+          /* Stripe's onboarding link expired: make a fresh one. */
+          const r = await paymentsCall("vendor_connect");
+          if (r && r.url) { window.location.href = r.url; return; }
+          setPayBanner({ tone: "warn", text: (r && r.error) || "Couldn't reopen Stripe. Try again from your dashboard." });
+          return;
+        }
+        const r = await paymentsCall("vendor_refresh");
+        setPayBanner(r && r.transfers_enabled
+          ? { tone: "ok", text: "✅ Payouts are set up. PLUJ can now send you money through Stripe." }
+          : { tone: "warn", text: "Stripe still needs a few details before you can be paid. Open your dashboard and press Finish Stripe setup." });
+      }
+    })();
+  }, [payReturn, user]);
   const [notifOpen,      setNotifOpen]      = useState(false);
   const [originBlocked,  setOriginBlocked]  = useState(false);
 
@@ -11879,6 +12385,22 @@ export default function PlujApp() {
       {/* ── SECURITY META HEADERS ──────────────────────────────────────────────── */}
       <SecurityMetaHeaders />
 
+      {/* Message after returning from Stripe */}
+      {payBanner && (
+        <div role="status"
+          style={{ position:"fixed", top:80, left:"50%", transform:"translateX(-50%)", zIndex:1100,
+                   width:"calc(100% - 32px)", maxWidth:520, borderRadius:12, padding:"12px 44px 12px 14px",
+                   fontSize:13, fontWeight:600, lineHeight:1.5, boxShadow:"0 10px 30px rgba(0,0,0,0.18)",
+                   background: payBanner.tone === "ok" ? "#ECFDF5" : payBanner.tone === "warn" ? "#FFFBEB" : "#EFF6FF",
+                   color: payBanner.tone === "ok" ? "#065F46" : payBanner.tone === "warn" ? "#92400E" : "#1E3A8A",
+                   border: `1px solid ${payBanner.tone === "ok" ? "#A7F3D0" : payBanner.tone === "warn" ? "#FCD34D" : "#BFDBFE"}` }}>
+          {payBanner.text}
+          <button onClick={() => setPayBanner(null)} aria-label="Dismiss" className="btn"
+            style={{ position:"absolute", right:8, top:8, width:28, height:28, borderRadius:99, border:"none",
+                     background:"rgba(0,0,0,0.06)", cursor:"pointer", fontSize:13 }}>✕</button>
+        </div>
+      )}
+
       {/* ── ADMIN PANEL ─────────────────────────────────────────────────────── */}
       {adminPanelOpen && user?.type === "admin" && (
         <Suspense fallback={<DashboardLoading label="the admin panel" />}>
@@ -11988,13 +12510,12 @@ export default function PlujApp() {
                      actually holds the thing they tapped. */
                   onOpenTarget={(t) => {
                     setNotifOpen(false);
-                    if (t.admin) {
-                      if (user.type === "admin") {
-                        setAdminPanelTab(t.adminTab || "accounts");
-                        setAccountOpen(false); setAdminPanelOpen(true);
-                      }
+                    if (t.admin && user.type === "admin") {
+                      setAdminPanelTab(t.adminTab || "accounts");
+                      setAccountOpen(false); setAdminPanelOpen(true);
                       return;
                     }
+                    if (t.admin && !t.tab) return;
                     setAccountTab(t.tab); setAccountConvId(t.id); setAccountOpen(true); }} />
               )}
               <button onClick={() => { setAccountOpen(o=>!o); setNotifOpen(false); }}

@@ -49,6 +49,10 @@ import {
   sb,
   submitReviewDB,
   uploadVendorPhoto,
+  BookingPayments,
+  ConfirmPriceField,
+  confirmPricePayload,
+  VendorPayoutsCard,
 } from "../PlujMarketplace.jsx";
 
 function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
@@ -938,18 +942,20 @@ function VendorDashboard({ user, onLogout }) {
     return () => { window.removeEventListener("focus", onFocus); if (t) clearInterval(t); };
   }, [reload, waitingForApproval]);
 
-  async function respond(reqId, status) {
+  async function respond(reqId, status, extra = {}) {
     setBusyId(reqId); setErr("");
-    const updated = await RLS.respondToRequest(reqId, status, "", user);
+    const updated = await RLS.respondToRequest(reqId, status, "", user, extra);
     setBusyId(null);
     if (!updated || updated.__error) {
       setErr((updated && updated.__error)
-        ? `Could not update: ${updated.__error}`
+        ? `Could not update: ${String(updated.__error).replace(/^.*?ERROR:\s*/, "")}`
         : "Could not update that request. Check the browser console for details.");
       return;
     }
     reload();
   }
+  /* Total price typed when confirming with payments on, per request. */
+  const [priceDraft, setPriceDraft] = useState({});
 
   const pending   = requests.filter(r => r.status === "pending");
   const confirmed = requests.filter(r => r.status === "confirmed");
@@ -1013,6 +1019,9 @@ function VendorDashboard({ user, onLogout }) {
       </div>
 
       <div style={{ maxWidth:1000, margin:"0 auto", padding:"18px 16px 60px" }}>
+
+        {/* Stripe payouts (only while PLUJ payments are switched on) */}
+        <VendorPayoutsCard user={user} />
 
         {/* SETUP CHECKLIST — shown until the vendor is approved and has a
             listing. Replaces two banners that each described a different
@@ -1226,9 +1235,20 @@ function VendorDashboard({ user, onLogout }) {
                     </p>
                   )}
 
+                  {/* Payment schedule, early release, problems (payments on) */}
+                  <BookingPayments req={r} user={user} />
+
+                  {r.status === "pending" && (
+                    <ConfirmPriceField req={r} value={priceDraft[r.id] ?? ""}
+                      onChange={v => setPriceDraft(d => ({ ...d, [r.id]: v }))} />
+                  )}
                   {r.status === "pending" && (
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                      <button onClick={()=>respond(r.id,"confirmed")} disabled={busyId===r.id} className="btn"
+                      <button onClick={()=>{
+                          const pp = confirmPricePayload(r, priceDraft[r.id]);
+                          if (pp.error) { setErr(pp.error); return; }
+                          respond(r.id, "confirmed", pp.extra);
+                        }} disabled={busyId===r.id} className="btn"
                         style={{ flex:1, padding:"9px 0", borderRadius:9, background:C.green,
                                  color:"#fff", border:"none", fontSize:12, fontWeight:700 }}>
                         ✓ Accept booking
