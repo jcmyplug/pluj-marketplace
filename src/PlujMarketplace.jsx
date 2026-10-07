@@ -9684,7 +9684,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             <div style={{ marginTop:14, background:"#F0FDF4", borderRadius:10, padding:"8px 12px", display:"flex", alignItems:"center", gap:8 }}>
               <span style={{ fontSize:14 }}>✓</span>
               <p style={{ margin:0, fontSize:11, color:"#065F46", lineHeight:1.4 }}>
-                <strong>Reviewed by PLUJ.</strong> This vendor's business details were checked before their listing went live.
+                <strong>Reviewed by PLUJ.</strong> This vendor's application was reviewed before their listing went live. Read their reviews and confirm the details with them before you book.
               </p>
             </div>
             )}
