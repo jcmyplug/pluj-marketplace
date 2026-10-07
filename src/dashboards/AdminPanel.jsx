@@ -8,6 +8,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 
 import {
   C,
+  CATEGORIES,
   CORS_CONFIG,
   MessagesPanel,
   RLS,
@@ -17,9 +18,11 @@ import {
   adminListAccounts,
   adminSendMessage,
   adminSetBlocked,
+  getVendorApplication,
   getVendorApps,
   isOriginAllowed,
   maskEmail,
+  parsePhotos,
   sendMessage,
   setVendorStatus,
   startConversation,
@@ -113,6 +116,288 @@ app.use(helmet({
 }
 
 
+/* ── Vendor application review ───────────────────────────────────────────────
+   Everything a vendor has told PLUJ, on one screen, so the admin can decide
+   whether this is a real business before approving it. Opened from the
+   Vendors tab ("Review application") and from a vendor's row in Accounts.
+   Approve and Decline live here; Decline asks for a reason, which the vendor
+   sees in their notifications. */
+
+const DESC_MIN = 40;   // same minimum as vendor sign-up (VENDOR_DESC_MIN)
+
+const DECLINE_REASONS = [
+  "We couldn't verify that this is a real business.",
+  "The description doesn't explain what event service you offer.",
+  "This business isn't allowed under PLUJ's Marketplace Rules.",
+];
+
+function ageFrom(dob) {
+  if (!dob) return null;
+  const d = new Date(dob + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  return a;
+}
+
+/* Vendor-typed links open only as http(s). Anything else ("@handle", a
+   javascript: URL) is shown as plain text. */
+function safeHref(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const withScheme = /^https?:\/\//i.test(s) ? s
+    : /^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(s) ? "https://" + s : null;
+  if (!withScheme) return null;
+  try {
+    const u = new URL(withScheme);
+    return (u.protocol === "https:" || u.protocol === "http:") ? u.href : null;
+  } catch { return null; }
+}
+
+function fmtDate(v) {
+  if (!v) return "";
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "" :
+    d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+}
+
+function catLabel(id) {
+  const c = (CATEGORIES || []).find(x => x.id === id);
+  return c ? c.label : (id || "");
+}
+
+function VendorReview({ vendorId, onDecided }) {
+  const [app, setApp]           = useState(null);
+  const [err, setErr]           = useState("");
+  const [busy, setBusy]         = useState(false);
+  const [declining, setDecl]    = useState(false);
+  const [reason, setReason]     = useState("");
+
+  const load = React.useCallback(() => {
+    setErr("");
+    getVendorApplication(vendorId).then(r => { if (r.ok) setApp(r); else setErr(r.error); });
+  }, [vendorId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function decide(status) {
+    if (status === "rejected" && !reason.trim()) { setErr("Write a short reason. The vendor will see it."); return; }
+    setBusy(true); setErr("");
+    const res = await setVendorStatus(vendorId, status, status === "rejected" ? reason.trim() : "");
+    setBusy(false);
+    if (!res || !res.ok) { setErr((res && res.error) || "The change did not save."); return; }
+    setDecl(false); setReason("");
+    load();
+    if (onDecided) onDecided(status);
+  }
+
+  if (!app) {
+    return (
+      <p style={{ margin:"10px 0 0", fontSize:12, color: err ? "#B91C1C" : C.midGray }}>
+        {err ? `⚠ ${err}` : "Loading application…"}
+      </p>
+    );
+  }
+
+  const v = app.vendor, p = app.profile, listings = app.listings;
+  const desc   = String(v.description || "").trim();
+  const age    = ageFrom(p.dob);
+  const phone  = v.biz_phone || p.phone || "";
+  const siteHref = safeHref(v.biz_website);
+  const status = v.verification_status || "pending";
+  const photos = [
+    ...parsePhotos(v.photos),
+    ...listings.flatMap(l => parsePhotos(l.photos)),
+  ].filter(u => typeof u === "string" && /^https:\/\//i.test(u));
+
+  const checks = [
+    [!!p.responsibility_accepted_at, "Confirmed their information is true",
+                                    "Signed up before the truthfulness box existed"],
+    [!!p.email_verified,            "Email confirmed",                       "Email not confirmed yet"],
+    [desc.length >= DESC_MIN,       "Business description given",
+                                    desc ? "Business description is very short" : "No business description"],
+    [String(phone).replace(/\D/g,"").length >= 10, "Phone number given",     "No phone number"],
+    [!!String(v.biz_website || "").trim(), "Website or social media given",  "No website or social media"],
+    [listings.length > 0,           `${listings.length} listing${listings.length===1?"":"s"} added`, "No listings yet"],
+    [photos.length > 0,             `${photos.length} photo${photos.length===1?"":"s"} uploaded`,     "No photos yet"],
+  ];
+
+  const ein = String(v.ein || "").replace(/\D/g, "");
+  const rows = [
+    ["Business name",     v.business_name],
+    ["Legal name",        v.biz_legal],
+    ["Contact person",    p.full_name || p.display_name],
+    ["Email",             p.email ? `${p.email}${p.email_verified ? "  ✓ confirmed" : "  ✗ not confirmed"}` : ""],
+    ["Phone",             phone],
+    ["Age",               age != null ? String(age) : ""],
+    ["Business address",  [v.biz_address, v.biz_city, v.biz_state, v.biz_zip].filter(Boolean).join(", ")],
+    ["Service areas",     v.service_areas],
+    ["Years in business", v.years_in_biz != null ? String(v.years_in_biz) : ""],
+    ["Business type",     v.biz_type],
+    ["License #",         v.biz_license],
+    ["EIN",               ein ? `••••${ein.slice(-4)}` : ""],
+    ["Owners / managers", v.managing_members],
+    ["Signed up",         fmtDate(p.created_at || v.created_at)],
+    ["Accepted terms",    fmtDate(p.terms_accepted_at)],
+    ["Confirmed true",    p.responsibility_accepted_at
+                            ? `${fmtDate(p.responsibility_accepted_at)} (information true, responsible for posts)` : ""],
+    ["Sign-up location",  p.geo_signal && p.geo_signal.tz_city ? p.geo_signal.tz_city : ""],
+    ["Document",          v.doc_file_name],
+  ].filter(([, val]) => val != null && String(val).trim() !== "");
+
+  const H = ({ children }) => (
+    <p style={{ margin:"14px 0 6px", fontSize:10, fontWeight:800, color:C.midGray,
+                textTransform:"uppercase", letterSpacing:"0.08em" }}>{children}</p>
+  );
+
+  return (
+    <div style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:12,
+                  padding:"4px 14px 14px" }}>
+      <H>About the business</H>
+      {desc ? (
+        <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.6, whiteSpace:"pre-wrap",
+                    wordBreak:"break-word" }}>{desc}</p>
+      ) : (
+        <p style={{ margin:0, fontSize:12.5, color:"#B45309", fontWeight:600 }}>
+          ⚠ This vendor hasn't described their business yet. Message them and ask before approving.
+        </p>
+      )}
+
+      <H>Quick checks</H>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+        {checks.map(([ok, good, bad]) => (
+          <span key={good} style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99,
+                                    background: ok ? C.greenSoft : "#FFFBEB",
+                                    color: ok ? C.green : "#B45309" }}>
+            {ok ? "✓ " + good : "⚠ " + bad}
+          </span>
+        ))}
+      </div>
+
+      <H>Details</H>
+      <div style={{ display:"grid", gridTemplateColumns:"minmax(110px,auto) 1fr", columnGap:12, rowGap:5 }}>
+        {rows.map(([k, val]) => (
+          <React.Fragment key={k}>
+            <span style={{ fontSize:11.5, color:C.midGray }}>{k}</span>
+            <span style={{ fontSize:12, color:C.black, fontWeight:600, wordBreak:"break-word" }}>{val}</span>
+          </React.Fragment>
+        ))}
+        {String(v.biz_website || "").trim() && (
+          <>
+            <span style={{ fontSize:11.5, color:C.midGray }}>Website / social</span>
+            <span style={{ fontSize:12, fontWeight:600, wordBreak:"break-word" }}>
+              {siteHref ? (
+                <a href={siteHref} target="_blank" rel="noopener noreferrer nofollow"
+                   style={{ color:"#1D4ED8" }}>{v.biz_website} ↗</a>
+              ) : <span style={{ color:C.black }}>{v.biz_website}</span>}
+            </span>
+          </>
+        )}
+      </div>
+
+      <H>Listings ({listings.length})</H>
+      {listings.length === 0 ? (
+        <p style={{ margin:0, fontSize:12, color:C.midGray }}>
+          None yet. Vendors add listings from their dashboard after confirming their email.
+        </p>
+      ) : listings.map(l => (
+        <div key={l.id} style={{ padding:"8px 10px", background:"#F9FAFB", borderRadius:9, marginBottom:6 }}>
+          <p style={{ margin:0, fontSize:12.5, fontWeight:700, color:C.black }}>
+            {l.name || l.service_type || "Untitled listing"}
+            <span style={{ fontWeight:500, color:C.midGray }}>
+              {" · "}{catLabel(l.category)}{l.subcategory ? ` · ${l.subcategory}` : ""}
+              {l.price_value != null ? ` · $${Number(l.price_value).toLocaleString("en-US")}` : ""}
+              {l.active === false ? " · hidden" : ""}
+            </span>
+          </p>
+          {l.description && (
+            <p style={{ margin:"3px 0 0", fontSize:11.5, color:C.midGray, lineHeight:1.5,
+                        whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
+              {String(l.description).slice(0, 400)}{String(l.description).length > 400 ? "…" : ""}
+            </p>
+          )}
+        </div>
+      ))}
+
+      {photos.length > 0 && (
+        <>
+          <H>Photos</H>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+            {photos.slice(0, 12).map(u => (
+              <a key={u} href={u} target="_blank" rel="noopener noreferrer">
+                <img src={u} alt="" loading="lazy"
+                  style={{ width:64, height:64, objectFit:"cover", borderRadius:8, border:`1px solid ${C.border}` }} />
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+
+      {status === "rejected" && v.rejection_reason && (
+        <p style={{ margin:"12px 0 0", fontSize:11.5, color:"#B91C1C" }}>
+          Declined: {v.rejection_reason}
+        </p>
+      )}
+      {status === "approved" && (
+        <p style={{ margin:"12px 0 0", fontSize:11.5, color:C.green, fontWeight:700 }}>
+          ✓ Approved{v.verified_at ? ` on ${fmtDate(v.verified_at)}` : ""}
+        </p>
+      )}
+
+      {err && <p style={{ margin:"10px 0 0", fontSize:12, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+
+      {declining ? (
+        <div style={{ marginTop:12 }}>
+          <p style={{ margin:"0 0 6px", fontSize:12, fontWeight:700, color:C.black }}>
+            Why are you declining? The vendor will see this.
+          </p>
+          <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:6 }}>
+            {DECLINE_REASONS.map(r => (
+              <button key={r} type="button" onClick={()=>setReason(r)} className="btn"
+                style={{ textAlign:"left", fontSize:11.5, padding:"6px 9px", borderRadius:8, cursor:"pointer",
+                         border:`1px solid ${reason===r ? "#FCA5A5" : C.border}`,
+                         background: reason===r ? "#FEF2F2" : "#fff", color:C.black }}>{r}</button>
+            ))}
+          </div>
+          <textarea value={reason} onChange={e=>setReason(e.target.value)} maxLength={500}
+            placeholder="Or write your own reason…"
+            style={{ width:"100%", minHeight:64, padding:"8px 10px", border:`1px solid ${C.border}`,
+                     borderRadius:9, fontSize:12.5, resize:"vertical", boxSizing:"border-box",
+                     fontFamily:"'Inter',sans-serif" }} />
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <button onClick={()=>{ setDecl(false); setReason(""); setErr(""); }} disabled={busy} className="btn"
+              style={{ flex:1, padding:"9px 0", borderRadius:9, border:`1px solid ${C.border}`,
+                       background:"#fff", fontSize:12, fontWeight:700, color:C.midGray }}>Cancel</button>
+            <button onClick={()=>decide("rejected")} disabled={busy || !reason.trim()} className="btn"
+              style={{ flex:1, padding:"9px 0", borderRadius:9, border:"none", background:"#B91C1C",
+                       color:"#fff", fontSize:12, fontWeight:800, opacity: (!reason.trim()) ? 0.5 : 1 }}>
+              {busy ? "Saving…" : "Decline vendor"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display:"flex", gap:8, marginTop:12 }}>
+          {status !== "approved" && (
+            <button onClick={()=>decide("approved")} disabled={busy} className="btn"
+              style={{ flex:1, padding:"9px 0", borderRadius:9, background:C.green, color:"#fff",
+                       border:"none", fontSize:12.5, fontWeight:800 }}>
+              {busy ? "Saving…" : "✓ Approve vendor"}
+            </button>
+          )}
+          {status !== "rejected" && (
+            <button onClick={()=>{ setDecl(true); setErr(""); }} disabled={busy} className="btn"
+              style={{ flex:1, padding:"9px 0", borderRadius:9, background:"#FEF2F2", color:"#B91C1C",
+                       border:"1px solid #FCA5A5", fontSize:12.5, fontWeight:800 }}>
+              ✗ {status === "approved" ? "Revoke approval" : "Decline"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* Admin moderation console: every user and vendor, with actions. */
 
 function AdminAccounts({ adminId, onChanged }) {
@@ -127,6 +412,7 @@ function AdminAccounts({ adminId, onChanged }) {
   const [msgSubject, setMsgSubject] = useState("");
   const [msgBody, setMsgBody] = useState("");
   const [okNote, setOkNote] = useState("");
+  const [reviewFor, setReviewFor] = useState(null);   // vendor row whose application is open
 
   const load = React.useCallback(() => {
     setLoad(true);
@@ -259,6 +545,10 @@ function AdminAccounts({ adminId, onChanged }) {
 
             {!isAdminRow && (
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+                {isVendor && (
+                  <Btn onClick={()=>setReviewFor(id => id === r.id ? null : r.id)} disabled={busyId===r.id}
+                    bg={C.orange} fg="#fff">{reviewFor === r.id ? "▴ Close review" : "📋 Review"}</Btn>
+                )}
                 {isVendor && r.vendorStatus !== "approved" && (
                   <Btn onClick={()=>act(r,"approve")} disabled={busyId===r.id} bg={C.green} fg="#fff">✓ Accept</Btn>
                 )}
@@ -276,6 +566,10 @@ function AdminAccounts({ adminId, onChanged }) {
                 )}
                 <Btn onClick={()=>act(r,"delete")} disabled={busyId===r.id} bg="#111" fg="#fff">🗑 Delete</Btn>
               </div>
+            )}
+            {isVendor && reviewFor === r.id && (
+              <VendorReview vendorId={r.id}
+                onDecided={() => { load(); if (onChanged) onChanged(); }} />
             )}
           </div>
         );
@@ -338,8 +632,7 @@ function AdminPanel({ user, onClose, initialTab }) {
      "new vendor waiting for approval" alert opens straight onto Vendors. */
   const [atab,       setAtab]      = useState(initialTab || "accounts");
   const [vendorApps, setVendorApps]= useState([]);
-  const [busy,       setBusy]      = useState(false);
-  const [actionErr,  setActionErr] = useState("");
+  const [reviewing,  setReviewing] = useState(null);   // vendorId whose application is open
   const origin = (typeof window !== "undefined" ? window.location.origin : "") || "null";
   const originOk = isOriginAllowed(origin);
 
@@ -349,20 +642,6 @@ function AdminPanel({ user, onClose, initialTab }) {
      was closed and reopened. */
   const refreshVendorApps = React.useCallback(() => getVendorApps().then(setVendorApps), []);
   useEffect(() => { refreshVendorApps(); }, [atab, refreshVendorApps]);
-
-  async function handleAction(vendorId, action) {
-    setBusy(true);
-    setActionErr("");
-    const res = await setVendorStatus(vendorId, action === "approve" ? "approved" : "rejected",
-      action === "reject" ? "Did not meet verification requirements." : "");
-    if (!res || !res.ok) {
-      setActionErr((res && res.error) || "Action failed — the change did not save.");
-      setBusy(false);
-      return;
-    }
-    setVendorApps(await getVendorApps());
-    setBusy(false);
-  }
 
   const pendingCount = vendorApps.filter(v => v.status === "pending").length;
 
@@ -456,12 +735,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                 </button>
               </div>
 
-              {actionErr && (
-                <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
-                              borderRadius:9, padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:600 }}>
-                  ⚠ {actionErr}
-                </div>
-              )}
+
 
               {vendorApps.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"36px 0", color:C.lightGray }}>
@@ -510,23 +784,35 @@ function AdminPanel({ user, onClose, initialTab }) {
                         {app.status==="approved" ? "✓ Approved" : app.status==="rejected" ? "✗ Rejected" : "⏳ Pending"}
                       </span>
                     </div>
-                    {app.status === "pending" && (
-                      <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                        <button onClick={()=>handleAction(app.vendorId,"approve")}
-                          disabled={busy} className="btn"
-                          style={{ flex:1, padding:"8px 0", borderRadius:9, background:C.green,
-                                   color:"#fff", border:"none", fontSize:12, fontWeight:700 }}>
-                          ✓ Approve vendor
-                        </button>
-                        <button onClick={()=>handleAction(app.vendorId,"reject")}
-                          disabled={busy} className="btn"
-                          style={{ flex:1, padding:"8px 0", borderRadius:9, background:"#FEF2F2",
-                                   color:"#EF4444", border:"1px solid #FCA5A5", fontSize:12, fontWeight:700 }}>
-                          ✗ Reject
-                        </button>
-                      </div>
+                    {/* A two-line preview of their description, so the list
+                        alone shows who wrote something real. */}
+                    {app.description ? (
+                      <p style={{ margin:"8px 0 0", fontSize:11.5, color:C.black, lineHeight:1.5,
+                                  display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical",
+                                  overflow:"hidden", wordBreak:"break-word" }}>
+                        {app.description}
+                      </p>
+                    ) : (
+                      <p style={{ margin:"8px 0 0", fontSize:11, color:"#B45309", fontWeight:600 }}>
+                        ⚠ No business description yet
+                      </p>
                     )}
-                    {app.reason && (
+                    {/* Approve and Decline live inside the review, so every
+                        decision is made with the whole application in view. */}
+                    <button onClick={()=>setReviewing(r => r === app.vendorId ? null : app.vendorId)}
+                      className="btn"
+                      style={{ width:"100%", marginTop:10, padding:"8px 0", borderRadius:9, fontSize:12,
+                               fontWeight:800, cursor:"pointer",
+                               border: app.status === "pending" ? "none" : `1px solid ${C.border}`,
+                               background: app.status === "pending" ? C.black : "#fff",
+                               color: app.status === "pending" ? "#fff" : C.black }}>
+                      {reviewing === app.vendorId ? "▴ Close review" : "📋 Review application"}
+                    </button>
+                    {reviewing === app.vendorId && (
+                      <VendorReview vendorId={app.vendorId}
+                        onDecided={() => { refreshVendorApps(); }} />
+                    )}
+                    {app.reason && reviewing !== app.vendorId && (
                       <p style={{ margin:"8px 0 0", fontSize:10, color:C.midGray, fontStyle:"italic" }}>
                         Review note: {app.reason}
                       </p>
@@ -537,9 +823,10 @@ function AdminPanel({ user, onClose, initialTab }) {
 
               <div style={{ background:"#EFF6FF", borderRadius:10, padding:"12px 14px", marginTop:8 }}>
                 <p style={{ margin:0, fontSize:10, color:"#1D4ED8", lineHeight:1.65 }}>
-                  <strong>Privacy note:</strong> Full application details (license #, EIN, address, managing members)
-                  are stored in the vendor's private encrypted storage. Only non-sensitive summaries appear here.
-                  Contact vendors at their registered email to request verification documents.
+                  <strong>Before approving:</strong> open <strong>Review application</strong> to see everything
+                  the vendor has given PLUJ: their description, contact details, listings and photos. Only
+                  admins can see this. If something looks off, message them from the Accounts tab and ask for
+                  proof (a website, social media page or business license) before approving.
                 </p>
               </div>
             </div>

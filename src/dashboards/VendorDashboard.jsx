@@ -756,7 +756,13 @@ function ServicesManager({ vendorId }) {
           </div>
 
 
-          <div style={{ display:"flex", gap:8, marginTop:12 }}>
+          {/* Same promise the vendor made at sign-up, repeated where each post
+              is made (Terms: "Vendors: you are responsible for what you post"). */}
+          <p style={{ margin:"12px 0 0", fontSize:11, color:C.midGray, lineHeight:1.55 }}>
+            By saving, you confirm this listing is true and accurate, that the photos are your own
+            work, that you can deliver it as described, and that you're responsible for it.
+          </p>
+          <div style={{ display:"flex", gap:8, marginTop:10 }}>
             <button onClick={save} disabled={busy || uploading} className="btn"
               style={{ flex:1, padding:"10px 0", borderRadius:10, border:"none",
                        background: busy ? "#F3F4F6" : C.orange, color: busy ? C.midGray : "#fff",

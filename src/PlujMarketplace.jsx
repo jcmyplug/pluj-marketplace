@@ -2579,7 +2579,7 @@ export async function setSitePublic(open) {
 
 export async function getVendorApps() {
   const { data } = await sb.from("vendor_profiles")
-    .select("id, business_name, biz_legal, category, verification_status, created_at, biz_city, biz_state, photo_count, doc_file_name")
+    .select("id, business_name, biz_legal, category, verification_status, created_at, biz_city, biz_state, photo_count, doc_file_name, description, rejection_reason")
     .order("created_at", { ascending: false })
     .get();
   return (data || []).map(v => ({
@@ -2590,7 +2590,34 @@ export async function getVendorApps() {
     submittedAt: new Date(v.created_at).getTime(),
     docFileName: v.doc_file_name,
     photoCount:  v.photo_count,
+    description: v.description || "",
+    reason:      v.rejection_reason || "",
   }));
+}
+
+/* Everything the admin needs to decide on one vendor application, in one go:
+   the business record, the person behind it, and the listings they've added.
+   Only admins can read other vendors' rows (RLS: is_admin()), so for anyone
+   else this comes back empty. */
+export async function getVendorApplication(vendorId) {
+  const [vp, prof, svcs] = await Promise.all([
+    sb.from("vendor_profiles").select("*").eq("id", vendorId).single().get(),
+    sb.from("profiles")
+      .select("id, full_name, display_name, email, phone, dob, email_verified, status, created_at, geo_signal, terms_accepted_at, responsibility_accepted_at, blocked_reason")
+      .eq("id", vendorId).single().get(),
+    sb.from("vendor_services")
+      .select("id, name, category, subcategory, service_type, description, price_value, photos, active, created_at")
+      .eq("vendor_id", vendorId).order("created_at", { ascending: true }).get(),
+  ]);
+  if (vp.error || !vp.data) {
+    return { ok: false, error: (vp.error && vp.error.message) || "Could not load this application." };
+  }
+  return {
+    ok: true,
+    vendor:   vp.data,
+    profile:  prof.data || {},
+    listings: Array.isArray(svcs.data) ? svcs.data : [],
+  };
 }
 
 async function getVendorStatus(vendorId) {
@@ -3839,6 +3866,11 @@ function PasswordInput({ style = {}, iconColor = "#6B7280",
   );
 }
 
+/* Vendor sign-up description limits. The minimum is also enforced in the
+   database (handle_new_user); keep the two the same. */
+const VENDOR_DESC_MIN = 40;
+const VENDOR_DESC_MAX = 1000;
+
 function AuthModal({ onClose, onAuth }) {
   const [tab,          setTab]         = useState("login");
   const [role,         setRole]        = useState("user");
@@ -3849,6 +3881,11 @@ function AuthModal({ onClose, onAuth }) {
   const [captcha,      setCaptcha]     = useState(() => genCaptcha());
   const [tsToken,      setTsToken]     = useState("");   /* Turnstile, when enabled */
   const [tosAccepted,  setTosAccepted] = useState(false);
+  /* The responsibility box on step 2. Vendors confirm their information is
+     true and they're responsible for their posts; hosts confirm they'll check
+     vendors themselves before booking. Recorded by handle_new_user as
+     profiles.responsibility_accepted_at. */
+  const [respAccepted, setRespAccepted] = useState(false);
   const [forgotMsg,    setForgotMsg]   = useState("");  // password-reset confirmation
   const [mailError,    setMailError]   = useState(false); // verification email failed to send
   const [legalView,    setLegalView]   = useState(null);  // Terms / Privacy / Marketplace rules
@@ -3871,6 +3908,7 @@ function AuthModal({ onClose, onAuth }) {
     name:"", firstName:"", lastName:"", email:"", password:"", password2:"", phone:"", dob:"", setupKey:"", captchaAnswer:"",
     business:"", bizLegal:"", bizType:"LLC", bizLicense:"", ein:"",
     yearsInBiz:"", bizPhone:"", bizWebsite:"", managingMembers:"",
+    bizDescription:"",
     bizAddress:"", bizCity:"", bizState:"TX", bizZip:"",
     serviceAreas:"", schedule:"",
     serviceCities:[], availDays:[], availBlocks:[],
@@ -3929,6 +3967,14 @@ function AuthModal({ onClose, onAuth }) {
       if (!form.firstName.trim()) { setErr("Please enter your first name."); return false; }
       if (!form.lastName.trim())  { setErr("Please enter your last name.");  return false; }
       if (role === "vendor" && !form.business.trim()) { setErr("Please enter your business name."); return false; }
+      /* PLUJ reviews every vendor by hand before they go live, and this is
+         what the review starts from. handle_new_user enforces the same
+         minimum, so a script calling the signup endpoint directly can't skip
+         it either. Keep VENDOR_DESC_MIN in step with the database. */
+      if (role === "vendor" && form.bizDescription.trim().length < VENDOR_DESC_MIN) {
+        setErr(`Please describe your business in at least ${VENDOR_DESC_MIN} characters, so PLUJ can review it.`);
+        return false;
+      }
       if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
         { setErr("Please enter a valid email address."); return false; }
       if (!form.password) { setErr("Please enter a password."); return false; }
@@ -3942,6 +3988,10 @@ function AuthModal({ onClose, onAuth }) {
         { setErr("Password needs a lowercase letter, an uppercase letter, a number and a symbol (like ! ? # $)."); return false; }
       if (!form.password2) { setErr("Please re-enter your password to confirm it."); return false; }
       if (form.password !== form.password2) { setErr("Passwords don't match. Please re-enter them."); return false; }
+      /* Marked required on the form, but nothing checked it and it was never
+         saved (meta read form.bizPhone, which this form doesn't have). */
+      if (String(form.phone || "").replace(/\D/g, "").length < 10)
+        { setErr("Please enter a phone number we can reach you on (10 digits)."); return false; }
       if (!form.dob) { setErr("Please enter your date of birth."); return false; }
       {
         const dobDate = new Date(form.dob);
@@ -3970,6 +4020,12 @@ function AuthModal({ onClose, onAuth }) {
         setErr(`Verification failed — answer: ${form.captchaAnswer || "(blank)"}`); return false;
       }
       if (!tosAccepted) { setErr("Please accept PLUJ's terms to continue."); return false; }
+      if (!respAccepted) {
+        setErr(role === "vendor"
+          ? "Please confirm that your business information is true and that you're responsible for what you post."
+          : "Please confirm that you'll check vendors yourself before you book.");
+        return false;
+      }
       return true;
     }
     return true;
@@ -4078,8 +4134,14 @@ function AuthModal({ onClose, onAuth }) {
         biz_license:      form.bizLicense    || null,
         ein:              form.ein           || null,
         years_in_biz:     form.yearsInBiz    || null,
-        biz_phone:        form.bizPhone      || null,
-        biz_website:      form.bizWebsite    || null,
+        /* The form's phone box is form.phone; bizPhone is kept for any caller
+           that still sets it. handle_new_user writes this to profiles.phone
+           and, for vendors, vendor_profiles.biz_phone. */
+        biz_phone:        form.bizPhone || form.phone || null,
+        biz_website:      role === "vendor" ? (form.bizWebsite.trim() || null) : null,
+        /* The vendor's own description of their business: what the admin
+           reviews, and the "About" on their public page once approved. */
+        description:      role === "vendor" ? (form.bizDescription.trim() || null) : null,
         managing_members: form.managingMembers || null,
         biz_address:      form.bizAddress    || null,
         biz_city:         form.bizCity       || null,
@@ -4096,6 +4158,8 @@ function AuthModal({ onClose, onAuth }) {
         project_size:     form.projectSize   || null,
         doc_file_name:    docFile?.name      || null,
         market_id:        "houston-tx",
+        /* Required by handle_new_user. */
+        responsibility_accepted: respAccepted === true,
       };
       /* Started and completed are separate events on purpose: the gap between
          them is the signup drop-off, which is invisible if you only record
@@ -4455,6 +4519,32 @@ function AuthModal({ onClose, onAuth }) {
           {inp("Last name",  "lastName",  "text", true)}
         </div>
         {role === "vendor" && inp("Business / stage name", "business", "text", true)}
+        {role === "vendor" && (
+          <div>
+            <label htmlFor="signup-biz-desc"
+              style={{ display:"block", fontSize:12, fontWeight:600, color:C.midGray, marginBottom:4 }}>
+              Describe your business *{" "}
+              <span style={{ fontWeight:400 }}>(PLUJ reviews this before approving you)</span>
+            </label>
+            <textarea id="signup-biz-desc" value={form.bizDescription} maxLength={VENDOR_DESC_MAX}
+              onChange={e=>upd("bizDescription", e.target.value)} rows={4}
+              placeholder="What you offer, the events you work and how long you've been doing it. For example: Houston DJ for weddings and quinceañeras since 2018, with my own sound and lights."
+              style={{ width:"100%", padding:"10px 14px", border:`1px solid ${C.border}`, borderRadius:10,
+                       fontSize:14, color:C.black, background:"#fff", resize:"vertical", lineHeight:1.5,
+                       fontFamily:"'Inter',sans-serif", boxSizing:"border-box" }} />
+            {(() => {
+              const n = form.bizDescription.trim().length;
+              const ok = n >= VENDOR_DESC_MIN;
+              return (
+                <p style={{ margin:"2px 0 0", fontSize:11, fontWeight:600, color: ok ? "#047857" : C.midGray }}>
+                  {ok ? "✓ " : ""}{n} / {VENDOR_DESC_MIN} characters minimum
+                </p>
+              );
+            })()}
+          </div>
+        )}
+        {role === "vendor" && inp("Website, Instagram or Facebook (optional)",
+                                  "bizWebsite", "text", false)}
         {inp("Email address", "email", "email", true)}
         {inp("Password", "password", "password", true)}
         {/* Requirements shown up front rather than revealed one error at a time.
@@ -4578,6 +4668,52 @@ function AuthModal({ onClose, onAuth }) {
             </div>
           );
         })()}
+        {/* Second, separate box: the specific promise for this role. Kept
+            apart from the general terms box on purpose, so nobody can say
+            they agreed to it without seeing it. The wording mirrors the
+            "Vendors: you are responsible for what you post" and "Hosts: check
+            vendors before you book" sections of the Terms. */}
+        <button type="button" onClick={()=>setRespAccepted(a => !a)}
+          style={{ display:"flex", alignItems:"flex-start", gap:11, width:"100%", textAlign:"left",
+                   cursor:"pointer", padding:"14px 15px", borderRadius:12,
+                   border:`1.5px solid ${respAccepted ? C.orange : C.border}`,
+                   background: respAccepted ? "#FFF7ED" : "#fff" }}>
+          <span style={{ width:20, height:20, borderRadius:6, flexShrink:0, marginTop:1,
+                         display:"flex", alignItems:"center", justifyContent:"center",
+                         border:`2px solid ${respAccepted ? C.orange : "#D6D3D1"}`,
+                         background: respAccepted ? C.orange : "#fff",
+                         color:"#fff", fontSize:13, fontWeight:900 }}>
+            {respAccepted ? "✓" : ""}
+          </span>
+          {role === "vendor" ? (
+            <span style={{ flex:1 }}>
+              <span style={{ display:"block", fontSize:13, fontWeight:800, color:C.black, marginBottom:3 }}>
+                My business information is true, and I'm responsible for what I post
+              </span>
+              <span style={{ display:"block", fontSize:11.5, color:C.midGray, lineHeight:1.6 }}>
+                Everything I tell PLUJ and hosts about me and my business, at sign-up, in my profile and
+                in every listing, photo, price and message, is true, accurate and mine to post. I actually
+                offer the services I list and will deliver what I promise. I'm solely responsible and liable
+                for my posts and my services, and I won't use PLUJ to mislead or scam anyone or take money
+                for services I won't provide. False information can get my account removed and reported to
+                the authorities.
+              </span>
+            </span>
+          ) : (
+            <span style={{ flex:1 }}>
+              <span style={{ display:"block", fontSize:13, fontWeight:800, color:C.black, marginBottom:3 }}>
+                I'll check vendors myself before I book
+              </span>
+              <span style={{ display:"block", fontSize:11.5, color:C.midGray, lineHeight:1.6 }}>
+                PLUJ reviews vendor applications but can't control or guarantee what vendors post, whether
+                it's true, or how they perform. Before booking or paying any vendor I'll do my own due
+                diligence: read their reviews and listing, ask questions, and get the price, deposit and
+                cancellation terms in writing. Choosing and paying a vendor is my decision and my risk, and
+                PLUJ isn't liable for what a vendor does.
+              </span>
+            </span>
+          )}
+        </button>
         {role === "vendor" && (
           <div style={{ background:"#FFFBEB", borderRadius:10, padding:"12px 14px",
                         border:"1px solid #FCD34D" }}>
@@ -4609,7 +4745,7 @@ function AuthModal({ onClose, onAuth }) {
                       alignItems:"center", flexShrink:0 }}>
           <div style={{ display:"flex", gap:6, background:"#F3F4F6", borderRadius:99, padding:4 }}>
             {["login","signup"].map(t => (
-              <button key={t} onClick={()=>{setTab(t);setErr("");setStep(1);setTosAccepted(false);setLegalRead({ Terms:false, Privacy:false, "Marketplace rules":false });setCaptcha(genCaptcha());setRlState({blocked:false,attemptsLeft:5});}} className="btn"
+              <button key={t} onClick={()=>{setTab(t);setErr("");setStep(1);setTosAccepted(false);setRespAccepted(false);setLegalRead({ Terms:false, Privacy:false, "Marketplace rules":false });setCaptcha(genCaptcha());setRlState({blocked:false,attemptsLeft:5});}} className="btn"
                 style={{ padding:"7px 18px", borderRadius:99, fontSize:13, fontWeight:600, border:"none",
                          background: tab===t ? "#fff" : "transparent",
                          color: tab===t ? C.black : C.midGray,
@@ -4634,7 +4770,7 @@ function AuthModal({ onClose, onAuth }) {
               <p style={{ fontSize:11, fontWeight:600, color:C.midGray, marginBottom:8 }}>I am a…</p>
               <div style={{ display:"flex", gap:7 }}>
                 {[["user","👤","Host"],["vendor","🏪","Vendor"]].map(([r,em,label])=>(
-                  <button key={r} onClick={()=>{setRole(r);setStep(1);}} className="btn"
+                  <button key={r} onClick={()=>{setRole(r);setStep(1);setRespAccepted(false);}} className="btn"
                     style={{ flex:1, padding:"9px 6px", borderRadius:12,
                              border:`2px solid ${role===r ? C.orange : C.border}`,
                              background: role===r ? C.orangeSoft : "#fff",
@@ -4654,7 +4790,8 @@ function AuthModal({ onClose, onAuth }) {
                 Creating your vendor account takes one minute
               </p>
               <p style={{ margin:"3px 0 0", fontSize:11.5, color:"#9A3412", lineHeight:1.55 }}>
-                Just the basics now. After you confirm your email, your dashboard walks you
+                Tell us who you are and what your business does. PLUJ reviews every vendor
+                before they go live. After you confirm your email, your dashboard walks you
                 through your business details and your first <strong>listing</strong> — each
                 service you offer (a DJ set, a taco truck, a venue) is its own listing.
               </p>
@@ -8460,6 +8597,13 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                 Requests go to each vendor individually. No payment is collected until
                 a vendor confirms your booking.
               </p>
+              {/* Host due diligence, as in the Terms ("Hosts: check vendors before
+                  you book") and the box ticked at sign-up. */}
+              <p style={{ fontSize:10, color:C.midGray, textAlign:"center",
+                          margin:"4px 0 0", lineHeight:1.6 }}>
+                Before you book or pay, read each vendor's reviews and confirm the price and terms
+                with them in writing. PLUJ reviews vendors but can't guarantee them.
+              </p>
             </>
           )}
         </div>
@@ -10062,12 +10206,12 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
 /* ══════════════════════════════════════════════════════════════════════════
    LEGAL & INFO CONTENT
    ══════════════════════════════════════════════════════════════════════════ */
-const LEGAL_UPDATED = "August 2026";   /* month + year — update when the documents change */
+const LEGAL_UPDATED = "October 2026";   /* month + year — update when the documents change */
 
 const INFO_CONTENT = {
   "About": [
-    ["What PLUJ is", "PLUJ is an event marketplace that connects people planning events with vetted local vendors — food, music, production and decor, and logistics — in one place."],
-    ["How we vet vendors", "Vendors submit business details and documentation when they apply. Our team reviews each application before a listing goes live, and we can remove a listing at any time if standards are not met."],
+    ["What PLUJ is", "PLUJ is an event marketplace that connects people planning events with local vendors — food, music, production and decor, and logistics — in one place."],
+    ["How we review vendors", "Vendors describe their business and confirm that everything they tell us is true when they apply. Our team reviews each application before a listing goes live, and we can remove a listing at any time if standards are not met. Our review is not a guarantee: before you book, read the vendor's reviews and check them yourself."],
     ["Contact", "For questions, use the Help center or contact the vendor directly through their listing."],
   ],
   /* Plain-language guides, written 30 Sep 2026 for people who have never used
@@ -10075,9 +10219,10 @@ const INFO_CONTENT = {
      that says "press Submit" when the button says "Send" is worse than none. */
   "Host guide": [
     ["Who this is for", "A host is anyone planning an event and booking vendors for it — a birthday, a wedding, a corporate party. Browsing PLUJ is free and you don't need an account to look around."],
-    ["1. Create your account", "Press Log in / Sign up at the top of the page, choose Sign up, and pick Host. Enter your name, email, a password, your phone number and date of birth (you must be 18 or older). On the next screen answer the quick human check, accept PLUJ's terms, and press Create account & verify email."],
+    ["1. Create your account", "Press Log in / Sign up at the top of the page, choose Sign up, and pick Host. Enter your name, email, a password, your phone number and date of birth (you must be 18 or older). On the next screen answer the quick human check, accept PLUJ's terms, tick the box confirming you'll check vendors yourself before you book, and press Create account & verify email."],
     ["2. Confirm your email", "We send you an email titled Confirm your email address. Open the newest one, tap Confirm my email address, then press Confirm my email on the PLUJ page that opens. The link works once and stops working after 10 minutes — if it has expired, sign up again with the same email or use Forgot password? to get a fresh link."],
     ["3. Find vendors", "Use the search bar at the top — where, when, what service and how many guests — or pick a category such as Food & Drinks or Music & Performance. PLUJ only shows vendors who serve your area, have room for your guest count and are free on your date. Not sure what you need? Build My Event asks a few questions and suggests a full lineup."],
+    ["Check before you book", "PLUJ reviews every vendor before they go live, but we can't control or guarantee what vendors post or how they perform. Before you book or pay, read the vendor's reviews and listing, ask questions in Messages, check their website or social media, and get the price, deposit and cancellation terms in writing. If something feels wrong, don't pay, and report the vendor to us."],
     ["4. Build your lineup", "On any listing press Request to book to add it to your cart. Add as many vendors as you need — food, music, decor, rentals. Open the cart, set your event date, time, address and guest count once, and they apply to every vendor in it."],
     ["5. Send your requests", "In the cart press Send booking requests. A request is not a booking yet: each vendor reviews it and accepts or declines. You'll get a notification and an email either way."],
     ["6. Track and change requests", "Open your account (your initials at the top right) and go to My Requests. You can see each request's status, use Edit request to change the date, guests or venue while it's still pending, or cancel it. Cancelling a request that hasn't been accepted is always free."],
@@ -10088,11 +10233,11 @@ const INFO_CONTENT = {
   ],
   "Vendor guide": [
     ["Who this is for", "A vendor is a business that provides a service at events — a DJ, a caterer, a food truck, a venue, a photographer, rentals. On PLUJ you have one business account and as many listings as services you offer."],
-    ["1. Create your account", "Press Log in / Sign up, choose Sign up, and pick Vendor. Enter your name, your business name, email, password, phone and date of birth. On the next screen answer the human check, accept PLUJ's terms and press Create vendor account. That's all the signup asks."],
+    ["1. Create your account", "Press Log in / Sign up, choose Sign up, and pick Vendor. Enter your name, your business name, a short description of your business (at least 40 characters: what you offer, the events you work and how long you've been doing it), your website or social media if you have one, email, password, phone and date of birth. On the next screen answer the human check, accept PLUJ's terms, tick the box confirming your business information is true and that you're responsible for what you post, and press Create vendor account."],
     ["2. Confirm your email", "Open the newest Confirm your email address email, tap the link, and press Confirm my email on the page that opens. The link works once and expires after 10 minutes. You'll land in your vendor dashboard."],
     ["3. Add your business details", "Your dashboard shows a short checklist. The first step is Add business details: business name, a short description of your business, business phone, city and ZIP, and the areas you work in. Your phone number is private — only PLUJ sees it. Legal name, license number and website are optional but help us approve you faster. You can change all of this later under Business profile."],
     ["4. Create your listings", "A listing is one service hosts can book. A DJ who also rents a photo booth has two listings; a caterer with a taco truck and a dessert truck has two. Go to My listings and press Add listing. For each one set the category, a description, a starting price, guest capacity, photos (up to 10, the first is the cover), where you'll travel, and when you're available. Listings with good photos and a clear description get far more requests."],
-    ["5. Approval", "PLUJ reviews your business details, usually within 1–2 business days. Your listings stay hidden until you're approved, then go live automatically. You'll get a notification in your dashboard and the checklist turns green."],
+    ["5. Approval", "PLUJ reviews your description, business details and listings, usually within 1–2 business days. We may message you to ask for proof that your business is real, such as a website, social media page or license. Your listings stay hidden until you're approved, then go live automatically. You'll get a notification in your dashboard and the checklist turns green."],
     ["6. Answer booking requests", "When a host sends a request it appears under Requests and in Notifications, and we email you. Open it to see the date, time, guest count, venue and message. Press Accept booking to confirm or Decline if you can't do it. Please answer quickly — hosts often send requests to several vendors and book whoever confirms first."],
     ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
     ["8. Messages", "Use Messages to answer host questions before and after you accept. Conversations stay open until 3 days after the event."],
@@ -10129,9 +10274,11 @@ const INFO_CONTENT = {
     ["Limitation of liability", "To the maximum extent permitted by law, PLUJ and its owners, officers, employees, contractors and suppliers will not be liable for any indirect, incidental, special, consequential, exemplary or punitive damages, or for any loss of profits, revenue, business, opportunity, data, goodwill, or the cost of substitute services, arising out of or relating to the platform, any booking, any vendor or customer, or any event, under any theory of liability including contract, tort, negligence, strict liability, warranty or statute, and whether or not we were advised of the possibility of such damages. To the maximum extent permitted by law, our total aggregate liability for all claims will not exceed the greater of the total service fees you paid to PLUJ in the twelve months before the event giving rise to the claim, the amount you paid through PLUJ for the specific booking giving rise to the claim, or 500 US dollars. These limitations apply even if a limited remedy fails of its essential purpose, and they are a fundamental basis of the bargain between us."],
     ["Reformation and savings", "If any limitation, disclaimer, release or waiver in these Terms is held unenforceable or overbroad, it will be modified and reformed to the minimum extent necessary to make it enforceable, and will otherwise remain in full force. It will not be struck out entirely, and its partial unenforceability will not affect any other provision. Nothing in these Terms excludes liability that cannot lawfully be excluded, including liability for fraud, gross negligence, willful misconduct, or death or personal injury caused by our negligence, and any such liability is limited to the maximum extent the law allows."],
     ["Vendor obligations and indemnity", "If you list services on PLUJ, you represent and warrant that you hold all licences, permits, certifications and registrations required for your services, including food handling, alcohol service and any venue or occupancy permits, and that you will perform the services safely, lawfully and as described in your listing. You agree to defend, indemnify and hold harmless PLUJ and its owners, officers, employees and suppliers from any claim, demand, investigation, loss, liability, damage, fine or expense, including reasonable legal fees, arising out of or relating to your services, your listings, your conduct, any injury to persons or damage to property connected with your services, your breach of these Terms, or your violation of any law or third-party right. This obligation survives termination of your account."],
+    ["Vendors: you are responsible for what you post", "If you are a vendor, you are solely responsible and liable for every listing, photograph, description, price, availability, review response, message and any other content you post, and for the services you provide or fail to provide. Each time you post or update anything, you represent and warrant that all information you give PLUJ or hosts about yourself and your business is true, accurate, current, complete and not misleading; that you are the business or are authorized to act for it; that you actually offer, and are able to deliver, the services you list on the terms you list; and that every photograph shows your own work or work you have the right to use. You must keep this information up to date and correct anything that becomes untrue. You must not use PLUJ to defraud, deceive or scam anyone, including by taking a deposit or payment for services you do not intend to or cannot provide, impersonating another person or business, or posting fake listings. You are liable for any loss, damage or claim caused by information you provide that is false, misleading or inaccurate, and your indemnity in the section above covers it. PLUJ may remove any vendor it believes has provided false information, without notice, and may report suspected fraud to law enforcement and cooperate with any investigation. You confirm this statement separately when you create a vendor account."],
     ["Insurance is between you and the other party", "PLUJ does not provide, arrange, broker, recommend or procure insurance of any kind, and nothing on the platform is an offer of insurance or a guarantee of payment. Vendors are solely responsible for deciding what insurance their business needs and for obtaining it, including any coverage a customer asks them to carry. Customers are solely responsible for deciding whether to obtain their own event or cancellation insurance. Any insurance requirement agreed between a customer and a vendor is a term of their own contract, not of these Terms, and PLUJ is not responsible for verifying that any policy exists, is in force, or covers any particular loss."],
     ["Customer indemnity", "You agree to defend, indemnify and hold harmless PLUJ from any claim arising out of your use of the platform, the content you post, your conduct at or in connection with an event, your breach of these Terms, or your violation of any law or third-party right."],
     ["Content posted by users", "Listings, photographs, descriptions, reviews and messages are created by users, not by PLUJ. We do not adopt, endorse or verify them, and we are not responsible for them. We may remove content at our discretion but are under no obligation to monitor it."],
+    ["Hosts: check vendors before you book", "PLUJ does not and cannot control what vendors write or post, whether it is true, or whether a vendor will perform as promised, and our review of vendor applications is limited as described above. Before you book or pay any vendor, you are solely responsible for your own due diligence, including reading the vendor's listing and reviews carefully, asking questions through Messages, checking their website, social media and, where relevant, their licenses, permits and insurance, and getting the price, deposit, cancellation terms and what is included in writing. Reviews are the opinions of other users, and PLUJ does not verify them. Deciding to book and pay a vendor is your decision alone, made at your own risk. To the maximum extent permitted by law, PLUJ is not liable for any loss caused by a vendor's misrepresentation, fraud, non-performance, late or poor performance, or conduct, and the release and limitation of liability above apply. If something seems wrong, do not pay, and report the vendor to us. You confirm this statement separately when you create a host account."],
     ["Disputes between users", "Disagreements about services, quality, timing, damage or payment are between the customer and the vendor. PLUJ is not a party and has no obligation to intervene, mediate, refund or compensate, though we may assist and may act against accounts that breach the Marketplace Rules."],
     ["Talk to us first", "Before starting arbitration or any legal proceeding, you agree to contact us and allow 30 days to resolve the dispute informally. Both sides will negotiate in good faith during that period. Most problems are settled this way."],
     ["Binding arbitration", "If a dispute is not resolved within 30 days, you and PLUJ agree it will be resolved by binding individual arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules, rather than in court, and each of you waives the right to a jury trial. Arbitration will take place in Harris County, Texas, or by video or telephone at your election. Either party may instead bring a qualifying individual claim in small claims court, and either party may seek injunctive relief in court to protect intellectual property. You may opt out of arbitration within 30 days of first accepting these Terms by emailing us your name, your account email, and a statement that you decline arbitration. Opting out does not affect anything else in these Terms."],
@@ -10141,7 +10288,7 @@ const INFO_CONTENT = {
     ["Copyright and takedowns", "Do not post material you do not have the right to use. If you believe content on PLUJ infringes your copyright, email us identifying the work and where it appears, your contact details, a statement of good-faith belief that the use is unauthorised, and a statement under penalty of perjury that your notice is accurate and that you are authorised to act. We remove infringing content and terminate repeat infringers."],
     ["Suspension and termination", "We may suspend or terminate any account that breaches these Terms, the Marketplace Rules or the law, or that creates risk for other users, at our discretion and without liability. You may close your account at any time from your account menu. Provisions that should by their nature survive termination will survive it, including the release, disclaimers, limitations, indemnities and dispute resolution terms."],
     ["Severability and entire agreement", "If any provision is unenforceable, the remainder stays in force. These Terms, together with the Privacy Policy, the Cancellations and refunds page and the Marketplace Rules, are the entire agreement between you and PLUJ."],
-    ["Acceptance", "By creating an account, ticking the acceptance box, or using the platform, you agree to these Terms, the Cancellations and refunds page, the Marketplace Rules and the Privacy Policy. We record the date and the version you accepted. If we change these Terms materially we will ask you to accept the new version."],
+    ["Acceptance", "By creating an account, ticking the acceptance box, or using the platform, you agree to these Terms, the Cancellations and refunds page, the Marketplace Rules and the Privacy Policy. When you sign up you also tick a second box: vendors confirm the statement in Vendors: you are responsible for what you post, and hosts confirm the statement in Hosts: check vendors before you book. We record the date and the version you accepted, and the date you ticked the second box. If we change these Terms materially we will ask you to accept the new version."],
     ["Changes", "We may update these Terms. Continuing to use PLUJ after an update means you accept the revised Terms."],
   ],
   "Privacy": [
@@ -10170,11 +10317,13 @@ const INFO_CONTENT = {
   ],
 
   "Marketplace rules": [
-    ["Be accurate", "Listings, photos, pricing, capacity and availability must reflect what you actually offer. Do not post photos of work that is not yours."],
+    ["Tell the truth", "Everything you post must be true and reflect what you actually offer: your business details, description, listings, photos, pricing, capacity and availability. Vendors are responsible and liable for every post. Do not post photos of work that is not yours."],
     ["Honor your commitments", "Vendors should respond to requests promptly and honor confirmed bookings. Customers should provide accurate event details."],
     ["Communicate respectfully", "No harassment, hate speech, threats, or discrimination of any kind."],
     ["Keep it legal and safe", "You must hold the licenses, permits and insurance required for the services you provide, and comply with all applicable laws."],
     ["No manipulation", "No fake reviews, fake accounts, or schemes to inflate ratings or bypass platform rules."],
+    ["No scams or fraud", "Never take a deposit or payment for a service you don't intend to or can't deliver, impersonate another person or business, post fake listings, or pressure hosts to pay in ways meant to get around PLUJ's rules. Suspected fraud leads to immediate removal and may be reported to law enforcement."],
+    ["Hosts: check before you book", "Read each vendor's reviews and listing, ask questions in Messages, and get the price, deposit and cancellation terms in writing before you pay. PLUJ reviews vendor applications but can't guarantee any vendor, and booking a vendor is your decision."],
     ["Consequences", "Breaking these rules can result in a warning, listing removal, suspension, or permanent removal from PLUJ. Serious violations may be reported to the relevant authorities."],
   ],
 };
