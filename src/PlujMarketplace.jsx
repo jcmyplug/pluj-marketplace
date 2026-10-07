@@ -11005,7 +11005,10 @@ export default function PlujApp() {
         `See prices and availability, then send booking requests on PLUJ.`);
       return;
     }
-    document.title = base;
+    /* Homepage keeps the keyword-rich title from index.html (brand first), so
+       search results read "PLUJ — Book Food, Music & Venues…" rather than
+       just the city. */
+    document.title = `PLUJ — Book Food, Music & Venues for Your Event | ${market.label}`;
     setMeta("description",
       `Build your whole event lineup in one place. Compare food trucks, DJs, ` +
       `venues, decor and rentals in ${market.label}, then send every booking ` +
