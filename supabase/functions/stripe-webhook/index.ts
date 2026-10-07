@@ -1,12 +1,18 @@
-/* PLUJ: Stripe webhook. Stripe calls this; it has no Supabase login, so
-   every request is checked against Stripe's signature instead. The signing
-   secret is in Vault (saved by Admin → Payments → Connect Stripe webhook),
-   or STRIPE_WEBHOOK_SECRET in the function's secrets.
+/* PLUJ: Stripe webhook (a Connect webhook: payments happen on vendors'
+   Stripe accounts, and event.account says which). Stripe calls this; it has
+   no Supabase login, so every request is checked against Stripe's signature
+   instead. The signing secret is in Vault (saved by Admin → Payments →
+   Connect Stripe webhook), or STRIPE_WEBHOOK_SECRET in the function's secrets.
+
+   Refunds and chargebacks are between the host, the vendor and Stripe: a
+   chargeback is taken from the vendor's Stripe account and the vendor answers
+   it in their Stripe dashboard. PLUJ only records it, tells everyone, and
+   stops any payments still to be charged on that booking.
 
    Each event is recorded in stripe_events and handled once. */
 
 import {
-  json, db, markPaid, notify, tellAdmins, money, verifyStripeSignature, settings, addVendorDebt, chargedCents, stripe,
+  json, db, markPaid, notify, tellAdmins, money, verifyStripeSignature, saveVendorAccountFlags,
 } from "../_shared/payments.ts";
 
 async function signingSecret(): Promise<string> {
@@ -28,6 +34,8 @@ async function paymentFor(metadata: any, paymentIntentId?: string) {
   return null;
 }
 
+const piOf = (o: any) => typeof o?.payment_intent === "string" ? o.payment_intent : o?.payment_intent?.id;
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   const payload = await req.text();
@@ -42,17 +50,19 @@ Deno.serve(async (req) => {
   }
 
   const obj = event.data?.object || {};
+  const account: string | undefined = event.account;
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        if (obj.payment_status !== "paid" || !obj.payment_intent) break;
+        if (obj.payment_status !== "paid" || !obj.payment_intent || !account) break;
         const pay = await paymentFor(obj.metadata);
-        if (pay) await markPaid(pay.id, typeof obj.payment_intent === "string" ? obj.payment_intent : obj.payment_intent.id);
+        if (pay) await markPaid(pay.id, piOf(obj), account);
         break;
       }
       case "payment_intent.succeeded": {
+        if (!account) break;
         const pay = await paymentFor(obj.metadata, obj.id);
-        if (pay) await markPaid(pay.id, obj.id);
+        if (pay) await markPaid(pay.id, obj.id, account);
         break;
       }
       case "payment_intent.payment_failed": {
@@ -68,87 +78,58 @@ Deno.serve(async (req) => {
         break;
       }
       case "charge.refunded": {
-        const pay = await paymentFor(obj.metadata, typeof obj.payment_intent === "string" ? obj.payment_intent : undefined);
+        const pay = await paymentFor(obj.metadata, piOf(obj));
         if (pay && (obj.amount_refunded || 0) > (pay.refunded_cents || 0)) {
-          // A refund made directly in the Stripe dashboard: keep our record right.
+          // A refund the vendor made in their own Stripe dashboard: keep our record right.
           await db().from("booking_payments").update({ refunded_cents: obj.amount_refunded }).eq("id", pay.id);
         }
         break;
       }
       case "charge.dispute.created": {
-        const pay = await paymentFor(obj.metadata, typeof obj.payment_intent === "string" ? obj.payment_intent : undefined);
+        const pay = await paymentFor(obj.metadata, piOf(obj));
         if (pay) {
+          await db().from("booking_payments").update({ disputed_cents: (pay.disputed_cents || 0) + (obj.amount || 0) }).eq("id", pay.id);
           await db().from("booking_payment_plans").update({ status: "on_hold",
-            hold_reason: "The host's bank opened a dispute (chargeback)" }).eq("booking_id", pay.booking_id).neq("status", "cancelled");
-          /* Stripe takes the disputed amount and a $15 fee from PLUJ's balance.
-             PLUJ doesn't absorb either: if the money is still held, the
-             disputed part is not paid to the vendor; if it was already paid,
-             it is taken back from the vendor (or put on their balance due),
-             and the fee goes on their balance due. */
-          const { data: plan } = await db().from("booking_payment_plans").select("vendor_id").eq("booking_id", pay.booking_id).single();
-          const s = await settings();
-          const amount = Math.min(obj.amount || 0, chargedCents(pay) - (pay.refunded_cents || 0));
-          if (!pay.transferred_at) {
-            await db().from("booking_payments").update({ disputed_cents: (pay.disputed_cents || 0) + amount }).eq("id", pay.id);
-          } else if (plan) {
-            // Already paid out: take it back from the vendor's Stripe balance;
-            // whatever can't be taken back goes on their balance due.
-            let back = 0;
-            if ((pay.transferred_cents || 0) > 0 && pay.stripe_transfer_id && pay.stripe_transfer_id !== "none") {
-              try {
-                back = Math.min(pay.transferred_cents, amount);
-                await stripe("POST", `/transfers/${pay.stripe_transfer_id}/reversals`, { amount: back,
-                  metadata: { booking_id: pay.booking_id, reason: "chargeback" } }, `pluj-dispute-${obj.id}`);
-                await db().from("booking_payments").update({ transferred_cents: pay.transferred_cents - back,
-                  disputed_cents: (pay.disputed_cents || 0) + back }).eq("id", pay.id);
-              } catch (e) {
-                console.warn("[stripe-webhook] reversal failed", (e as Error).message);
-                back = 0;
-              }
-            }
-            await addVendorDebt(plan.vendor_id, amount - back);
+            hold_reason: "The host's bank opened a dispute (chargeback)", updated_at: new Date().toISOString() })
+            .eq("booking_id", pay.booking_id).eq("status", "active");
+          const { data: plan } = await db().from("booking_payment_plans").select("host_id, vendor_id").eq("booking_id", pay.booking_id).single();
+          if (plan) {
+            await notify(plan.vendor_id, "payment_problem", "🚩 A host's bank disputed a payment",
+              `The host's bank opened a dispute (chargeback) for ${money(obj.amount || 0)} on booking ${pay.booking_id}. `
+              + "Stripe took the amount and its dispute fee from your Stripe account. Answer it with evidence in your Stripe dashboard before Stripe's deadline. "
+              + "Payments still to be charged on this booking are paused.", pay.booking_id);
+            await notify(plan.host_id, "payment_problem", "Card dispute opened",
+              `Your bank opened a dispute for ${money(obj.amount || 0)} on this booking. Your bank and the vendor will settle it through Stripe. `
+              + "Payments still to be charged on this booking are paused.", pay.booking_id);
           }
-          if (plan) await addVendorDebt(plan.vendor_id, Number(s.dispute_fee_cents ?? 1500));
         }
-        await tellAdmins("payment_problem", "🚩 Chargeback opened",
-          `A card dispute for ${money(obj.amount || 0)} was opened` + (pay ? ` on booking ${pay.booking_id}. Its payout is on hold.` : ".")
-          + " Respond in the Stripe dashboard before the deadline.", pay?.booking_id, "Chargeback opened on PLUJ");
+        await tellAdmins("payment_problem", "🚩 Chargeback opened (for your information)",
+          `A card dispute for ${money(obj.amount || 0)} was opened` + (pay ? ` on booking ${pay.booking_id}` : "")
+          + ". It is on the vendor's Stripe account, so the vendor answers it; nothing is taken from PLUJ. Remaining payments on the booking are paused.",
+          pay?.booking_id);
         break;
       }
       case "charge.dispute.closed": {
-        const pay = await paymentFor(obj.metadata, typeof obj.payment_intent === "string" ? obj.payment_intent : undefined);
+        const pay = await paymentFor(obj.metadata, piOf(obj));
         if (pay) {
-          const { data: plan } = await db().from("booking_payment_plans").select("vendor_id").eq("booking_id", pay.booking_id).single();
-          const s = await settings();
+          const { data: plan } = await db().from("booking_payment_plans").select("host_id, vendor_id").eq("booking_id", pay.booking_id).single();
           if (obj.status === "won") {
-            // The money came back to PLUJ: undo what the dispute took.
-            if ((pay.disputed_cents || 0) > 0 && !pay.transferred_at) {
-              await db().from("booking_payments").update({ disputed_cents: Math.max(0, pay.disputed_cents - (obj.amount || 0)) }).eq("id", pay.id);
-            } else if (plan) {
-              // Give the vendor back what was taken: the reversed part as a new
-              // transfer, the rest off their balance due.
-              const reversed = Math.min(pay.disputed_cents || 0, obj.amount || 0);
-              const { data: vp } = await db().from("vendor_profiles").select("stripe_account_id").eq("id", plan.vendor_id).single();
-              let returned = 0;
-              if (reversed > 0 && vp?.stripe_account_id) {
-                try {
-                  await stripe("POST", "/transfers", { amount: reversed, currency: "usd", destination: vp.stripe_account_id,
-                    transfer_group: pay.booking_id, description: `PLUJ booking ${pay.booking_id}: chargeback won`,
-                    metadata: { booking_id: pay.booking_id, payment_id: pay.id, reason: "chargeback won" } }, `pluj-dispute-won-${obj.id}`);
-                  await db().from("booking_payments").update({ transferred_cents: (pay.transferred_cents || 0) + reversed,
-                    disputed_cents: Math.max(0, (pay.disputed_cents || 0) - reversed) }).eq("id", pay.id);
-                  returned = reversed;
-                } catch (e) { console.warn("[stripe-webhook] return transfer failed", (e as Error).message); }
-              }
-              await addVendorDebt(plan.vendor_id, -((obj.amount || 0) - returned));
-            }
-          } else if (obj.status === "lost" && plan && (obj.evidence_details?.submission_count || 0) > 0) {
-            // A countered dispute that was lost costs a second $15.
-            await addVendorDebt(plan.vendor_id, Number(s.dispute_fee_cents ?? 1500));
+            await db().from("booking_payments").update({ disputed_cents: Math.max(0, (pay.disputed_cents || 0) - (obj.amount || 0)) }).eq("id", pay.id);
+          }
+          if (plan) {
+            await notify(plan.vendor_id, "payment_problem", `Card dispute closed: ${obj.status}`,
+              `The dispute for ${money(obj.amount || 0)} on booking ${pay.booking_id} closed with status "${obj.status}".`
+              + (obj.status === "won" ? " Stripe returned the amount to your Stripe account." : ""), pay.booking_id);
           }
         }
         await tellAdmins("payment_problem", `Chargeback closed: ${obj.status}`,
-          `The card dispute for ${money(obj.amount || 0)} closed with status "${obj.status}". Release or refund the booking in Admin → Payments.`);
+          `The card dispute for ${money(obj.amount || 0)} closed with status "${obj.status}". `
+          + "If the booking should carry on, resume it in Admin → Payments.", pay?.booking_id);
+        break;
+      }
+      case "account.updated": {
+        const { data: vp } = await db().from("vendor_profiles").select("id").eq("stripe_account_id", obj.id).maybeSingle();
+        if (vp) await saveVendorAccountFlags(vp.id, obj);
         break;
       }
     }

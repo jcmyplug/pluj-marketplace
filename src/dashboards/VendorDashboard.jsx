@@ -1235,7 +1235,7 @@ function VendorDashboard({ user, onLogout }) {
                     </p>
                   )}
 
-                  {/* Payment schedule, early release, problems (payments on) */}
+                  {/* Payment schedule and problem reports (payments on) */}
                   <BookingPayments req={r} user={user} />
 
                   {r.status === "pending" && (
