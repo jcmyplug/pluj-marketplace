@@ -2,6 +2,7 @@
   "name": "pluj-marketplace",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -21,10 +22,18 @@
     "test": "vitest run"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": "22.x"
   },
   "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
