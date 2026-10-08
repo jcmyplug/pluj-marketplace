@@ -790,8 +790,8 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .cat-icons { max-width: 1280px; margin: 0 auto; padding: 8px 28px 36px; display: flex; gap: 6px; justify-content: space-between; flex-wrap: wrap; }
 .cat-icons button { flex: 1 1 0; min-width: 92px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: none; border: none;
                     cursor: pointer; padding: 6px 4px; color: var(--ink); }
-.cat-icons .ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--cobalt);
-                 background: rgba(255,255,255,0.78); border: 1px solid rgba(30,64,255,0.12);
+.cat-icons .ic { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; color: var(--cobalt);
+                 background: #ECEFFF; border: 1px solid rgba(30,64,255,0.08);
                  transition: background-color 180ms ease, color 180ms ease, transform 180ms var(--ease-out); }
 .cat-icons button:hover .ic { background: var(--cobalt); color: #fff; transform: translateY(-2px); }
 .cat-icons .lb { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-2); text-align: center; line-height: 1.3; }
@@ -804,8 +804,8 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .dir-grid button { display: grid; grid-template-columns: auto 1fr; column-gap: 14px; row-gap: 6px; align-items: start; align-content: start; width: 100%; height: 100%; text-align: left;
                    background: #fff; border: 1px solid var(--line); border-radius: 24px; padding: 20px 20px 22px; cursor: pointer; color: var(--ink);
                    transition: border-color 180ms ease, box-shadow 220ms var(--ease-out), transform 220ms var(--ease-out); }
-.dir-grid button .ic { grid-row: span 2; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
-                       background: var(--mist); color: var(--cobalt); transition: background-color 180ms ease, color 180ms ease; }
+.dir-grid button .ic { grid-row: span 2; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
+                       background: #ECEFFF; color: var(--cobalt); transition: background-color 180ms ease, color 180ms ease; }
 .dir-name { font-family: var(--display); font-weight: 800; font-size: 21px; line-height: 1.15; letter-spacing: -0.03em; color: #000; }
 .dir-subs { font-size: 14px; line-height: 1.5; color: var(--ink-3); }
 .dir-subs .more { white-space: nowrap; }
@@ -928,7 +928,10 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   /* The directory as a two-column grid on phones: icon, name, three lines. */
   .dir-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .dir-grid button { grid-template-columns: 1fr; padding: 14px 14px 16px; border-radius: 20px; row-gap: 8px; }
-  .dir-grid button .ic { grid-row: auto; width: 38px; height: 38px; border-radius: 12px; }
+  .dir-grid button .ic { grid-row: auto; width: 48px; height: 48px; border-radius: 50%; }
+  .dir-grid button .ic svg { width: 25px; height: 25px; }
+  .cat-icons .ic { width: 58px; height: 58px; }
+  .cat-icons .ic svg { width: 27px; height: 27px; }
   .dir-name { font-size: 16px; }
   .dir-subs { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .dir-grid.sub .dir-name { font-size: 15px; }
@@ -8234,7 +8237,10 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         <Progress />
 
         <div style={{ textAlign:"center", marginBottom:20 }}>
-          <div style={{ fontSize:34, marginBottom:6 }}>{curCatObj?.icon}</div>
+          <div style={{ width:68, height:68, borderRadius:"50%", background:"#ECEFFF", color:C.cobalt,
+                        display:"grid", placeItems:"center", margin:"0 auto 10px" }}>
+            <Icon name={CAT_ICON[curCatObj?.id] || "dots"} size={32} stroke={1.5} />
+          </div>
           <h2 style={{ fontFamily:"var(--display)", fontSize:26, fontWeight:800, margin:"0 0 4px" }}>
             Do you need {curCatObj?.label}?
           </h2>
@@ -9598,31 +9604,34 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
 /* ─── ICONS ──────────────────────────────────────────────────────────────────
    One family, drawn here: 24px grid, 1.6 stroke, round ends, currentColor.
    Used for the categories and the hero's service row. */
+/* Line icons for the categories: one family, 24-unit grid, drawn to read at
+   28-30px in a soft lavender circle (brand board). */
 const ICON_PATHS = {
-  pin:        <><path d="M12 21s-6.5-5.8-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></>,
-  cloche:     <><path d="M4.5 16.5a7.5 7.5 0 0 1 15 0"/><path d="M3 16.5h18"/><path d="M12 9V7.2"/><path d="M10.3 7h3.4"/><path d="M5 19.5h14"/></>,
-  headphones: <><path d="M4.5 15v-2.5a7.5 7.5 0 0 1 15 0V15"/><rect x="3.5" y="14" width="4" height="6" rx="1.6"/><rect x="16.5" y="14" width="4" height="6" rx="1.6"/></>,
-  camera:     <><path d="M4.5 8h2.8l1.8-2.5h5.8L16.7 8h2.8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></>,
-  sparkle:    <><path d="M11 3.5l1.7 4.8 4.8 1.7-4.8 1.7L11 16.5l-1.7-4.8L4.5 10l4.8-1.7z"/><path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></>,
-  chair:      <><path d="M7.5 3.5h9v7.5h-9z"/><path d="M5.5 11h13v3h-13z"/><path d="M7.5 14v6.5M16.5 14v6.5"/></>,
-  speaker:    <><rect x="6" y="3" width="12" height="18" rx="2.5"/><circle cx="12" cy="14.2" r="3.3"/><circle cx="12" cy="7.6" r="1.1"/></>,
-  cocktail:   <><path d="M5 4.5h14l-7 7.5z"/><path d="M12 12v7.5"/><path d="M8.5 19.5h7"/><path d="M15.5 4.5l2-2"/></>,
-  lipstick:   <><rect x="8.5" y="11" width="7" height="9.5" rx="1.2"/><path d="M10 11V6.5l4-2.5V11"/></>,
-  car:        <><path d="M3.5 13.5l2.2-5.5h12.6l2.2 5.5V18h-17z"/><circle cx="7.5" cy="18" r="1.8"/><circle cx="16.5" cy="18" r="1.8"/><path d="M3.5 13.5h17"/></>,
-  balloon:    <><ellipse cx="12" cy="9" rx="5.5" ry="6.3"/><path d="M11 15.4h2l-1 1.6z"/><path d="M12 17c0 1.6-1.6 1.8-1.6 3.5"/></>,
-  clipboard:  <><rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11.5h7M8.5 15.5h5"/></>,
-  truck:      <><path d="M2.5 7h11v9.5h-11z"/><path d="M13.5 10h4.2l3 3.2v3.3h-7.2"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></>,
-  sun:        <><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></>,
-  dots:       <><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/></>,
+  pin:        <><path d="M12 21.5s-6.8-6-6.8-11.4a6.8 6.8 0 0 1 13.6 0c0 5.4-6.8 11.4-6.8 11.4z"/><circle cx="12" cy="10" r="2.5"/></>,
+  cloche:     <><path d="M4.5 16a7.5 7.5 0 0 1 15 0"/><path d="M2.8 16h18.4"/><path d="M5.5 19h13"/><circle cx="12" cy="7.3" r="1.2"/><path d="M8.2 12.8a4.6 4.6 0 0 1 2.4-2.5"/></>,
+  headphones: <><path d="M4 16v-3.5a8 8 0 0 1 16 0V16"/><path d="M4 14.5h1.6A1.4 1.4 0 0 1 7 15.9v3.2a1.4 1.4 0 0 1-1.4 1.4H5a1 1 0 0 1-1-1z"/><path d="M20 14.5h-1.6a1.4 1.4 0 0 0-1.4 1.4v3.2a1.4 1.4 0 0 0 1.4 1.4h.6a1 1 0 0 0 1-1z"/></>,
+  camera:     <><path d="M4.5 7.8h2.8l1.7-2.4h6l1.7 2.4h2.8a1.2 1.2 0 0 1 1.2 1.2v9a1.2 1.2 0 0 1-1.2 1.2h-15A1.2 1.2 0 0 1 3.3 18V9a1.2 1.2 0 0 1 1.2-1.2z"/><circle cx="12" cy="13.1" r="3.4"/><circle cx="17.6" cy="10.4" r=".5"/></>,
+  flower:     <><path d="M6.8 3.8l2.6 2.1L12 2.8l2.6 3.1 2.6-2.1v5.1a5.2 5.2 0 0 1-10.4 0z"/><path d="M12 14.1v7.4"/><path d="M12 19.2c0-2.8 1.9-4.7 5-4.9-.1 3-2 4.9-5 4.9z"/><path d="M12 17.2c0-2.4-1.6-4.1-4.2-4.3.1 2.6 1.7 4.3 4.2 4.3z"/></>,
+  chair:      <><path d="M7.5 12V4.6a1.1 1.1 0 0 1 1.1-1.1h6.8a1.1 1.1 0 0 1 1.1 1.1V12"/><path d="M10.4 3.5V12M13.6 3.5V12"/><path d="M6.2 12h11.6a.7.7 0 0 1 .7.7v1a.7.7 0 0 1-.7.7H6.2a.7.7 0 0 1-.7-.7v-1a.7.7 0 0 1 .7-.7z"/><path d="M7.2 14.4l-.8 6.6M16.8 14.4l.8 6.6"/></>,
+  speaker:    <><rect x="5.5" y="2.8" width="13" height="18.4" rx="2.2"/><circle cx="12" cy="14.4" r="3.7"/><circle cx="12" cy="14.4" r="1"/><circle cx="12" cy="6.9" r="1.5"/></>,
+  cocktail:   <><path d="M4.5 4.5h15L12 12.6z"/><path d="M6.9 7.1h10.2"/><path d="M12 12.6v7.4"/><path d="M8.4 20h7.2"/><path d="M16.5 2.5l-4.6 6.2"/><circle cx="13.2" cy="7" r="1.1"/></>,
+  lipstick:   <><path d="M7.6 12.6h8.8v7.6a1.2 1.2 0 0 1-1.2 1.2H8.8a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M9 12.6V10h6v2.6"/><path d="M9.9 10V6.3c0-.8.5-1.5 1.2-1.8l3-1.3V10"/></>,
+  car:        <><path d="M4.9 16.5H3.2a.7.7 0 0 1-.7-.7v-2.3c0-.7.5-1.3 1.2-1.5l2.8-.7 2.6-3.2a2 2 0 0 1 1.5-.7h4.9a2 2 0 0 1 1.5.7l2.7 3.1 1.6.4c.7.2 1.2.8 1.2 1.5v2.7a.7.7 0 0 1-.7.7h-1.7"/><path d="M9.1 16.5h5.8"/><circle cx="7" cy="16.5" r="2.1"/><circle cx="17" cy="16.5" r="2.1"/><path d="M6.8 11.3h11"/><path d="M12.2 7.9v3.4"/></>,
+  balloons:   <><ellipse cx="9" cy="9" rx="4.3" ry="5.2"/><path d="M8.4 14.2h1.2l-.6 1z"/><ellipse cx="16.3" cy="7.4" rx="3.3" ry="4"/><path d="M15.8 11.4h1l-.5.8z"/><path d="M9 15.2c.2 2.2 1.6 3.6 2.6 5.8"/><path d="M16.3 12.2c0 3-3.6 4.6-4.7 8.8"/></>,
+  clipboard:  <><rect x="5" y="4.6" width="14" height="16.6" rx="2.2"/><rect x="9" y="3" width="6" height="3.2" rx="1"/><path d="M8.4 11.6l1.3 1.3 2.3-2.4"/><path d="M13.8 11.9h2"/><path d="M8.4 16.4l1.3 1.3 2.3-2.4"/><path d="M13.8 16.7h2"/></>,
+  truck:      <><path d="M2.5 16.5V7.4a.9.9 0 0 1 .9-.9h11.1v10"/><path d="M14.5 9.5h3.7l3.3 3.6v2.7a.7.7 0 0 1-.7.7h-1.1"/><path d="M8.3 16.5h6.4"/><path d="M4.6 16.5H2.5"/><circle cx="6.5" cy="17" r="1.9"/><circle cx="17" cy="17" r="1.9"/><path d="M5 9.3h7v3.5H5z"/><path d="M4.4 9.3l.9-1.2h6.4l.9 1.2"/></>,
+  sun:        <><circle cx="12" cy="12" r="3.9"/><path d="M12 2.6v2.3M12 19.1v2.3M2.6 12h2.3M19.1 12h2.3M5.4 5.4l1.6 1.6M17 17l1.6 1.6M5.4 18.6L7 17M17 7l1.6-1.6"/></>,
+  dots:       <><circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/></>,
   wand:       <><path d="M4 20L15.5 8.5"/><path d="M14.5 3.5v3M18.5 5.5l-2 2M20.5 9.5h-3M13 7l4 4"/></>,
+  sparkle:    <><path d="M11 3.5l1.7 4.8 4.8 1.7-4.8 1.7L11 16.5l-1.7-4.8L4.5 10l4.8-1.7z"/><path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></>,
   arrow:      <><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></>,
 };
-export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo:"camera", production:"sparkle",
-  rentals:"chair", av:"speaker", staff:"cocktail", beauty:"lipstick", transport:"car", kids:"balloon",
+export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo:"camera", production:"flower",
+  rentals:"chair", av:"speaker", staff:"cocktail", beauty:"lipstick", transport:"car", kids:"balloons",
   logistics:"clipboard", other:"dots", build:"wand", all:"sparkle" };
-export function Icon({ name, size = 24 }) {
+export function Icon({ name, size = 24, stroke = 1.6 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke}
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       {ICON_PATHS[name] || ICON_PATHS.dots}
     </svg>
@@ -12508,21 +12517,35 @@ const CS_CSS = `
     radial-gradient(48% 50% at 92% 10%, #F4F8FF 0%, rgba(224,237,255,0.92) 38%, rgba(224,237,255,0) 76%),
     linear-gradient(165deg, #3350FF 0%, #8E9AFF 32%, #D3D0FF 58%, #E3EEFF 100%); }
 .cs-orb { position: absolute; border-radius: 50%; will-change: transform; }
-.cs-orb.o1 { width: 96vmax; height: 96vmax; left: -42vmax; top: 36%;
+/* The two spheres sit low, either side of the centre, 7vmin apart, sized in
+   vmin so they meet the same way on any screen. Every 16 seconds they drift
+   together, touch, squash a little at the point of contact (each one scales
+   from the side that touches) and bounce apart in slow motion. */
+.cs-orb.o1 { width: 124vmin; height: 124vmin; left: calc(50% - 122.5vmin); top: calc(100% - 68vmin); transform-origin: 100% 50%;
   background: radial-gradient(circle at 50% 50%, #FBFDFF 0%, #F1F5FF 30%, #DCE5FF 50%, #B8C3FF 62%, #8E9AFF 68%, #7480FF 70.7%, rgba(116,128,255,0) 71%);
-  filter: blur(5px); animation: cs-drift-a 8s ease-in-out infinite alternate; }
-.cs-orb.o2 { width: 80vmax; height: 80vmax; right: -38vmax; top: 54%;
+  filter: blur(5px); animation: cs-meet-a 16s infinite; }
+.cs-orb.o2 { width: 92vmin; height: 92vmin; left: calc(50% + 8.5vmin); top: calc(100% - 51vmin); transform-origin: 0% 50%;
   background: radial-gradient(circle at 50% 50%, #001EE0 0%, #0A2BFF 42%, #2846FF 56%, #5B62FF 65%, #9C93FF 69.5%, #B9B0FF 70.7%, rgba(185,176,255,0) 71%);
-  filter: blur(4px); animation: cs-drift-b 10s ease-in-out infinite alternate; }
+  filter: blur(4px); animation: cs-meet-b 16s infinite; }
 .cs-orb.o3 { width: 78vmin; height: 78vmin; left: 50%; top: 48%; transform: translate(-50%, -50%);
   background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0) 70%); }
-@keyframes cs-drift-a { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(3vmax, -3vmax) scale(1.03); }
-                        100% { transform: translate(5vmax, -1vmax) scale(1.05); } }
-@keyframes cs-drift-b { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-3vmax, -4vmax) scale(1.04); }
-                        100% { transform: translate(-5vmax, -1.5vmax) scale(1.02); } }
+@keyframes cs-meet-a {
+  0%   { transform: translate(0, 0) scale(1, 1);                animation-timing-function: cubic-bezier(0.42, 0, 0.78, 0.55); }
+  42%  { transform: translate(3.6vmin, -1.2vmin) scale(1, 1);    animation-timing-function: cubic-bezier(0.1, 0.5, 0.4, 1); }
+  47%  { transform: translate(3.85vmin, -1.25vmin) scale(0.965, 1.025); animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
+  58%  { transform: translate(-1.4vmin, -0.6vmin) scale(1.008, 0.995); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  100% { transform: translate(0, 0) scale(1, 1); }
+}
+@keyframes cs-meet-b {
+  0%   { transform: translate(0, 0) scale(1, 1);                animation-timing-function: cubic-bezier(0.42, 0, 0.78, 0.55); }
+  42%  { transform: translate(-3.6vmin, -1.2vmin) scale(1, 1);   animation-timing-function: cubic-bezier(0.1, 0.5, 0.4, 1); }
+  47%  { transform: translate(-3.85vmin, -1.25vmin) scale(0.965, 1.025); animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
+  58%  { transform: translate(1.4vmin, -0.6vmin) scale(1.008, 0.995); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  100% { transform: translate(0, 0) scale(1, 1); }
+}
 
 .cs-top, .cs-main, .cs-foot { position: relative; z-index: 2; }
-.cs-top { display: flex; justify-content: flex-end; padding: 18px 20px 0; }
+.cs-top { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px 0; }
 .cs-main { flex: 1; width: 100%; max-width: 780px; margin: 0 auto; box-sizing: border-box; padding: 20px 20px 28px;
            display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .cs-main > * { animation: cs-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
@@ -12581,8 +12604,9 @@ const CS_CSS = `
 .cs .go-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .cs-thanks { margin: 26px 0 0; font-size: 16.5px; font-weight: 500; color: #10132A; }
 
-.cs-foot { display: flex; align-items: center; justify-content: center; gap: 6px 14px; flex-wrap: wrap; padding: 6px 20px 20px; }
-.cs-note { padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.72); font-size: 12.5px; color: #2A2F4F; }
+/* Room at the bottom where the spheres meet. */
+.cs-foot { height: clamp(40px, 9vmin, 110px); }
+.cs-note { margin: 12px 0 0; font-size: 13px; color: #2A2F4F; }
 .cs-staff { border: 0; background: rgba(255,255,255,0.72); border-radius: 999px; padding: 7px 14px; cursor: pointer;
             font: 700 11.5px var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: #2A2F4F; }
 .cs-staff:hover { background: #fff; color: #000; }
@@ -12600,8 +12624,6 @@ const CS_CSS = `
   .cs-form { padding: 6px 6px 6px 20px; }
   .cs-go { width: 52px; height: 52px; }
   .cs-caps { font-size: 11.5px; letter-spacing: 0.24em; }
-  .cs-orb.o1 { width: 170vw; height: 170vw; left: -95vw; top: 60%; }
-  .cs-orb.o2 { width: 150vw; height: 150vw; right: -88vw; top: 74%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cs-orb, .cs-main > * { animation: none; }
@@ -12610,19 +12632,19 @@ const CS_CSS = `
 `;
 
 /* The page frame: gradient spheres, language switch, logo, and a footer. */
-function CsShell({ children, foot }) {
+function CsShell({ children, staff }) {
   return (
     <div className="cs grain">
       <style>{CS_CSS}</style>
       <div className="cs-bg" aria-hidden="true">
         <span className="cs-orb o1" /><span className="cs-orb o2" /><span className="cs-orb o3" />
       </div>
-      <div className="cs-top"><LangToggle /></div>
+      <div className="cs-top">{staff || <span />}<LangToggle /></div>
       <main className="cs-main">
         <div className="cs-logo"><PlujMark variant="horizontal" color="#000" size={120} /></div>
         {children}
       </main>
-      <footer className="cs-foot">{foot}</footer>
+      <div className="cs-foot" aria-hidden="true" />
     </div>
   );
 }
@@ -12673,10 +12695,7 @@ export function MaintenanceScreen({ onStaff }) {
   }
 
   return (
-    <CsShell foot={<>
-      <span className="cs-note">We'll only email you about the PLUJ opening. Unsubscribe anytime.</span>
-      <button type="button" className="cs-staff" onClick={onStaff}>Staff</button>
-    </>}>
+    <CsShell staff={<button type="button" className="cs-staff" onClick={onStaff}>Staff</button>}>
       <h1>Good parties are coming.</h1>
       <p className="tagline cs-tag">we know a guy</p>
       <p className="cs-lede">
@@ -12709,6 +12728,7 @@ export function MaintenanceScreen({ onStaff }) {
       )}
       {saved && <button type="button" className="cs-again" onClick={another}>Add another email</button>}
       {err && <p className="cs-err" id="cs-err" role="alert">{err}</p>}
+      {!saved && <p className="cs-note">We'll only email you about the PLUJ opening. Unsubscribe anytime.</p>}
 
       {saved && token && (
         <div className="cs-role">
@@ -12746,7 +12766,7 @@ export function WaitlistUnsubscribe() {
     });
   }, [token]);
   return (
-    <CsShell foot={null}>
+    <CsShell>
       <div className="cs-card" role="status">
         {st === "busy" && <p>One moment…</p>}
         {st === "ok" && (<>
@@ -14489,7 +14509,7 @@ export default function PlujApp() {
                   pickCat(cat); if (sub) setActiveSub(sub);
                   window.scrollTo({ top: 0 });
                 }}>
-                <span className="ic"><Icon name={icon} size={24} /></span>
+                <span className="ic"><Icon name={icon} size={30} stroke={1.5} /></span>
                 <span className="lb">{label}</span>
               </button>
             ))}
@@ -14557,7 +14577,7 @@ export default function PlujApp() {
                   return (
                     <li key={cat.id}>
                       <button onClick={()=>pickCat(cat.id)} aria-current={activeCat===cat.id ? "true" : undefined}>
-                        <span className="ic"><Icon name={CAT_ICON[cat.id] || "dots"} size={22} /></span>
+                        <span className="ic"><Icon name={CAT_ICON[cat.id] || "dots"} size={28} stroke={1.5} /></span>
                         <span className="dir-name">{cat.label}</span>
                         <span className="dir-subs">
                           {/* one text node per service, so each one translates on its own */}
