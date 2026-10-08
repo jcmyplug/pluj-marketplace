@@ -3709,6 +3709,7 @@ function parsePath(p) {
   const seg = String(p || "/").split("/").filter(Boolean);
   if (!seg.length) return { kind: "home" };
   if (seg[0] === "build") return { kind: "build" };
+  if (seg[0] === "unsubscribe") return { kind: "unsubscribe" };
   if (seg[0] === "event" && seg[1]) return { kind: "recap", id: decodeURIComponent(seg[1]) };
   if (seg[0] === "vendor" && seg[1]) {
     return { kind: "vendor", id: decodeURIComponent(seg[1]) };
@@ -3739,6 +3740,26 @@ function parsePath(p) {
 const BOOT_ROUTE = (() => {
   try { return parsePath(window.location.pathname); }
   catch { return { kind: "home" }; }
+})();
+
+/* ?preview=coming-soon shows the coming-soon page even while the site is on.
+   ?signup=host|pro (the button in the waitlist emails) opens sign-up with the
+   right account type; the parameter is then dropped from the address bar so a
+   refresh doesn't reopen it. */
+const BOOT_QUERY = (() => {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const signup = q.get("signup");
+    if (signup) {
+      q.delete("signup");
+      const rest = q.toString();
+      window.history.replaceState(null, "", window.location.pathname + (rest ? "?" + rest : "") + window.location.hash);
+    }
+    return {
+      comingSoon: q.get("preview") === "coming-soon",
+      signupRole: signup === "pro" ? "vendor" : signup === "host" ? "user" : null,
+    };
+  } catch { return { comingSoon: false, signupRole: null }; }
 })();
 
 const SITE_ORIGIN = "https://www.pluj.us";
@@ -4453,9 +4474,9 @@ function PasswordInput({ style = {}, iconColor = "#6B7280",
 const VENDOR_DESC_MIN = 40;
 const VENDOR_DESC_MAX = 1000;
 
-function AuthModal({ onClose, onAuth }) {
-  const [tab,          setTab]         = useState("login");
-  const [role,         setRole]        = useState("user");
+function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user" }) {
+  const [tab,          setTab]         = useState(initialTab === "signup" ? "signup" : "login");
+  const [role,         setRole]        = useState(initialRole === "vendor" ? "vendor" : "user");
   const [step,         setStep]        = useState(1);
   const [loading,      setLoading]     = useState(false);
   const [err,          setErr]         = useState("");
@@ -11422,6 +11443,7 @@ const LEGAL_SUMMARY = {
   ],
   "Privacy": [
     "We collect what bookings need: your account details, your event details and your messages.",
+    "If you join the waitlist, we use your email only to tell you when PLUJ opens, and you can unsubscribe from any email.",
     "We never sell your data and never use it for ads. There are no ad trackers on PLUJ.",
     "If your browser sends Global Privacy Control, we honor it automatically.",
     "You can see, correct, download or delete your data. We answer within 45 days.",
@@ -11536,6 +11558,7 @@ const INFO_CONTENT = {
   "Privacy": [
     ["What we collect", "Account details you provide (name, email, phone, date of birth), vendor business information and documents, listing content and photos, and booking requests you send or receive."],
     ["How we use it", "To operate the marketplace: creating your account, verifying vendors, showing listings, delivering booking requests, and providing support."],
+    ["The waitlist", "If you leave your email on our coming-soon page, we keep it with your language, whether you plan events or work them, and a scrambled code made from your internet connection that we use only to stop automated signups. We use your email only to tell you when PLUJ opens: one launch invite and, if you have not made an account a few days later, one reminder. We do not share it with anyone except our email provider. Every email has an unsubscribe link, and unsubscribing stops them at once. Write to info@pluj.us and we will delete your address."],
     ["What we share", "When you send a booking request, the vendor receives the event details you provided. Vendor listing information is public. We share data with the service providers listed below only so they can run PLUJ for us. We do not sell your personal information, we do not use it for targeted advertising, and we do not use it for profiling that leads to decisions with legal or similarly significant effects on you."],
     ["Verification documents", "Documents submitted during vendor verification are stored for review and are not shown publicly on listings."],
     ["Your choices", "You can edit your profile and listing information at any time."],
@@ -12441,48 +12464,303 @@ export function EmailLinkScreen({ link, onSession, onFinish, onRequestNew }) {
   );
 }
 
-/* ── MAINTENANCE SCREEN ───────────────────────────────────────────────────
-   What a visitor sees while the site is switched off. Deliberately a real
-   page rather than an empty marketplace: "we're working on it" is information,
-   an empty grid is a bug report waiting to happen.
+/* ── COMING SOON + WAITLIST ───────────────────────────────────────────────
+   What a visitor sees while the site is switched off: "Good parties are
+   coming." and a place to leave an email. Every address lands in the
+   waitlist table (through join_waitlist(), which keeps working while the
+   site is off), and on opening day an admin sends everyone the launch invite
+   from the Waitlist tab of the admin panel.
 
    The way back in is the word "Staff" at the bottom. It is not hidden — anyone
    can click it — because hiding it would protect nothing (the login is the
-   thing that protects the site) and would mean losing your own way in. */
-export function MaintenanceScreen({ onStaff }) {
+   thing that protects the site) and would mean losing your own way in.
+
+   /?preview=coming-soon shows this page even while the site is on, so it can
+   be checked before switching the site off. */
+const WAITLIST_KEY = "pluj_waitlist";
+
+export async function joinWaitlist(email) {
+  if (IS_PREVIEW) return { ok: true, token: null };
+  const { data, error } = await sb.rpc("join_waitlist", { p_email: email, p_lang: getLang(), p_source: "coming-soon" });
+  if (error || !data) return { ok: false, error: "network" };
+  return data;
+}
+export async function setWaitlistRole(token, role) {
+  if (IS_PREVIEW || !token) return true;
+  const { data } = await sb.rpc("waitlist_set_role", { p_token: token, p_role: role });
+  return data === true;
+}
+export async function unsubscribeWaitlist(token) {
+  if (IS_PREVIEW) return { ok: true, email: "" };
+  const { data, error } = await sb.rpc("waitlist_unsubscribe", { p_token: token });
+  if (error || !data) return { ok: false };
+  return data;
+}
+
+const CS_CSS = `
+.cs { position: relative; min-height: 100vh; min-height: 100dvh; overflow: hidden; display: flex; flex-direction: column;
+      background: #C9D4FF; color: #000; font-family: var(--font); }
+.cs.grain::after { opacity: 0.14; z-index: 1; }
+.cs-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(50% 44% at 12% 14%, #0A2BFF 0%, rgba(30,64,255,0.88) 30%, rgba(30,64,255,0) 72%),
+    radial-gradient(38% 34% at 52% 30%, rgba(139,124,246,0.7) 0%, rgba(139,124,246,0) 70%),
+    radial-gradient(48% 50% at 92% 10%, #F4F8FF 0%, rgba(224,237,255,0.92) 38%, rgba(224,237,255,0) 76%),
+    linear-gradient(165deg, #3350FF 0%, #8E9AFF 32%, #D3D0FF 58%, #E3EEFF 100%); }
+.cs-orb { position: absolute; border-radius: 50%; will-change: transform; }
+.cs-orb.o1 { width: 96vmax; height: 96vmax; left: -42vmax; top: 36%;
+  background: radial-gradient(circle at 50% 50%, #FBFDFF 0%, #F1F5FF 30%, #DCE5FF 50%, #B8C3FF 62%, #8E9AFF 68%, #7480FF 70.7%, rgba(116,128,255,0) 71%);
+  filter: blur(5px); animation: cs-drift-a 26s ease-in-out infinite alternate; }
+.cs-orb.o2 { width: 80vmax; height: 80vmax; right: -38vmax; top: 54%;
+  background: radial-gradient(circle at 50% 50%, #001EE0 0%, #0A2BFF 42%, #2846FF 56%, #5B62FF 65%, #9C93FF 69.5%, #B9B0FF 70.7%, rgba(185,176,255,0) 71%);
+  filter: blur(4px); animation: cs-drift-b 30s ease-in-out infinite alternate; }
+.cs-orb.o3 { width: 78vmin; height: 78vmin; left: 50%; top: 48%; transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0) 70%); }
+@keyframes cs-drift-a { to { transform: translate(2.5vmax, -1.5vmax); } }
+@keyframes cs-drift-b { to { transform: translate(-2vmax, -2.5vmax); } }
+
+.cs-top, .cs-main, .cs-foot { position: relative; z-index: 2; }
+.cs-top { display: flex; justify-content: flex-end; padding: 18px 20px 0; }
+.cs-main { flex: 1; width: 100%; max-width: 780px; margin: 0 auto; box-sizing: border-box; padding: 20px 20px 28px;
+           display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.cs-main > * { animation: cs-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.cs-main > :nth-child(2) { animation-delay: 60ms; }
+.cs-main > :nth-child(3) { animation-delay: 110ms; }
+.cs-main > :nth-child(4) { animation-delay: 160ms; }
+.cs-main > :nth-child(n+5) { animation-delay: 210ms; }
+@keyframes cs-in { from { opacity: 0; transform: translateY(10px); } }
+
+.cs-logo svg { height: clamp(78px, 13vh, 132px); width: auto; }
+.cs h1 { font-family: var(--display); font-weight: 800; font-size: clamp(46px, 7.4vw, 94px); line-height: 0.95;
+         letter-spacing: -0.04em; color: #000; margin: clamp(20px, 3.6vh, 36px) 0 0; max-width: 10.5ch; text-wrap: balance; }
+.cs-tag { margin: 18px 0 0; font-size: clamp(17px, 1.9vw, 22px); letter-spacing: 0.34em; padding-left: 0.34em; }
+.cs-lede { margin: 22px 0 0; max-width: 33em; font-size: clamp(16px, 1.45vw, 18.5px); line-height: 1.55; color: #10132A; text-wrap: pretty; }
+
+.cs-form { position: relative; margin-top: 30px; width: 100%; max-width: 560px; box-sizing: border-box;
+           display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 999px; padding: 8px 8px 8px 26px;
+           box-shadow: 0 24px 50px -20px rgba(16, 30, 140, 0.5), 0 0 0 1px rgba(255,255,255,0.8);
+           transition: box-shadow 180ms ease-out; }
+.cs-form:focus-within { box-shadow: 0 24px 50px -20px rgba(16, 30, 140, 0.5), 0 0 0 3px #1E40FF; }
+.cs-form input[type="email"] { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 15px 0;
+           font: 500 17px/1.2 var(--font); color: #000; }
+.cs-form input[type="email"]::placeholder { color: #626885; }
+.cs-go { flex: none; width: 58px; height: 58px; border-radius: 50%; border: 0; background: #000; color: #fff;
+         display: grid; place-items: center; cursor: pointer;
+         transition: background 160ms ease-out, transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.cs-go:hover { background: #1E40FF; transform: translateX(2px); }
+.cs-go:focus-visible { outline: 3px solid #1E40FF; outline-offset: 3px; }
+.cs-go[disabled] { opacity: 0.55; cursor: default; transform: none; }
+.cs-trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+.cs-err { margin: 14px 0 0; padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.9);
+          color: #B42318; font-size: 14px; font-weight: 700; }
+
+.cs-done { margin-top: 30px; width: 100%; max-width: 560px; box-sizing: border-box; display: flex; align-items: center; gap: 14px;
+           text-align: left; background: #fff; border-radius: 30px; padding: 12px 22px 12px 12px;
+           box-shadow: 0 24px 50px -20px rgba(16, 30, 140, 0.5); }
+.cs-check { flex: none; width: 50px; height: 50px; border-radius: 50%; background: #1E40FF; color: #fff; display: grid; place-items: center; }
+.cs-done b.t { display: block; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.cs-done .s { display: block; margin-top: 2px; font-size: 14.5px; line-height: 1.45; color: #3F4560; overflow-wrap: anywhere; }
+.cs-done .s b { color: #000; font-weight: 700; }
+.cs-again { margin-top: 10px; border: 0; background: rgba(255,255,255,0.72); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+            font: 700 13px var(--font); color: #10132A; }
+.cs-again:hover { background: #fff; }
+.cs-role { margin-top: 18px; }
+.cs-role p { margin: 0 0 10px; font-size: 15px; color: #10132A; }
+.cs-role .opts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.cs-role button { border: 1px solid #fff; background: rgba(255,255,255,0.62); border-radius: 999px; padding: 12px 20px; cursor: pointer;
+                  font: 700 15px var(--font); color: #000; transition: background 160ms ease-out; }
+.cs-role button:hover { background: #fff; }
+.cs-role button:focus-visible { outline: 3px solid #1E40FF; outline-offset: 2px; }
+
+.cs-caps { margin: 24px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: #000; }
+.cs-caps + .cs-caps { margin-top: 10px; }
+.cs-caps span { display: inline-block; white-space: nowrap; }
+.cs-caps .dot { margin: 0 0.7em 0 0.4em; }
+.cs .go-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.cs-thanks { margin: 26px 0 0; font-size: 16.5px; font-weight: 500; color: #10132A; }
+
+.cs-foot { display: flex; align-items: center; justify-content: center; gap: 6px 14px; flex-wrap: wrap; padding: 6px 20px 20px; }
+.cs-note { padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.72); font-size: 12.5px; color: #2A2F4F; }
+.cs-staff { border: 0; background: rgba(255,255,255,0.72); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+            font: 700 11.5px var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: #2A2F4F; }
+.cs-staff:hover { background: #fff; color: #000; }
+
+.cs-card { margin-top: 30px; width: 100%; max-width: 520px; box-sizing: border-box; background: #fff; border-radius: 28px;
+           padding: 28px 28px 30px; box-shadow: 0 24px 50px -20px rgba(16, 30, 140, 0.5); }
+.cs-card h2 { margin: 0 0 8px; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; color: #000; }
+.cs-card p { margin: 0; font-size: 15.5px; line-height: 1.55; color: #3F4560; }
+.cs-card a { display: inline-block; margin-top: 20px; background: #1E40FF; color: #fff; text-decoration: none; font-weight: 800;
+             font-size: 15px; padding: 13px 24px; border-radius: 999px; }
+
+@media (max-width: 560px) {
+  .cs-main { padding: 8px 16px 20px; }
+  .cs h1 { max-width: none; }
+  .cs-form { padding: 6px 6px 6px 20px; }
+  .cs-go { width: 52px; height: 52px; }
+  .cs-caps { font-size: 11.5px; letter-spacing: 0.24em; }
+  .cs-orb.o1 { width: 170vw; height: 170vw; left: -95vw; top: 60%; }
+  .cs-orb.o2 { width: 150vw; height: 150vw; right: -88vw; top: 74%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cs-orb, .cs-main > * { animation: none; }
+  .cs-go, .cs-form { transition: none; }
+}
+`;
+
+/* The page frame: gradient spheres, language switch, logo, and a footer. */
+function CsShell({ children, foot }) {
   return (
-    <div style={{
-      minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center",
-      background:"linear-gradient(135deg, #0A0A0A 0%, #1A1A2E 100%)",
-      color:"#fff", padding:"24px", textAlign:"center",
-      font:"16px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif",
-    }}>
-      <div style={{ maxWidth:440 }}>
-        {/* The real brand mark, not a word typed to look like one. */}
-        <div style={{ marginBottom:30 }}>
-          <PlujMark size={54} light />
-        </div>
-
-        <h1 style={{ fontSize:26, fontWeight:800, letterSpacing:"-0.02em", margin:"0 0 12px" }}>
-          Down for Maintenance
-        </h1>
-        <p style={{ margin:"0 0 8px", color:"rgba(255,255,255,0.72)" }}>
-          We are making improvements to Your Pluj and we will be back shortly.
-        </p>
-        <p style={{ margin:0, color:"rgba(255,255,255,0.45)", fontSize:14 }}>
-          Thank you for your patience — see you soon.
-        </p>
-
-        <button
-          onClick={onStaff}
-          style={{
-            marginTop:40, background:"none", border:"none", cursor:"pointer",
-            color:"rgba(255,255,255,0.3)", fontSize:12, letterSpacing:"0.06em",
-            textTransform:"uppercase", fontWeight:600, padding:"8px 12px",
-          }}
-        >Staff</button>
+    <div className="cs grain">
+      <style>{CS_CSS}</style>
+      <div className="cs-bg" aria-hidden="true">
+        <span className="cs-orb o1" /><span className="cs-orb o2" /><span className="cs-orb o3" />
       </div>
+      <div className="cs-top"><LangToggle /></div>
+      <main className="cs-main">
+        <div className="cs-logo"><PlujMark variant="horizontal" color="#000" size={120} /></div>
+        {children}
+      </main>
+      <footer className="cs-foot">{foot}</footer>
     </div>
+  );
+}
+
+const CS_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
+
+export function MaintenanceScreen({ onStaff }) {
+  const [email, setEmail] = useState("");
+  const [busy,  setBusy]  = useState(false);
+  const [err,   setErr]   = useState("");
+  /* This browser already joined: show the confirmation instead of the form. */
+  const [saved, setSaved] = useState(() => { try { return localStorage.getItem(WAITLIST_KEY) || ""; } catch { return ""; } });
+  const [token, setToken] = useState(null);
+  const [role,  setRole]  = useState(null);
+  const trap = useRef(null);
+
+  const badEmail = "Enter a valid email, like name@example.com.";
+
+  async function submit(e) {
+    e.preventDefault();
+    if (busy) return;
+    const v = email.trim();
+    if (!CS_EMAIL_RE.test(v)) { setErr(badEmail); return; }
+    /* A bot filled the hidden field: say thanks, save nothing. */
+    if (trap.current && trap.current.value) { setSaved(v); return; }
+    setErr(""); setBusy(true);
+    const r = await joinWaitlist(v);
+    setBusy(false);
+    if (r && r.ok) {
+      setSaved(v); setToken(r.token || null); setRole(null); setEmail("");
+      try { localStorage.setItem(WAITLIST_KEY, v); } catch { /* private mode */ }
+      track("waitlist_joined", {});
+      return;
+    }
+    setErr(r && r.error === "invalid_email" ? badEmail
+         : r && r.error === "rate_limited" ? "Too many tries from this connection. Try again in an hour."
+         : "We couldn't save your email. Check your connection and try again.");
+  }
+
+  async function pick(which) {
+    setRole(which);
+    await setWaitlistRole(token, which);
+  }
+
+  function another() {
+    setSaved(""); setToken(null); setRole(null); setErr("");
+    try { localStorage.removeItem(WAITLIST_KEY); } catch { /* private mode */ }
+  }
+
+  return (
+    <CsShell foot={<>
+      <span className="cs-note">We'll only email you about the PLUJ opening. Unsubscribe anytime.</span>
+      <button type="button" className="cs-staff" onClick={onStaff}>Staff</button>
+    </>}>
+      <h1>Good parties are coming.</h1>
+      <p className="tagline cs-tag">we know a guy</p>
+      <p className="cs-lede">
+        Book your entire party or just one piece: DJ, catering, food trucks, bartenders, venues, lighting and more.
+        All in one place. À la carte, or the whole thing.
+      </p>
+
+      {!saved ? (
+        <form className="cs-form" onSubmit={submit} noValidate>
+          <label htmlFor="cs-email" className="go-label">Your email</label>
+          <input id="cs-email" type="email" inputMode="email" autoComplete="email" spellCheck={false}
+            placeholder="Enter your email" value={email}
+            onChange={e => { setEmail(e.target.value); if (err) setErr(""); }}
+            aria-invalid={err ? "true" : undefined} aria-describedby={err ? "cs-err" : undefined} />
+          <input ref={trap} className="cs-trap" type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+          <button type="submit" className="cs-go" disabled={busy} aria-label="Join the waitlist" title="Join the waitlist">
+            <Icon name="arrow" size={24} />
+          </button>
+        </form>
+      ) : (
+        <div className="cs-done" role="status">
+          <span className="cs-check" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.2 4.2L19 7.2" /></svg>
+          </span>
+          <span>
+            <b className="t">You're on the list.</b>
+            <span className="s">We'll email <b data-no-translate>{saved}</b> the day PLUJ opens.</span>
+          </span>
+        </div>
+      )}
+      {saved && <button type="button" className="cs-again" onClick={another}>Add another email</button>}
+      {err && <p className="cs-err" id="cs-err" role="alert">{err}</p>}
+
+      {saved && token && (
+        <div className="cs-role">
+          {!role ? (<>
+            <p>One more thing, so we send you the right invite:</p>
+            <div className="opts">
+              <button type="button" onClick={() => pick("host")}>I'm planning an event</button>
+              <button type="button" onClick={() => pick("pro")}>I'm an event pro</button>
+            </div>
+          </>) : (
+            <p>{role === "pro" ? "Got it. You'll get the invite for event pros." : "Got it. You'll get the invite for hosts."}</p>
+          )}
+        </div>
+      )}
+
+      {!saved && <p className="cs-caps">
+        <span>Join the waitlist</span><span className="dot" aria-hidden="true">·</span><span>Be the first to know</span>
+      </p>}
+      <p className="cs-caps" data-no-translate>#weknowaguy</p>
+      <p className="cs-thanks">Thank you for your patience — see you soon.</p>
+    </CsShell>
+  );
+}
+
+/* /unsubscribe?t=<token>, the link at the bottom of every waitlist email.
+   Ahead of the maintenance gate, so it works whether the site is on or off. */
+export function WaitlistUnsubscribe() {
+  const token = (() => { try { return new URLSearchParams(window.location.search).get("t") || ""; } catch { return ""; } })();
+  const [st, setSt] = useState("busy");
+  const [masked, setMasked] = useState("");
+  useEffect(() => {
+    if (!/^[0-9a-f-]{36}$/i.test(token)) { setSt("bad"); return; }
+    unsubscribeWaitlist(token).then(r => {
+      if (r && r.ok) { setMasked(r.email || ""); setSt("ok"); } else setSt("bad");
+    });
+  }, [token]);
+  return (
+    <CsShell foot={null}>
+      <div className="cs-card" role="status">
+        {st === "busy" && <p>One moment…</p>}
+        {st === "ok" && (<>
+          <h2>You're off the list.</h2>
+          {masked
+            ? <p>We won't email <b data-no-translate>{masked}</b> about the PLUJ opening again.</p>
+            : <p>We won't email you about the PLUJ opening again.</p>}
+          <a href="/">Back to PLUJ</a>
+        </>)}
+        {st === "bad" && (<>
+          <h2>That link didn't work.</h2>
+          <p>Copy the whole link from the email and try again, or write to info@pluj.us and we'll take you off the list ourselves.</p>
+          <a href="/">Back to PLUJ</a>
+        </>)}
+      </div>
+    </CsShell>
   );
 }
 
@@ -12507,7 +12785,7 @@ export function SiteSwitch() {
     const turningOff = !isPrivate;
     if (turningOff && !window.confirm(
       "Take pluj.us offline?\n\nEveryone except admins will see the " +
-      "\"Down for Maintenance\" page until you turn it back on."
+      "\"Good parties are coming\" page, where they can join the waitlist, until you turn it back on."
     )) return;
     setBusy(true);
     const r = await setSitePublic(isPrivate);   // isPrivate === true means "open it"
@@ -12537,9 +12815,11 @@ export function SiteSwitch() {
         </div>
         <div style={{ fontSize:13, color:C.midGray, marginTop:2 }}>
           {isPrivate === null ? " "
-            : off ? "Visitors see the Down for Maintenance page. Admins still see the full site."
+            : off ? "Visitors see the \"Good parties are coming\" page and can join the waitlist. Admins still see the full site."
                   : "Anyone can browse and book on pluj.us."}
         </div>
+        <a href="/?preview=coming-soon" target="_blank" rel="noopener noreferrer"
+           style={{ display:"inline-block", marginTop:6, fontSize:12.5, fontWeight:700, color:C.cobalt }}>See the page visitors see</a>
         {msg && <div style={{ fontSize:13, color:C.red, marginTop:6 }}>{msg}</div>}
       </div>
       <button
@@ -12553,6 +12833,228 @@ export function SiteSwitch() {
           opacity: (busy || isPrivate === null) ? 0.5 : 1,
         }}
       >{busy ? "Working…" : (off ? "Turn the site on" : "Turn the site off")}</button>
+    </div>
+  );
+}
+
+/* The Waitlist tab of the admin panel: who signed up on the coming-soon page,
+   and the two emails for opening day. Admin-only is enforced by is_admin()
+   inside every waitlist_* function, not by this component. */
+const wlDate = (x) => x ? new Date(x).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+
+export function WaitlistAdmin() {
+  const [d,        setD]        = useState(null);
+  const [err,      setErr]      = useState("");
+  const [addr,     setAddr]     = useState("");
+  const [cap,      setCap]      = useState(80);
+  const [saving,   setSaving]   = useState(false);
+  const [saveMsg,  setSaveMsg]  = useState("");
+  const [prev,     setPrev]     = useState(null);     // { kind, role, lang, subject, html }
+  const [sending,  setSending]  = useState("");
+  const [sendMsg,  setSendMsg]  = useState("");
+  const [showAll,  setShowAll]  = useState(false);
+
+  async function load() {
+    if (IS_PREVIEW) { setErr("Not available in preview mode."); return; }
+    const { data, error } = await sb.rpc("waitlist_admin");
+    if (error || !data) { setErr((error && error.message) || "Couldn't load the waitlist."); return; }
+    setErr(""); setD(data); setAddr(data.mailing_address || ""); setCap(data.daily_cap || 80);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function saveSettings() {
+    setSaving(true); setSaveMsg("");
+    const { error } = await sb.rpc("waitlist_settings", { p_address: addr, p_daily_cap: Number(cap) || 0 });
+    setSaving(false);
+    if (error) { setSaveMsg((error && error.message) || "Couldn't save."); return; }
+    setSaveMsg("Saved.");
+    load();
+  }
+
+  async function preview(kind, role, lang) {
+    const k = kind || prev?.kind || "invite", r = role || prev?.role || "host", l = lang || prev?.lang || "en";
+    const { data, error } = await sb.rpc("waitlist_email_preview", { p_kind: k, p_role: r, p_lang: l });
+    if (error || !data) { setSendMsg((error && error.message) || "Couldn't load the preview."); return; }
+    setPrev({ kind: k, role: r, lang: l, subject: data.subject, html: data.html });
+  }
+
+  async function send(kind) {
+    const n = kind === "invite" ? d.summary.to_invite : d.summary.to_remind;
+    const days = Math.ceil(n / Math.max(1, Number(cap) || 1));
+    const what = kind === "invite" ? "the launch invite" : "the reminder";
+    if (!window.confirm(
+      `Send ${what} to ${n} ${n === 1 ? "person" : "people"}?\n\n` +
+      (days > 1 ? `At ${cap} a day, the last ones go out in ${days} days.\n\n` : "") +
+      "Once sent, it can't be taken back."
+    )) return;
+    setSending(kind); setSendMsg("");
+    const { data, error } = await sb.rpc("waitlist_send", { p_kind: kind });
+    setSending("");
+    if (error || !data) { setSendMsg((error && error.message) || "Couldn't send."); return; }
+    setSendMsg(data.days > 1
+      ? `Queued ${data.queued}. They go out over ${data.days} days, ${data.daily_cap} a day.`
+      : `Queued ${data.queued}. They go out in the next few minutes.`);
+    load();
+  }
+
+  function downloadCsv() {
+    const esc = v => { const t = v == null ? "" : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const head = ["email", "type", "language", "joined_waitlist", "invited", "reminded", "has_account", "unsubscribed"];
+    const lines = (d.rows || []).map(r => [r.email, r.role === "pro" ? "event pro" : "host", r.lang,
+      r.created_at, r.invited_at || "", r.reminded_at || "", r.joined ? "yes" : "no", r.unsubscribed_at || ""].map(esc).join(","));
+    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `pluj-waitlist-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  const box  = { border:`1px solid ${C.border}`, borderRadius:14, padding:"16px 18px", marginBottom:16, background:"#fff" };
+  const h4   = { margin:"0 0 4px", fontSize:14.5, fontWeight:800, color:C.black };
+  const note = { margin:0, fontSize:12.5, color:C.midGray, lineHeight:1.5 };
+  const pill = (on) => ({ border:`1px solid ${on ? C.cobalt : C.border}`, background: on ? C.orangeSoft : "#fff",
+                          color: on ? C.cobalt : C.darkGray, borderRadius:99, padding:"5px 11px", fontSize:12, fontWeight:700, cursor:"pointer" });
+  const btn  = (primary, off) => ({ border: primary ? "none" : `1px solid ${C.border}`, background: primary ? C.cobalt : "#fff",
+                          color: primary ? "#fff" : C.black, borderRadius:99, padding:"9px 16px", fontSize:13, fontWeight:800,
+                          cursor: off ? "default" : "pointer", opacity: off ? 0.45 : 1 });
+
+  if (err) return <div style={{ ...box, color:C.red, fontSize:13 }}>{err}</div>;
+  if (!d)  return <div style={{ ...box, fontSize:13, color:C.midGray }}>Loading the waitlist…</div>;
+
+  const s = d.summary || {};
+  const noAddr = !(d.mailing_address || "").trim();
+  const blocker = d.site_private ? "Turn the site on first (Settings). These emails tell people PLUJ is open."
+                : noAddr ? "Add your mailing address below first."
+                : d.queued > 0 ? "The last batch is still going out."
+                : "";
+  const rows = showAll ? (d.rows || []) : (d.rows || []).slice(0, 25);
+  const stats = [
+    [s.total, "on the list"], [s.hosts, "hosts"], [s.pros, "event pros"], [s.spanish, "in Spanish"],
+    [s.joined, "made an account"], [s.unsubscribed, "unsubscribed"],
+  ];
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:16 }}>📬</span>
+        <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Waitlist</h3>
+        <a href="/?preview=coming-soon" target="_blank" rel="noopener noreferrer"
+           style={{ marginLeft:"auto", fontSize:12.5, fontWeight:700, color:C.cobalt }}>See the sign-up page</a>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8, marginBottom:16 }}>
+        {stats.map(([n, l]) => (
+          <div key={l} style={{ background:C.mist, borderRadius:12, padding:"10px 12px" }}>
+            <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", color:C.black }}>{n || 0}</div>
+            <div style={{ fontSize:12, color:C.midGray }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Opening-day emails */}
+      <div style={box}>
+        <p style={h4}>Opening-day emails</p>
+        <p style={{ ...note, marginBottom:12 }}>
+          Each one is written in the person's language, with a button for hosts or for event pros, an unsubscribe link and your mailing address.
+        </p>
+        {[
+          ["invite",   "Launch invite", "Tells everyone PLUJ is open.", s.to_invite],
+          ["reminder", "Reminder",      "For people invited 2+ days ago who still have no account. Their last waitlist email.", s.to_remind],
+        ].map(([k, title, desc, n]) => {
+          const off = !!blocker || !n || !!sending;
+          return (
+            <div key={k} style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:"10px 0", borderTop:`1px solid ${C.borderLight}` }}>
+              <div style={{ flex:1, minWidth:200 }}>
+                <div style={{ fontSize:13.5, fontWeight:800, color:C.black }}>{title}</div>
+                <div style={{ fontSize:12.5, color:C.midGray }}>{desc} {n || 0} to send.</div>
+              </div>
+              <button type="button" onClick={() => preview(k)} style={btn(false, false)}>Preview</button>
+              <button type="button" disabled={off} onClick={() => send(k)} style={btn(true, off)}>
+                {sending === k ? "Sending…" : `Send to ${n || 0}`}
+              </button>
+            </div>
+          );
+        })}
+        {blocker && <p style={{ ...note, color:C.darkGray, marginTop:8 }}>{blocker}</p>}
+        {d.queued > 0 && <p style={{ ...note, marginTop:8 }}>{d.queued} still going out. {d.sent} sent so far.</p>}
+        {d.queued === 0 && d.sent > 0 && <p style={{ ...note, marginTop:8 }}>{d.sent} sent.</p>}
+        {sendMsg && <p style={{ ...note, color:C.black, fontWeight:700, marginTop:8 }}>{sendMsg}</p>}
+
+        {prev && (
+          <div style={{ marginTop:12, borderTop:`1px solid ${C.borderLight}`, paddingTop:12 }}>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}>
+              <button type="button" style={pill(prev.kind === "invite")}   onClick={() => preview("invite")}>Invite</button>
+              <button type="button" style={pill(prev.kind === "reminder")} onClick={() => preview("reminder")}>Reminder</button>
+              <span style={{ width:8 }} />
+              <button type="button" style={pill(prev.role === "host")} onClick={() => preview(null, "host")}>Host</button>
+              <button type="button" style={pill(prev.role === "pro")}  onClick={() => preview(null, "pro")}>Event pro</button>
+              <span style={{ width:8 }} />
+              <button type="button" style={pill(prev.lang === "en")} onClick={() => preview(null, null, "en")} data-no-translate>English</button>
+              <button type="button" style={pill(prev.lang === "es")} onClick={() => preview(null, null, "es")} data-no-translate>Español</button>
+              <button type="button" onClick={() => setPrev(null)}
+                style={{ marginLeft:"auto", border:"none", background:"none", color:C.midGray, fontSize:12.5, fontWeight:700, cursor:"pointer" }}>Close</button>
+            </div>
+            <div style={{ fontSize:12.5, color:C.midGray, marginBottom:6 }}>
+              Subject: <b style={{ color:C.black }} data-no-translate>{prev.subject}</b>
+            </div>
+            <iframe title="Email preview" srcDoc={prev.html} sandbox=""
+              style={{ width:"100%", height:520, border:`1px solid ${C.border}`, borderRadius:12, background:"#EEF2FF" }} />
+          </div>
+        )}
+      </div>
+
+      {/* Settings the emails need */}
+      <div style={box}>
+        <p style={h4}>Before you send</p>
+        <label style={{ display:"block", fontSize:12.5, fontWeight:700, color:C.darkGray, margin:"10px 0 4px" }}>Mailing address</label>
+        <input value={addr} onChange={e => { setAddr(e.target.value); setSaveMsg(""); }} maxLength={200}
+          placeholder="Street or PO box, Houston, TX 770XX"
+          style={{ width:"100%", boxSizing:"border-box", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px", fontSize:14 }} />
+        <p style={{ ...note, marginTop:4 }}>US law (CAN-SPAM) requires a postal address in marketing emails. A PO box works.</p>
+        <label style={{ display:"block", fontSize:12.5, fontWeight:700, color:C.darkGray, margin:"12px 0 4px" }}>Waitlist emails per day</label>
+        <input type="number" min={1} max={5000} value={cap} onChange={e => { setCap(e.target.value); setSaveMsg(""); }}
+          style={{ width:120, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px", fontSize:14 }} />
+        <p style={{ ...note, marginTop:4 }}>
+          Your email plan sends 100 emails a day. Keeping waitlist emails to 80 leaves room for booking emails. Raise this after upgrading the plan.
+        </p>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12 }}>
+          <button type="button" onClick={saveSettings} disabled={saving} style={btn(true, saving)}>{saving ? "Saving…" : "Save"}</button>
+          {saveMsg && <span style={{ fontSize:12.5, fontWeight:700, color: saveMsg === "Saved." ? C.green : C.red }}>{saveMsg}</span>}
+        </div>
+      </div>
+
+      {/* The list */}
+      <div style={box}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+          <p style={{ ...h4, margin:0 }}>Everyone who signed up</p>
+          <button type="button" onClick={downloadCsv} disabled={!(d.rows || []).length}
+            style={{ ...btn(false, !(d.rows || []).length), marginLeft:"auto", padding:"6px 12px", fontSize:12 }}>Download CSV</button>
+        </div>
+        {!(d.rows || []).length && <p style={note}>Nobody yet. Signups from the coming-soon page show up here.</p>}
+        {rows.map(r => {
+          const status = r.unsubscribed_at ? ["Unsubscribed", C.midGray, C.bgAlt]
+                       : r.joined ? ["Has an account", C.green, C.greenSoft]
+                       : r.reminded_at ? ["Reminded " + wlDate(r.reminded_at), C.cobalt, C.orangeSoft]
+                       : r.invited_at ? ["Invited " + wlDate(r.invited_at), C.cobalt, C.orangeSoft]
+                       : ["Waiting", C.darkGray, C.mist];
+          return (
+            <div key={r.email} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderTop:`1px solid ${C.borderLight}`, fontSize:13 }}>
+              <span data-no-translate style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600, color:C.black }}>{r.email}</span>
+              <span style={{ color:C.midGray, fontSize:12 }}>{r.role === "pro" ? "Event pro" : "Host"}</span>
+              <span data-no-translate style={{ color:C.midGray, fontSize:12 }}>{r.lang === "es" ? "ES" : "EN"}</span>
+              <span style={{ color:C.midGray, fontSize:12, minWidth:44 }}>{wlDate(r.created_at)}</span>
+              <span style={{ fontSize:11, fontWeight:800, color:status[1], background:status[2], borderRadius:99, padding:"3px 8px", whiteSpace:"nowrap" }}>{status[0]}</span>
+            </div>
+          );
+        })}
+        {(d.rows || []).length > 25 && (
+          <button type="button" onClick={() => setShowAll(v => !v)}
+            style={{ marginTop:8, border:"none", background:"none", color:C.cobalt, fontWeight:700, fontSize:12.5, cursor:"pointer", padding:0 }}>
+            {showAll ? "Show fewer" : `Show all ${(d.rows || []).length}`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -12603,7 +13105,9 @@ export default function PlujApp() {
       });
     }
   }, []);
-  const [authModal, setAuthModal] = useState(false);
+  /* true = log in; { tab, role } = open on sign-up as that kind of account. */
+  const [authModal, setAuthModal] = useState(() =>
+    BOOT_QUERY.signupRole ? { tab: "signup", role: BOOT_QUERY.signupRole } : false);
   /* Password-recovery: set when arriving via a Supabase recovery email link */
   const [recoveryToken, setRecoveryToken] = useState(null);
   /* Set when the page was opened from a confirmation or reset email. Captured
@@ -13532,6 +14036,16 @@ export default function PlujApp() {
     );
   }
 
+  /* ── WAITLIST UNSUBSCRIBE ── works whether the site is on or off. */
+  if (BOOT_ROUTE.kind === "unsubscribe") {
+    return (
+      <>
+        <style>{GLOBAL_CSS}</style>
+        <WaitlistUnsubscribe />
+      </>
+    );
+  }
+
   /* ── MAINTENANCE GATE ────────────────────────────────────────────────────
      Placed after every hook in this component and before the vendor routing,
      so nobody — customer or vendor — gets past it while the site is off. The
@@ -13541,7 +14055,7 @@ export default function PlujApp() {
      This is a courtesy screen, not the security boundary. The security
      boundary is the database: private mode revokes anonymous read access, so
      even someone who skipped this page entirely would be shown nothing. */
-  if (sitePrivate && user?.type !== "admin") {
+  if ((sitePrivate && user?.type !== "admin") || BOOT_QUERY.comingSoon) {
     return (
       <>
         <style>{GLOBAL_CSS}</style>
@@ -13604,7 +14118,8 @@ export default function PlujApp() {
         </Suspense>
       )}
 
-      {authModal && <AuthModal onClose={()=>setAuthModal(false)} onAuth={u=>{setUser(u);setAuthModal(false);}} />}
+      {authModal && <AuthModal initialTab={authModal.tab} initialRole={authModal.role}
+                      onClose={()=>setAuthModal(false)} onAuth={u=>{setUser(u);setAuthModal(false);}} />}
 
       {infoPage && <InfoPageModal page={infoPage} onClose={()=>setInfoPage(null)} />}
 
@@ -14376,7 +14891,7 @@ export default function PlujApp() {
                     contracts. The hosts who book you already have a date, a guest count and a price.
                   </p>
                   <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-                    <button onClick={() => setAuthModal(true)} className="btn"
+                    <button onClick={() => setAuthModal({ tab: "signup", role: "vendor" })} className="btn"
                       style={{ background:"#fff", color:"#1E40FF", borderRadius:99, padding:"14px 24px", fontSize:15.5, fontWeight:800 }}>
                       List your business
                     </button>

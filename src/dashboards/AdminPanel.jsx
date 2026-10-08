@@ -14,6 +14,7 @@ import {
   RLS,
   SECURITY_HEADERS,
   SiteSwitch,
+  WaitlistAdmin,
   adminDeleteAccount,
   adminListAccounts,
   adminSendMessage,
@@ -979,6 +980,7 @@ function AdminPanel({ user, onClose, initialTab }) {
   const tabs = [
     ["accounts","👥 Accounts", 0],
     ["messages","💬 Messages", 0],
+    ["waitlist","📬 Waitlist", 0],
     ["vendors","🏪 Vendors", pendingCount],
     ["payments","💳 Payments", openProblems],
     ["cors",   "🌐 CORS",   0],
@@ -1035,6 +1037,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           {/* ── VENDOR APPLICATIONS ── */}
           {atab === "accounts" && <AdminAccounts adminId={user.id} onChanged={refreshVendorApps} />}
           {atab === "messages" && <MessagesPanel user={user} isAdmin />}
+          {atab === "waitlist" && <WaitlistAdmin />}
 
           {atab === "payments" && <AdminPayments onChanged={refreshProblems} />}
 
