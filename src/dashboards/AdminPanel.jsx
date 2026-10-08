@@ -339,7 +339,7 @@ function VendorReview({ vendorId, onDecided }) {
           {detail && (
             <button onClick={() => markCheck(field, !v[field])} disabled={busy} className="btn"
               style={{ flexShrink:0, padding:"7px 12px", borderRadius:99, fontSize:12, fontWeight:800,
-                       border:"1.5px solid #000", background: v[field] ? "#fff" : "#000", color: v[field] ? "#000" : "#fff" }}>
+                       border:"1.5px solid #1E40FF", background: v[field] ? "#fff" : "#000", color: v[field] ? "#000" : "#fff" }}>
               {v[field] ? "Remove check" : "Mark checked"}
             </button>
           )}
@@ -812,7 +812,7 @@ function AdminAccounts({ adminId, onChanged }) {
           <button key={k} onClick={()=>setKF(k)} className="btn"
             style={{ padding:"5px 12px", borderRadius:99, fontSize:11.5, fontWeight:700, cursor:"pointer",
                      border:`1px solid ${kindFilter===k?C.orange:C.border}`,
-                     background: kindFilter===k ? "#FFF7ED" : "#fff",
+                     background: kindFilter===k ? "#EEF2FF" : "#fff",
                      color: kindFilter===k ? C.orange : C.midGray }}>{l}</button>
         ))}
         <span style={{ marginLeft:"auto", fontSize:11, color:C.lightGray, alignSelf:"center" }}>
@@ -902,7 +902,7 @@ function AdminAccounts({ adminId, onChanged }) {
                 <button key={k} onClick={()=>setMsgKind(k)} className="btn"
                   style={{ flex:1, padding:"7px 0", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
                            border:`1.5px solid ${msgKind===k?C.orange:C.border}`,
-                           background: msgKind===k ? "#FFF7ED" : "#fff",
+                           background: msgKind===k ? "#EEF2FF" : "#fff",
                            color: msgKind===k ? C.orange : C.midGray }}>{l}</button>
               ))}
             </div>

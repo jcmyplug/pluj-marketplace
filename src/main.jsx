@@ -83,7 +83,7 @@ class ErrorBoundary extends React.Component {
     const card = { maxWidth: 460, width: '100%', textAlign: 'left', color: '#fff' };
     const btn = {
       display: 'inline-block', padding: '12px 22px', borderRadius: 999,
-      background: '#FF5C28', color: '#fff', fontWeight: 700, fontSize: 15,
+      background: '#1E40FF', color: '#fff', fontWeight: 700, fontSize: 15,
       border: 'none', cursor: 'pointer',
     };
     const ghost = {

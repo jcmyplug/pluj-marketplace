@@ -143,11 +143,11 @@ function RecapManager({ vendorId }) {
 
       {!form ? (
         <button onClick={() => setForm({ ...blank })} className="btn"
-          style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800, marginBottom:14 }}>
+          style={{ background:"#1E40FF", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800, marginBottom:14 }}>
           Add a past event
         </button>
       ) : (
-        <div style={{ border:"1.5px solid #000", borderRadius:10, padding:"6px 14px 14px", marginBottom:16 }}>
+        <div style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:20, padding:"6px 14px 14px", marginBottom:16 }}>
           <label style={L}>Title *</label>
           <input style={F} value={form.title} maxLength={120} onChange={e => set("title", e.target.value)} placeholder="e.g. Backyard 40th for 80 guests" />
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -188,7 +188,7 @@ function RecapManager({ vendorId }) {
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:6 }}>
               {hits.filter(h => !form.credited.includes(h.id)).map(h => (
                 <button key={h.id} className="btn" onClick={() => { set("credited", [...form.credited, h.id]); setNames(n => ({ ...n, [h.id]: { name: h.business_name } })); setQ(""); }}
-                  style={{ border:"1.5px solid #000", background:"#fff", borderRadius:99, padding:"5px 12px", fontSize:12, fontWeight:700 }}>
+                  style={{ border:"1.5px solid #1E40FF", background:"#fff", borderRadius:99, padding:"5px 12px", fontSize:12, fontWeight:700 }}>
                   + {h.business_name}
                 </button>
               ))}
@@ -207,11 +207,11 @@ function RecapManager({ vendorId }) {
           )}
           <div style={{ display:"flex", gap:8, marginTop:14 }}>
             <button onClick={save} disabled={busy} className="btn"
-              style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
+              style={{ background:"#1E40FF", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
               {busy ? "Saving…" : form.id ? "Save changes" : "Post event"}
             </button>
             <button onClick={() => { setForm(null); setErr(""); }} className="btn"
-              style={{ background:"#fff", color:"#000", border:"1.5px solid #000", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:700 }}>
+              style={{ background:"#fff", color:"#1E40FF", border:"1.5px solid #1E40FF", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:700 }}>
               Cancel
             </button>
           </div>
@@ -810,7 +810,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     <button key={k} type="button" onClick={() => setField("offsite", val)} className="btn"
                       style={{ flex:1, padding:"9px 8px", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer",
                                border:`1.5px solid ${on ? C.orange : C.border}`,
-                               background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                               background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                       {l}
                     </button>
                   );
@@ -838,7 +838,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                         }}
                         style={{ padding:"5px 11px", borderRadius:99, fontSize:11.5, fontWeight:600, cursor:"pointer",
                                  border:`1.5px solid ${on ? C.orange : C.border}`,
-                                 background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                                 background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                         {on ? "✓ " : ""}{city}
                       </button>
                     );
@@ -875,7 +875,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     onClick={()=> setField("avail_days", on ? cur.filter(x=>x!==d) : [...cur, d])}
                     style={{ padding:"6px 13px", borderRadius:99, fontSize:11.5, fontWeight:700, cursor:"pointer",
                              border:`1.5px solid ${on ? C.orange : C.border}`,
-                             background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                             background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                     {d}
                   </button>
                 );
@@ -890,7 +890,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     onClick={()=> setField("avail_blocks", on ? cur.filter(x=>x!==id) : [...cur, id])}
                     style={{ padding:"6px 12px", borderRadius:99, fontSize:11.5, fontWeight:600, cursor:"pointer",
                              border:`1.5px solid ${on ? C.orange : C.border}`,
-                             background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                             background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                     {on ? "✓ " : ""}{label}
                   </button>
                 );
@@ -921,7 +921,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     style={{ flex:"1 1 150px", padding:"9px 10px", borderRadius:9, fontSize:11.5,
                              fontWeight:700, cursor:"pointer",
                              border:`1.5px solid ${on ? C.orange : C.border}`,
-                             background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                             background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                     {label}
                   </button>
                 );
@@ -1144,7 +1144,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     addons: [...(e.addons || []), { name:"", price:"" }] }))}
                   className="btn"
                   style={{ padding:"6px 11px", borderRadius:8, border:`1px solid ${C.orange}`,
-                           background:"#FFF7ED", color:C.orange, fontSize:11.5, fontWeight:700 }}>
+                           background:"#EEF2FF", color:C.orange, fontSize:11.5, fontWeight:700 }}>
                   + Add add-on
                 </button>
               )}

@@ -466,42 +466,63 @@ function fmtCurrency(amount, countryCode = "US") {
 }
 
 export const GLOBAL_CSS = `
-/* ── Type: Big Shoulders Display, a condensed poster face with the energy of
-   a dance-hall or festival bill, for display; Figtree for everything you
-   read, clear in English and Spanish with all the accents. ── */
-@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500..900&family=Figtree:wght@400..800&display=swap');
+/* ── PLUJ brand (Oct 2026 brand board) ──
+   Cobalt is the brand; ultramarine, periwinkle, lavender and icy blue are the
+   light it throws. Type is Plus Jakarta Sans throughout: tight and heavy for
+   headlines, open for reading, and tracked wide only for the tagline
+   "we know a guy". Black is for the logo and headlines. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..800&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --ink: #17120F; --ink-2: #4B5260; --ink-3: #6B7280;
-  --line: #E7E7E9; --surface: #F6F6F7; --white: #FFFFFF;
-  --accent: #D13F17; --accent-hover: #B83510; --flame: #FF5C28; --accent-soft: #FFF1EC;
-  /* Celebration palette for the public pages: marigold (PLUJ orange) as a
-     surface, true black type, white paper. */
-  --marigold: #FF5C28; --black: #000000;
-  --display: 'Big Shoulders Display', 'Figtree', system-ui, sans-serif;
+  --cobalt: #1E40FF; --cobalt-deep: #1531D9; --ultra: #6366F1; --peri: #8B7CF6; --lav: #C4B5FD; --icy: #E0EDFF;
+  --mist: #F4F7FF;                      /* the page tint: icy blue, almost white */
+  --ink: #0B0C17; --ink-2: #3F4560; --ink-3: #5A6080;
+  --line: #E3E8F7; --line-2: #CFD8F5; --surface: #F4F7FF; --white: #FFFFFF;
+  --accent: #1E40FF; --accent-hover: #1531D9; --accent-soft: #EEF2FF;
+  --black: #000000;
+  --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ok: #0F7A55; --ok-soft: #E8F6EF;
-  --r-sm: 10px; --r-md: 14px; --r-lg: 22px;
+  --r-sm: 10px; --r-md: 16px; --r-lg: 24px; --r-xl: 32px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --glow: 0 30px 80px -30px rgba(30,64,255,0.45);
+  /* The brand light: a field of cobalt, periwinkle and lavender on icy blue. */
+  --field: radial-gradient(60% 75% at 100% 0%, rgba(196,181,253,0.95) 0%, rgba(196,181,253,0) 62%),
+           radial-gradient(55% 70% at 0% 100%, rgba(139,124,246,0.55) 0%, rgba(139,124,246,0) 60%),
+           radial-gradient(50% 60% at 85% 100%, rgba(30,64,255,0.40) 0%, rgba(30,64,255,0) 65%),
+           linear-gradient(180deg, #F4F7FF 0%, #E6EEFF 100%);
+  --deep: radial-gradient(70% 90% at 0% 0%, #6366F1 0%, rgba(99,102,241,0) 60%),
+          radial-gradient(60% 80% at 100% 100%, #8B7CF6 0%, rgba(139,124,246,0) 60%),
+          radial-gradient(50% 60% at 80% 10%, #C4B5FD 0%, rgba(196,181,253,0) 55%),
+          #1E40FF;
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   /* z-index scale */
   --z-sticky: 200; --z-dropdown: 300; --z-drawer: 900; --z-modal: 1000; --z-toast: 1200;
 }
 html { -webkit-text-size-adjust: 100%; }
-body { background: #fff; color: var(--ink); font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+body { background: #fff; color: var(--ink); font-family: var(--font);
        -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-.pluj { font-family: 'Figtree', system-ui, sans-serif; color: var(--ink); background: #fff; min-height: 100vh;
-        font-size: 15px; line-height: 1.5; }
-.pluj button, .pluj input, .pluj select, .pluj textarea { font-family: 'Figtree', system-ui, sans-serif; color: inherit; }
-.pluj h1, .pluj h2 { font-family: var(--display); font-weight: 800; letter-spacing: -0.005em;
-        text-wrap: balance; color: var(--ink); line-height: 1.02; }
-.pluj h3 { font-family: 'Figtree', system-ui, sans-serif; font-weight: 750; letter-spacing: -0.01em; text-wrap: balance; color: var(--ink); }
-.pluj ::selection { background: #FF5C28; color: #000; }
+.pluj { font-family: var(--font); color: var(--ink); background: #fff; min-height: 100vh;
+        font-size: 15px; line-height: 1.55; }
+.pluj button, .pluj input, .pluj select, .pluj textarea { font-family: var(--font); color: inherit; }
+.pluj h1, .pluj h2 { font-family: var(--display); font-weight: 800; letter-spacing: -0.035em;
+        text-wrap: balance; color: var(--black); line-height: 1.02; }
+.pluj h3 { font-family: var(--font); font-weight: 700; letter-spacing: -0.015em; text-wrap: balance; color: var(--ink); }
+.pluj ::selection { background: #C4B5FD; color: #000; }
 .pluj p { text-wrap: pretty; }
 .pluj a { color: var(--accent); }
 input { outline: none; }
+/* The tagline, set the way the brand board sets it: lowercase, tracked wide. */
+.tagline { font-family: var(--font); font-weight: 500; letter-spacing: 0.22em; text-transform: lowercase; color: #000; }
+/* Grain over the gradient fields, so the light reads as printed, not flat. */
+.grain { position: relative; isolation: isolate; }
+.grain::after { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: var(--grain);
+                opacity: 0.10; mix-blend-mode: overlay; z-index: 0; border-radius: inherit; }
+.grain > * { position: relative; z-index: 1; }
 
 /* ── Visible keyboard focus everywhere ── */
 .pluj button:focus-visible, .pluj a:focus-visible, .pluj [role="button"]:focus-visible,
-.pluj summary:focus-visible { outline: 3px solid rgba(209,63,23,0.45); outline-offset: 2px; border-radius: 10px; }
+.pluj summary:focus-visible { outline: 3px solid rgba(30,64,255,0.55); outline-offset: 2px; border-radius: 12px; }
 
 /* ── Motion respects the visitor's setting ── */
 @media (prefers-reduced-motion: reduce) {
@@ -510,11 +531,11 @@ input { outline: none; }
 }
 
 /* ── Focus rings only on keyboard navigation (Uber Eats pattern) ── */
-input:focus-visible { border-color: #D13F17 !important; box-shadow: 0 0 0 3px rgba(209,63,23,0.16) !important; }
+input:focus-visible { border-color: #1E40FF !important; box-shadow: 0 0 0 3px rgba(30,64,255,0.18) !important; }
 input:focus:not(:focus-visible) { border-color: #E5E7EB !important; box-shadow: none !important; }
-textarea:focus-visible { outline: 2px solid rgba(209,63,23,0.35) !important; outline-offset: 2px; }
+textarea:focus-visible { outline: 2px solid rgba(30,64,255,0.40) !important; outline-offset: 2px; }
 textarea:focus:not(:focus-visible) { outline: none !important; }
-select:focus-visible { outline: 2px solid rgba(209,63,23,0.35); outline-offset: 1px; }
+select:focus-visible { outline: 2px solid rgba(30,64,255,0.40); outline-offset: 1px; }
 select:focus:not(:focus-visible) { outline: none; }
 
 /* ── Password show/hide eye (PasswordInput) ──
@@ -608,23 +629,21 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 /* ── Filters bar ── */
 .filter-pill {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 600;
-  border: 1.5px solid #E5E7EB; background: #fff; cursor: pointer;
-  white-space: nowrap; transition: all 0.15s ease;
+  padding: 8px 15px; border-radius: 99px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--line-2); background: #fff; cursor: pointer; color: var(--ink);
+  white-space: nowrap; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.filter-pill.active {
-  background: #111; color: #fff; border-color: #111;
-}
-.filter-pill:hover:not(.active) { border-color: #111; }
+.filter-pill.active { background: var(--cobalt); color: #fff; border-color: var(--cobalt); }
+.filter-pill:hover:not(.active) { border-color: var(--cobalt); background: var(--mist); }
 
 /* ── Vendor card V2 ── */
 .vcard2 {
-  border-radius: 18px; overflow: hidden; background: #fff;
+  border-radius: 24px; overflow: hidden; background: #fff;
   border: 1px solid var(--line); cursor: pointer;
   transition: transform 260ms var(--ease-out), box-shadow 260ms var(--ease-out), border-color 260ms var(--ease-out);
   display: flex; flex-direction: column;
 }
-.vcard2:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -18px rgba(23,18,15,0.28); border-color: #DADADD; }
+.vcard2:hover { transform: translateY(-3px); box-shadow: 0 24px 50px -24px rgba(30,64,255,0.40); border-color: var(--line-2); }
 .vcard2:active { transform: translateY(-1px); }
 
 /* ── Heart / favorite button ── */
@@ -667,10 +686,10 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .rec-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 12px; border-radius: 99px; font-size: 11px; font-weight: 700;
-  background: #FFF7ED; border: 1.5px solid rgba(255,92,40,0.2); color: #FF5C28;
+  background: var(--accent-soft); border: 1.5px solid rgba(30,64,255,0.2); color: var(--cobalt);
   cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
 }
-.rec-chip:hover { background: #FF5C28; color: #fff; border-color: #FF5C28; }
+.rec-chip:hover { background: var(--cobalt); color: #fff; border-color: var(--cobalt); }
 
 /* ── Availability dot ── */
 .avail-dot {
@@ -691,193 +710,228 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 /* ── Smooth page transitions ── */
 .page-enter { animation: fadeUp 0.32s cubic-bezier(0.16,1,0.3,1) both; }
 
-/* ── Home (Oct 2026 redesign) ──
-   A marigold field; the artwork is the logo's own geometry (dot, bowl, half
-   moon); the example event is a real ticket stub; the categories are set
-   like a festival bill. Everything else stays quiet. */
-.hero-field { background: var(--marigold); color: var(--black); position: relative; overflow: hidden; }
-.home-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 44px;
-             align-items: center; max-width: 1240px; margin: 0 auto; padding: 56px 28px 72px; }
-.home-hero h1 { font-size: clamp(56px, 7.2vw, 96px); line-height: 0.92; font-weight: 800; letter-spacing: -0.01em;
+/* ── Home (brand board, 8 Oct 2026) ──
+   The hero is the brand's own light: an icy field with cobalt and lavender
+   coming in from the corners, and one big cobalt sphere carrying the white
+   mark, the way the brand board does it. Everything below is white with
+   cobalt doing the pointing. */
+.hero-field { background: var(--field); color: var(--black); position: relative; overflow: hidden; margin-top: -64px; padding-top: 64px; }
+.hero-field::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 90px; pointer-events: none;
+                      background: linear-gradient(180deg, rgba(255,255,255,0) 0%, #FFFFFF 100%); z-index: 0; }
+.home-hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr); gap: 40px;
+             align-items: center; max-width: 1280px; margin: 0 auto; padding: 40px 28px 40px; }
+.hero-kicker { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.72);
+               border: 1px solid rgba(30,64,255,0.14); border-radius: 999px; padding: 7px 14px;
+               font-size: 13px; font-weight: 700; color: var(--cobalt); margin-bottom: 22px; }
+.hero-kicker i { width: 7px; height: 7px; border-radius: 50%; background: var(--cobalt); display: inline-block; }
+.home-hero h1 { font-size: clamp(48px, 6.4vw, 88px); line-height: 0.98; font-weight: 800; letter-spacing: -0.045em;
                 color: var(--black); margin: 0; }
-.home-hero .lede { font-size: 18px; line-height: 1.55; color: #000; max-width: 33em; margin: 22px 0 28px; }
-.hero-search { display: grid; grid-template-columns: 1.25fr 1.15fr 1.2fr 0.85fr auto; background: #fff;
-               border-radius: 16px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,0.9); border: 2px solid #000; }
-.hero-search > label { display: block; padding: 11px 16px 10px; border-right: 1.5px solid #E2E2E2; min-width: 0; cursor: text; }
-.hero-search > label span { display: block; font-size: 12.5px; font-weight: 800; color: #000; }
+.home-hero .tagline { display: block; font-size: clamp(16px, 1.5vw, 20px); margin: 18px 0 0; }
+.home-hero .lede { font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 32em; margin: 18px 0 30px; }
+/* The search: a white pill, the arrow in cobalt (brand board). */
+.hero-search { display: grid; grid-template-columns: 1.15fr 1.1fr 1.25fr 0.85fr auto; align-items: center;
+               background: #fff; border-radius: 999px; padding: 6px 6px 6px 10px;
+               box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 24px 60px -24px rgba(30,64,255,0.45), 0 2px 8px rgba(11,12,23,0.06);
+               border: 1px solid rgba(30,64,255,0.10); }
+.hero-search > label { display: block; padding: 8px 16px; border-right: 1px solid var(--line); min-width: 0; cursor: text; }
+.hero-search > label span { display: block; font-size: 12px; font-weight: 700; color: var(--ink); }
 .hero-search input, .hero-search select { width: 100%; border: none; outline: none; background: transparent;
-               font-size: 15px; padding: 3px 0 0; color: #000; min-width: 0; }
-.hero-search button.go { margin: 7px; border-radius: 11px; padding: 0 24px; background: #000; color: #fff;
-               font-weight: 800; font-size: 15px; white-space: nowrap; }
-.hero-search button.go:hover { background: #2b2b2b; }
-.hero-alt { background: none; border: none; padding: 0; font-size: 15px; font-weight: 700; color: #000;
-            text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; cursor: pointer; }
-.promise-row { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 26px; }
-.promise { font-size: 14.5px; color: #000; display: inline-flex; gap: 8px; align-items: baseline; }
-.promise b { font-weight: 800; }
-.promise::before { content: ""; width: 9px; height: 9px; background: #000; transform: rotate(45deg) translateY(-1px); flex: 0 0 auto; }
-.hero-art { position: relative; min-height: 590px; }
-/* The logo's geometry: the photo sits in the bowl (flat left, round right),
-   the dot floats to its left and the half moon hangs beneath. */
-.hero-photo { position: absolute; right: 0; top: 0; width: 76%; height: 50%; border-radius: 0 999px 999px 0;
-              overflow: hidden; background: #000; }
-.hero-art .shape { position: absolute; background: #000; }
-.hero-art .shape.dot { left: 0; top: 9%; width: 19%; aspect-ratio: 1; border-radius: 50%; }
-.hero-art .shape.moon { left: 24%; top: 51%; width: 22%; aspect-ratio: 1 / 2; border-radius: 0 999px 999px 0; background: #fff; }
-.hero-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.stamp { position: absolute; right: -14px; top: -22px; width: 118px; height: 118px; z-index: 3; }
-.stamp svg { width: 100%; height: 100%; animation: spin 26s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-/* The ticket: a real stub. Notches at the tear line come from a mask, the
-   barcode from stripes, the total is set in the poster face. */
-.ticket { position: absolute; z-index: 2; right: 0; bottom: 0; width: min(300px, 64%);
-          background: #fff; color: #000; border: 2px solid #000; border-radius: 16px; transform: rotate(-3deg);
-          transition: transform 400ms var(--ease-out); padding: 0;
-          -webkit-mask: radial-gradient(circle 11px at 0 66%, transparent 10.5px, #000 11px) left / 51% 100% no-repeat,
-                        radial-gradient(circle 11px at 100% 66%, transparent 10.5px, #000 11px) right / 51% 100% no-repeat;
-                  mask: radial-gradient(circle 11px at 0 66%, transparent 10.5px, #000 11px) left / 51% 100% no-repeat,
-                        radial-gradient(circle 11px at 100% 66%, transparent 10.5px, #000 11px) right / 51% 100% no-repeat; }
+               font-size: 15px; padding: 2px 0 0; color: var(--ink); min-width: 0; }
+.hero-search button.go { height: 56px; width: 56px; border-radius: 999px; padding: 0; background: var(--cobalt); color: #fff;
+               font-weight: 700; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+               box-shadow: 0 10px 24px -8px rgba(30,64,255,0.65); }
+.hero-search button.go .go-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hero-search button.go:hover { background: var(--cobalt-deep); }
+.hero-search button.go svg { width: 18px; height: 18px; }
+.hero-alt { background: none; border: none; padding: 0; font-size: 15px; font-weight: 700; color: var(--ink);
+            text-decoration: underline; text-decoration-color: rgba(30,64,255,0.45); text-decoration-thickness: 2px;
+            text-underline-offset: 5px; cursor: pointer; }
+.hero-alt:hover { color: var(--cobalt); }
+.promise-row { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-top: 26px; }
+.promise { font-size: 14.5px; color: var(--ink-2); display: inline-flex; gap: 9px; align-items: center; }
+.promise b { font-weight: 700; color: var(--ink); }
+.promise::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--cobalt); flex: 0 0 auto;
+                   box-shadow: 0 0 0 4px rgba(30,64,255,0.14); }
+/* The art: the logo's own shapes as spheres. */
+.hero-art { position: relative; min-height: 600px; }
+.orb { position: absolute; border-radius: 50%; }
+.orb.main { right: -12%; top: -2%; width: 92%; aspect-ratio: 1;
+  background: radial-gradient(circle at 72% 22%, rgba(196,181,253,0.95) 0%, rgba(196,181,253,0) 38%),
+              radial-gradient(circle at 22% 80%, rgba(139,124,246,0.9) 0%, rgba(139,124,246,0) 46%),
+              radial-gradient(circle at 50% 45%, #1E40FF 0%, #2E4BFF 50%, #5A63F5 100%);
+  box-shadow: 0 50px 120px -40px rgba(30,64,255,0.65), inset 0 -40px 90px rgba(224,237,255,0.25); }
+.orb.main .mark { position: absolute; left: 50%; top: 50%; transform: translate(-48%, -52%); width: 46%; }
+.orb.main .mark svg { width: 100% !important; height: auto !important; }
+.orb.lav { right: -22%; bottom: -4%; width: 50%; aspect-ratio: 1;
+  background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #E0EDFF 22%, #C4B5FD 58%, #8B7CF6 100%);
+  box-shadow: 0 30px 70px -30px rgba(99,102,241,0.55); }
+.orb.half { left: 4%; top: 58%; width: 22%; aspect-ratio: 1 / 2; border-radius: 0 999px 999px 0;
+  background: linear-gradient(170deg, #FFFFFF 0%, #E0EDFF 35%, #8B7CF6 100%); box-shadow: 0 30px 60px -30px rgba(99,102,241,0.5); }
+.orb.dot { left: 2%; top: 14%; width: 11%; aspect-ratio: 1; background: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #C4B5FD 60%, #8B7CF6 100%); }
+/* The example receipt: one price, nothing added. */
+.ticket { position: absolute; z-index: 3; left: -2%; bottom: 0; width: min(290px, 58%);
+          background: #fff; color: var(--ink); border-radius: 24px; transform: rotate(-2deg);
+          box-shadow: 0 40px 80px -30px rgba(11,12,23,0.35), 0 2px 10px rgba(30,64,255,0.08);
+          border: 1px solid rgba(30,64,255,0.08); transition: transform 400ms var(--ease-out); }
 .ticket:hover { transform: rotate(0deg) translateY(-4px); }
-.ticket .top { padding: 16px 18px 12px; }
-.ticket .tag { font-size: 12px; font-weight: 800; color: #000; }
-.ticket .ex { font-size: 11.5px; font-weight: 700; color: #555; float: right; }
-.ticket .ev { font-family: var(--display); font-size: 30px; font-weight: 800; line-height: 1; margin: 6px 0 10px; }
-.ticket .row { display: flex; align-items: baseline; gap: 6px; font-size: 13.5px; padding: 3px 0; }
-.ticket .row .lead { flex: 1; border-bottom: 1.5px dotted #B5B5B5; transform: translateY(-3px); }
-.ticket .row b { font-weight: 800; white-space: nowrap; }
-.ticket .tear { border-top: 2px dashed #000; margin: 0 14px; }
-.ticket .bottom { padding: 12px 18px 14px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; }
-.ticket .total { font-family: var(--display); font-size: 40px; font-weight: 900; line-height: 0.9; }
-.ticket .note { font-size: 12px; color: #333; margin-top: 4px; }
-.ticket .ok { font-size: 12.5px; font-weight: 800; color: #000; }
-.ticket .barcode { width: 64px; height: 38px; background: repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 4px, #000 4px 5px, transparent 5px 8px, #000 8px 11px, transparent 11px 12px); }
-/* Categories on the home page: a directory. Each category is a name and the
-   services in it, under a black rule. Hover turns the whole entry black. */
-.dir-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 40px; align-items: end; margin-bottom: 22px; }
-.dir-head h2 { font-size: clamp(36px, 4.4vw, 60px); line-height: 0.95; margin: 0; color: #000; text-wrap: balance; }
-.dir-head p { margin: 0; font-size: 16px; line-height: 1.5; color: #333; max-width: 46ch; justify-self: end; }
-.dir-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1px; background: #DADADA; border-top: 2px solid #000; border-bottom: 1px solid #DADADA; }
-.dir-grid li { background: #fff; }
+.ticket .top { padding: 18px 20px 12px; }
+.ticket .tag { font-size: 12px; font-weight: 700; color: var(--ink-3); }
+.ticket .ex { font-size: 11px; font-weight: 700; color: var(--cobalt); float: right; background: var(--accent-soft); border-radius: 99px; padding: 2px 8px; }
+.ticket .ev { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin: 6px 0 10px; color: #000; }
+.ticket .row { display: flex; align-items: baseline; gap: 6px; font-size: 13.5px; padding: 3px 0; color: var(--ink-2); }
+.ticket .row .lead { flex: 1; border-bottom: 1.5px dotted var(--line-2); transform: translateY(-3px); }
+.ticket .row b { font-weight: 700; white-space: nowrap; color: var(--ink); }
+.ticket .tear { border-top: 1.5px dashed var(--line-2); margin: 0 16px; }
+.ticket .bottom { padding: 12px 20px 16px; }
+.ticket .total { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; color: var(--cobalt); }
+.ticket .note { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.ticket .ok { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+/* Category icons under the hero, as on the brand board. */
+.cat-icons { max-width: 1280px; margin: 0 auto; padding: 8px 28px 36px; display: flex; gap: 6px; justify-content: space-between; flex-wrap: wrap; }
+.cat-icons button { flex: 1 1 0; min-width: 92px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: none; border: none;
+                    cursor: pointer; padding: 6px 4px; color: var(--ink); }
+.cat-icons .ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--cobalt);
+                 background: rgba(255,255,255,0.78); border: 1px solid rgba(30,64,255,0.12);
+                 transition: background-color 180ms ease, color 180ms ease, transform 180ms var(--ease-out); }
+.cat-icons button:hover .ic { background: var(--cobalt); color: #fff; transform: translateY(-2px); }
+.cat-icons .lb { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-2); text-align: center; line-height: 1.3; }
+/* Categories on the home page: a directory. */
+.dir-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 40px; align-items: end; margin-bottom: 26px; }
+.dir-head h2 { font-size: clamp(36px, 4.4vw, 60px); line-height: 1; margin: 0; color: #000; text-wrap: balance; }
+.dir-head p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--ink-2); max-width: 46ch; justify-self: end; }
+.dir-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
 .dir-grid li.wide { grid-column: 1 / -1; }
-.dir-grid button { display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%; text-align: left;
-                   background: #fff; border: none; padding: 22px 22px 24px; cursor: pointer; color: #000;
-                   transition: background-color 160ms ease, color 160ms ease; }
-.dir-name { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: -0.005em; }
-.dir-subs { font-size: 14.5px; line-height: 1.45; color: #4B5260; transition: color 160ms ease; }
+.dir-grid button { display: grid; grid-template-columns: auto 1fr; column-gap: 14px; row-gap: 6px; align-items: start; align-content: start; width: 100%; height: 100%; text-align: left;
+                   background: #fff; border: 1px solid var(--line); border-radius: 24px; padding: 20px 20px 22px; cursor: pointer; color: var(--ink);
+                   transition: border-color 180ms ease, box-shadow 220ms var(--ease-out), transform 220ms var(--ease-out); }
+.dir-grid button .ic { grid-row: span 2; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
+                       background: var(--mist); color: var(--cobalt); transition: background-color 180ms ease, color 180ms ease; }
+.dir-name { font-family: var(--display); font-weight: 800; font-size: 21px; line-height: 1.15; letter-spacing: -0.03em; color: #000; }
+.dir-subs { font-size: 14px; line-height: 1.5; color: var(--ink-3); }
 .dir-subs .more { white-space: nowrap; }
-.dir-grid button:hover, .dir-grid button[aria-current="true"] { background: #000; color: #fff; }
-.dir-grid button:hover .dir-subs, .dir-grid button[aria-current="true"] .dir-subs { color: rgba(255,255,255,0.78); }
-.dir-grid .build { background: #000; color: #fff; padding: 28px 22px; display: grid;
-                  grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); gap: 20px 40px; align-items: start; }
-.dir-grid .build .dir-name { color: #fff; padding-top: 18px; }
+.dir-grid button:hover, .dir-grid button[aria-current="true"] { border-color: rgba(30,64,255,0.45); box-shadow: 0 24px 50px -28px rgba(30,64,255,0.55); transform: translateY(-2px); }
+.dir-grid button:hover .ic, .dir-grid button[aria-current="true"] .ic { background: var(--cobalt); color: #fff; }
+.dir-grid .build { background: var(--deep); color: #fff; padding: 34px 30px; display: grid; border-radius: 32px; overflow: hidden;
+                  grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); gap: 20px 40px; align-items: center; }
+.dir-grid .build .dir-name { color: #fff; font-size: clamp(28px, 3vw, 40px); line-height: 1.02; }
+.dir-grid .build .tagline { color: rgba(255,255,255,0.85); font-size: 14px; display: block; margin-top: 12px; }
 .build-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .build-ways button { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; cursor: pointer;
-                     background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.32); border-radius: 6px;
-                     padding: 18px 18px 18px; transition: border-color 160ms ease, background-color 160ms ease; }
-.build-ways button:hover { border-color: #fff; background: rgba(255,255,255,0.06); }
-.build-ways b { font-size: 18px; font-weight: 800; }
-.build-ways span { font-size: 14.5px; line-height: 1.45; color: rgba(255,255,255,0.8); }
-.build-ways .go { margin-top: auto; font-weight: 800; font-size: 14.5px; color: #000; background: #fff; border-radius: 999px; padding: 9px 16px; }
+                     background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.28); border-radius: 22px;
+                     padding: 20px; transition: background-color 180ms ease, border-color 180ms ease; backdrop-filter: blur(6px); }
+.build-ways button:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.6); }
+.build-ways b { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.build-ways span { font-size: 14.5px; line-height: 1.5; color: rgba(255,255,255,0.88); }
+.build-ways .go { margin-top: auto; font-weight: 700; font-size: 14.5px; color: var(--cobalt); background: #fff; border-radius: 999px; padding: 10px 18px; }
 .build-ways button + button .go { background: transparent; color: #fff; box-shadow: inset 0 0 0 1.5px #fff; }
-.dir-grid.sub { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0; background: transparent;
-                border-left: 1px solid #DADADA; border-bottom: none; }
-.dir-grid.sub li { border-right: 1px solid #DADADA; border-bottom: 1px solid #DADADA; }
-.dir-grid.sub .dir-name { font-size: 24px; }
-.dir-grid.sub button { padding: 18px 18px 20px; }
+.dir-grid.sub { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.dir-grid.sub button { grid-template-columns: 1fr; }
+.dir-grid.sub .dir-name { font-size: 18px; }
 @media (max-width: 720px) {
   .dir-head { grid-template-columns: 1fr; }
   .dir-head p { justify-self: start; }
-  .dir-name { font-size: 26px; }
-  .dir-grid button { padding: 18px 16px 20px; }
-  .dir-grid .build { grid-template-columns: 1fr; padding: 22px 16px; }
-  .dir-grid .build .dir-name { padding-top: 0; }
+  .dir-grid .build { grid-template-columns: 1fr; padding: 26px 18px; border-radius: 26px; }
 }
-.occasions { margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
-.occasions h3 { margin: 0; font-size: 16px; font-weight: 800; color: #000; }
-.occasions .pills.sm button { font-size: 14px; padding: 8px 15px; }
-/* Categories while browsing: one row of pills that scrolls sideways on phones. */
+.occasions { margin-top: 30px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.occasions h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--ink); }
+.occasions .pills.sm button { font-size: 14px; padding: 9px 16px; }
+/* Pills: icy blue at rest, cobalt when chosen. */
 .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .pills::-webkit-scrollbar { display: none; }
-.pills button { flex: 0 0 auto; background: #fff; border: 1.5px solid #000; border-radius: 999px; padding: 9px 16px;
-                font-size: 14px; font-weight: 700; color: #000; cursor: pointer; white-space: nowrap;
-                transition: background-color 160ms ease, color 160ms ease; }
-.pills button:hover { background: #F2F2F2; }
-.pills button.on { background: #000; color: #fff; }
-.pills.sm { flex-wrap: wrap; overflow: visible; gap: 6px; }
-.pills.sm button { padding: 6px 13px; font-size: 13px; font-weight: 650; border-width: 1px; border-color: #C9C9C9; }
-.pills.sm button.on { border-color: #000; }
+.pills button { flex: 0 0 auto; background: #fff; border: 1px solid var(--line-2); border-radius: 999px; padding: 10px 18px;
+                font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; white-space: nowrap;
+                transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.pills button:hover { background: var(--mist); border-color: rgba(30,64,255,0.4); }
+.pills button.on { background: var(--cobalt); color: #fff; border-color: var(--cobalt); }
+.pills.sm { flex-wrap: wrap; overflow: visible; gap: 8px; }
+.pills.sm button { padding: 7px 14px; font-size: 13px; font-weight: 600; }
 /* How it works */
-.steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
-.steps3 .n { font-family: var(--display); font-size: 64px; font-weight: 900; color: var(--marigold); line-height: 0.8;
-             -webkit-text-stroke: 2px #000; }
-.steps3 h3 { margin: 14px 0 6px; font-size: 20px; }
+.steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.steps3 > div { background: var(--mist); border-radius: 28px; padding: 26px 24px 28px; }
+.steps3 .n { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: var(--cobalt); color: #fff;
+             font-size: 19px; font-weight: 800; box-shadow: 0 12px 26px -10px rgba(30,64,255,0.7); }
+.steps3 h3 { margin: 18px 0 6px; font-size: 20px; }
 /* The comparison table */
-.compare { border-top: 2px solid #000; }
-.crow { display: grid; grid-template-columns: 0.7fr 1.15fr 1.15fr; gap: 16px; padding: 16px 0; border-bottom: 1px solid #E2E2E2; align-items: baseline; }
-.crow > span:first-child { font-weight: 800; font-size: 15px; }
-.crow .them { color: #6B6B6B; font-size: 16px; text-decoration: line-through; text-decoration-color: rgba(0,0,0,0.25); }
-.crow .us { font-family: var(--display); font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; line-height: 1.05; }
-.crow.head { padding: 10px 0; }
-.crow.head span { font-family: 'Figtree', system-ui, sans-serif !important; font-size: 13.5px !important; font-weight: 800 !important;
-                  color: #4B5260; text-decoration: none !important; }
-.crow.head .us { color: #000; }
+.compare { border-top: 1px solid var(--line-2); }
+.crow { display: grid; grid-template-columns: 0.7fr 1.1fr 1.2fr; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.crow > span:first-child { font-weight: 700; font-size: 15px; color: var(--ink); }
+.crow .them { color: var(--ink-3); font-size: 15.5px; }
+.crow .us { font-size: clamp(17px, 1.7vw, 21px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; color: #000;
+            display: flex; gap: 10px; align-items: center; }
+.crow .us::before { content: ""; flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+                    background: var(--cobalt) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M6 12.5l4 4 8-9'/></svg>") center / 14px no-repeat; }
+.crow.head { padding: 12px 0; }
+.crow.head span { font-size: 13px !important; font-weight: 700 !important; color: var(--ink-3); }
+.crow.head .us { color: var(--cobalt); }
+.crow.head .us::before { display: none; }
 @media (max-width: 640px) {
   .crow { grid-template-columns: 1fr 1fr; }
   .crow > span:first-child { grid-column: 1 / -1; margin-bottom: -8px; }
   .crow.head > span:first-child { display: none; }
 }
 /* Event recaps */
-.recaps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
-.recap-card { display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border: none; padding: 0; cursor: pointer; color: #000; }
-.recap-img { display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 4px; background: #F2F2F2; margin-bottom: 6px; }
+.recaps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 22px; }
+.recap-card { display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border: none; padding: 0; cursor: pointer; color: var(--ink); }
+.recap-img { display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 24px; background: var(--mist); margin-bottom: 8px; }
 .recap-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 300ms ease; }
 .recap-card:hover .recap-img img { transform: scale(1.03); }
-.recap-title { font-family: var(--display); font-size: 24px; font-weight: 800; line-height: 1; }
-.recap-meta, .recap-by { font-size: 13px; color: #4B5260; }
+.recap-title { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; color: #000; }
+.recap-meta, .recap-by { font-size: 13px; color: var(--ink-3); }
 @media (prefers-reduced-motion: reduce) { .recap-card:hover .recap-img img { transform: none; } }
 /* Trust badges on cards: what PLUJ checked by hand. */
-.badge-chk { font-size: 11.5px; font-weight: 700; color: #000; border: 1px solid #000; border-radius: 999px; padding: 2px 8px; line-height: 1.4; }
-/* The PLUJ promise: one bordered block, the promise set big. */
-.promise-block { margin-top: 72px; border: 2px solid #000; border-radius: 4px; padding: 40px 40px 34px; background: #fff; }
-.promise-block .kicker { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #000; }
-.promise-block h2 { font-size: clamp(36px, 4.6vw, 64px); line-height: 0.95; margin: 0 0 22px; max-width: 16ch; text-wrap: balance; }
-.promise-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 40px; margin-bottom: 22px; }
-.promise-cols p { margin: 0; font-size: 16px; line-height: 1.6; color: #333; max-width: 46ch; }
-.promise-link { background: #000; color: #fff; border-radius: 999px; padding: 12px 20px; font-size: 14.5px; font-weight: 800; }
-.promise-block .tag { font-family: var(--display); font-weight: 800; font-size: 22px; color: var(--marigold); }
-@media (max-width: 640px) { .promise-block { padding: 26px 18px 22px; } }
-/* Vendors: a poster block */
-.vendor-band { background: #000; color: #fff; border-radius: 4px; padding: 56px 48px; display: grid;
+.badge-chk { font-size: 11.5px; font-weight: 700; color: var(--cobalt); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; line-height: 1.4; }
+/* The PLUJ promise: an icy panel with the brand light in the corner. */
+.promise-block { margin-top: 72px; border-radius: 32px; padding: 48px 44px 40px; background: var(--field); overflow: hidden; }
+.promise-block .kicker { margin: 0 0 14px; font-size: 14px; font-weight: 700; color: var(--cobalt); }
+.promise-block h2 { font-size: clamp(34px, 4.4vw, 60px); line-height: 1; margin: 0 0 22px; max-width: 15ch; text-wrap: balance; }
+.promise-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 40px; margin-bottom: 26px; }
+.promise-cols p { margin: 0; font-size: 16px; line-height: 1.65; color: var(--ink-2); max-width: 46ch; }
+.promise-link { background: var(--cobalt); color: #fff; border-radius: 999px; padding: 13px 22px; font-size: 14.5px; font-weight: 700;
+                box-shadow: 0 12px 28px -12px rgba(30,64,255,0.7); }
+.promise-block .tag { font-size: 14px; font-weight: 700; letter-spacing: 0.18em; color: var(--ink); }
+@media (max-width: 640px) { .promise-block { padding: 30px 20px 26px; border-radius: 26px; } }
+/* Pros: the brand light at full strength, like the poster on the brand board. */
+.vendor-band { background: var(--deep); color: #fff; border-radius: 32px; padding: 60px 52px; display: grid;
                grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; align-items: end; position: relative; overflow: hidden; }
-.vendor-band h2 { color: #fff !important; font-size: clamp(44px, 6vw, 88px); line-height: 0.92; margin: 0 0 18px; }
-.vendor-band .big { font-family: var(--display); font-weight: 900; font-size: clamp(64px, 8vw, 120px); line-height: 0.85; color: var(--marigold); }
-.vendor-band .fact { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: baseline;
-                     padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.18); font-size: 15px; color: rgba(255,255,255,0.86); }
-.vendor-band .fact b { font-family: var(--display); font-size: 36px; font-weight: 800; color: #fff; min-width: 3.2ch; }
-/* Footer: the wordmark, full width */
-.foot { background: #fff; border-top: 2px solid #000; }
-.foot-in { max-width: 1240px; margin: 0 auto; padding: 44px 28px 18px; display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 28px; }
-.foot h4 { font-size: 14px; font-weight: 800; margin: 0 0 10px; color: #000; }
-.foot button.lnk { display: block; background: none; border: none; padding: 5px 0; font-size: 14.5px; color: #333; cursor: pointer; text-align: left; }
-.foot button.lnk:hover { color: #000; text-decoration: underline; text-underline-offset: 3px; }
+.vendor-band h2 { color: #fff !important; font-size: clamp(42px, 5.6vw, 80px); line-height: 0.98; margin: 0 0 18px; }
+.vendor-band .fact { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+                     padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.22); font-size: 15px; color: rgba(255,255,255,0.9); }
+.vendor-band .fact b { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; color: #fff; min-width: 3.2ch; }
+/* Footer: icy light, the black wordmark at full width. */
+.foot { background: linear-gradient(180deg, #FFFFFF 0%, #F4F7FF 30%, #E6EEFF 100%); border-top: 1px solid var(--line); position: relative; overflow: hidden; }
+.foot-in { max-width: 1240px; margin: 0 auto; padding: 52px 28px 18px; display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 28px; }
+.foot h4 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: var(--ink); }
+.foot button.lnk { display: block; background: none; border: none; padding: 5px 0; font-size: 14.5px; color: var(--ink-2); cursor: pointer; text-align: left; }
+.foot button.lnk:hover { color: var(--cobalt); }
 .wordmark { padding: 8px 28px 0; max-width: 1240px; margin: 0 auto; }
 .wordmark svg { width: 100% !important; height: auto !important; }
+.foot .tagline { font-size: clamp(14px, 1.6vw, 22px); }
 @media (max-width: 980px) {
-  .home-hero { grid-template-columns: 1fr; gap: 34px; padding: 8px 18px 44px; }
-  .hero-art { min-height: 520px; max-width: 520px; margin: 0 auto; width: 100%; }
-  .hero-search { grid-template-columns: 1fr 1fr; }
-  .hero-search > label { border-bottom: 1.5px solid #E2E2E2; }
-  .hero-search > label:nth-child(2n) { border-right: none; }
-  .hero-search button.go { grid-column: 1 / -1; height: 50px; }
-  .vendor-band { grid-template-columns: 1fr; padding: 36px 22px; }
-  .steps3 { grid-template-columns: 1fr; gap: 26px; }
+  .home-hero { grid-template-columns: 1fr; gap: 26px; padding: 18px 18px 24px; }
+  .hero-art { min-height: 460px; max-width: 520px; margin: 0 auto; width: 100%; }
+  .hero-search { grid-template-columns: 1fr 1fr; border-radius: 28px; padding: 8px; }
+  .hero-search > label { border-right: none; border-bottom: 1px solid var(--line); }
+  .hero-search button.go { grid-column: 1 / -1; justify-content: center; margin-top: 6px; width: 100%; height: 52px; }
+  .hero-search button.go .go-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .vendor-band { grid-template-columns: 1fr; padding: 40px 24px; border-radius: 28px; }
+  .steps3 { grid-template-columns: 1fr; gap: 14px; }
   .foot-in { grid-template-columns: 1fr 1fr; }
+  .cat-icons { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 24px; scrollbar-width: none; }
+  .cat-icons::-webkit-scrollbar { display: none; }
+  .cat-icons button { flex: 0 0 auto; }
 }
-@media (max-width: 520px) {
-  .hero-art { min-height: 480px; }
-  .ticket { width: 80%; right: 0; }
-  .stamp { width: 104px; height: 104px; right: -10px; }
+@media (max-width: 560px) {
+  .hero-art { min-height: 540px; }
+  .orb.main { width: 84%; right: -4%; top: 0; }
+  .orb.lav { width: 44%; right: -16%; bottom: 14%; }
+  .ticket { width: 72%; left: 0; bottom: 0; }
+  /* The directory as a two-column grid on phones: icon, name, three lines. */
+  .dir-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dir-grid button { grid-template-columns: 1fr; padding: 14px 14px 16px; border-radius: 20px; row-gap: 8px; }
+  .dir-grid button .ic { grid-row: auto; width: 38px; height: 38px; border-radius: 12px; }
+  .dir-name { font-size: 16px; }
+  .dir-subs { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .dir-grid.sub .dir-name { font-size: 15px; }
 }
 
 /* Phones: the logo mark alone, and the sticky search collapses to one row. */
@@ -923,16 +977,17 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 const BUILD_VERSION = "v5-2026-08-06-anon-read-ok";
 export const C = {
   /* ── Primary ── */
-  /* Oct 2026: the accent is a deeper PLUJ orange so white text on it and
-     orange text on white both pass WCAG AA (4.7:1). The bright brand orange
-     is kept as `flame` for marks and decoration, never for text. */
-  orange: "#D13F17", orangeHov: "#B83510", orangeSoft: "#FFF1EC", flame: "#FF5C28",
-  orangeBorder: "rgba(209,63,23,0.24)", orangeGlow: "rgba(209,63,23,0.30)",
+  /* 8 Oct 2026, brand board: cobalt is the accent (white on cobalt 6.4:1,
+     cobalt on white 6.4:1, both AA). The key names stay "orange" so every
+     screen that used the old accent follows the brand without a rename. */
+  orange: "#1E40FF", orangeHov: "#1531D9", orangeSoft: "#EEF2FF", flame: "#6366F1",
+  orangeBorder: "rgba(30,64,255,0.22)", orangeGlow: "rgba(30,64,255,0.30)",
+  cobalt: "#1E40FF", ultra: "#6366F1", peri: "#8B7CF6", lav: "#C4B5FD", icy: "#E0EDFF", mist: "#F4F7FF",
 
   /* ── Neutrals (ink is a warm near-black; greys pass 4.5:1 on white) ── */
-  black: "#17120F", darkGray: "#2A2420", midGray: "#4B5260",
-  lightGray: "#6B7280", border: "#E7E7E9", borderLight: "#F2F2F3",
-  bg: "#F6F6F7", bgAlt: "#F4F4F5", white: "#fff",
+  black: "#0B0C17", darkGray: "#23263A", midGray: "#3F4560",
+  lightGray: "#5A6080", border: "#E3E8F7", borderLight: "#EEF2FC",
+  bg: "#F4F7FF", bgAlt: "#F1F4FD", white: "#fff",
 
   /* ── Semantic ── */
   green: "#0F7A55", greenSoft: "#E8F6EF", greenDark: "#065F46",
@@ -941,13 +996,13 @@ export const C = {
   blue: "#3B82F6",  blueSoft: "#EFF6FF",
 
   /* ── PLUJ brand palette ── */
-  violet: "#7A5CFF", violetSoft: "#F0ECFF", violetBorder: "rgba(122,92,255,0.22)",
+  violet: "#6366F1", violetSoft: "#EEF0FF", violetBorder: "rgba(99,102,241,0.22)",
   crystalBlue: "#5FD6FF", frostAqua: "#7FE7DA",
 
   /* ── Gradients (as CSS strings) ── */
-  gradPrimary: "linear-gradient(135deg, #FF5C28 0%, #FF8C00 100%)",
+  gradPrimary: "linear-gradient(135deg, #1E40FF 0%, #6366F1 55%, #8B7CF6 100%)",
   gradDark:    "linear-gradient(135deg, #0A0A0A 0%, #1A1A2E 100%)",
-  gradViolet:  "linear-gradient(135deg, #7A5CFF 0%, #5FD6FF 100%)",
+  gradViolet:  "linear-gradient(135deg, #6366F1 0%, #C4B5FD 100%)",
   gradHero:    "linear-gradient(105deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.50) 55%, rgba(0,0,0,0.18) 100%)",
 
   /* ── Elevation / shadows ── */
@@ -958,7 +1013,7 @@ export const C = {
   shadowPopover:"0 0 8px rgba(0,0,0,0.10), 0 4px 4px rgba(0,0,0,0.04)",
   shadowDrawer: "-4px 0 40px rgba(0,0,0,0.12)",
   shadowModal:  "0 32px 80px rgba(0,0,0,0.24), 0 8px 24px rgba(0,0,0,0.10)",
-  shadowButton: "0 8px 18px -8px rgba(209,63,23,0.55)",
+  shadowButton: "0 12px 26px -10px rgba(30,64,255,0.6)",
   shadowViolet: "0 4px 18px rgba(122,92,255,0.38)",
 };
 
@@ -4245,7 +4300,7 @@ export function Stars({ r, size=13, interactive=false, onRate }) {
   );
 }
 
-function Avatar({ name, size=32, bg="#FF5C28" }) {
+function Avatar({ name, size=32, bg="#1E40FF" }) {
   return (
     <div style={{ width:size, height:size, borderRadius:"50%", background:bg, color:"#fff",
                   display:"flex", alignItems:"center", justifyContent:"center",
@@ -4889,7 +4944,7 @@ function AuthModal({ onClose, onAuth }) {
             </p>
 
             {created.type === "vendor" && (
-              <div style={{ background:"#FFF7ED", border:`1.5px solid ${C.orangeBorder}`, borderRadius:14,
+              <div style={{ background:"#EEF2FF", border:`1.5px solid ${C.orangeBorder}`, borderRadius:14,
                             padding:"14px 16px", marginBottom:16, textAlign:"left" }}>
                 <p style={{ margin:"0 0 9px", fontSize:12, fontWeight:800, color:C.orange }}>
                   What happens next
@@ -4955,7 +5010,7 @@ function AuthModal({ onClose, onAuth }) {
 
   const StepDots = () => (
     <div style={{ marginBottom:14 }}>
-      <div style={{ background:"#FFF7ED", border:`1px solid ${C.orangeBorder}`, borderRadius:10,
+      <div style={{ background:"#EEF2FF", border:`1px solid ${C.orangeBorder}`, borderRadius:10,
                     padding:"9px 12px", marginBottom:12 }}>
         <p style={{ margin:0, fontSize:11.5, fontWeight:800, color:C.orange }}>
           {/* Was "Step 1 of 2". It meant stage 1 of the two-part journey
@@ -5171,7 +5226,7 @@ function AuthModal({ onClose, onAuth }) {
                 style={{ display:"flex", alignItems:"flex-start", gap:11, width:"100%", textAlign:"left",
                          cursor:"pointer", padding:"14px 15px", borderRadius:12,
                          border:`1.5px solid ${tosAccepted ? C.orange : C.border}`,
-                         background: tosAccepted ? "#FFF7ED" : "#fff" }}>
+                         background: tosAccepted ? "#EEF2FF" : "#fff" }}>
                 <span style={{ width:20, height:20, borderRadius:6, flexShrink:0, marginTop:1,
                                display:"flex", alignItems:"center", justifyContent:"center",
                                border:`2px solid ${tosAccepted ? C.orange : "#D6D3D1"}`,
@@ -5204,7 +5259,7 @@ function AuthModal({ onClose, onAuth }) {
           style={{ display:"flex", alignItems:"flex-start", gap:11, width:"100%", textAlign:"left",
                    cursor:"pointer", padding:"14px 15px", borderRadius:12,
                    border:`1.5px solid ${respAccepted ? C.orange : C.border}`,
-                   background: respAccepted ? "#FFF7ED" : "#fff" }}>
+                   background: respAccepted ? "#EEF2FF" : "#fff" }}>
           <span style={{ width:20, height:20, borderRadius:6, flexShrink:0, marginTop:1,
                          display:"flex", alignItems:"center", justifyContent:"center",
                          border:`2px solid ${respAccepted ? C.orange : "#D6D3D1"}`,
@@ -5311,7 +5366,7 @@ function AuthModal({ onClose, onAuth }) {
           )}
 
           {tab === "signup" && role === "vendor" && step === 1 && (
-            <div style={{ background:"#FFF7ED", border:`1px solid ${C.orangeBorder}`, borderRadius:10,
+            <div style={{ background:"#EEF2FF", border:`1px solid ${C.orangeBorder}`, borderRadius:10,
                           padding:"10px 12px" }}>
               <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.orange }}>
                 Creating your vendor account takes one minute
@@ -5385,7 +5440,7 @@ function Stamp() {
       <text fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:800, fontSize:17 }}>
         <textPath href="#stamp-ring" textLength="318" lengthAdjust="spacing">ONE PRICE ● NO FEES ADDED ●</textPath>
       </text>
-      <text x="70" y="84" textAnchor="middle" fill="#FF5C28" style={{ fontFamily:"var(--display)", fontWeight:900, fontSize:44 }}>$</text>
+      <text x="70" y="84" textAnchor="middle" fill="#1E40FF" style={{ fontFamily:"var(--display)", fontWeight:900, fontSize:44 }}>$</text>
     </svg>
   );
 }
@@ -5668,7 +5723,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
           {req.status === "cancelled" && (
             req.cancelledBy === "vendor" && user.type !== "vendor" ? (
               /* The PLUJ promise: if a pro cancels, we find a replacement. */
-              <div style={{ border:"2px solid #000", borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+              <div style={{ border:"1.5px solid rgba(30,64,255,0.35)", background:"#F4F7FF", borderRadius:20, padding:"12px 14px", marginBottom:14 }}>
                 <p style={{ margin:0, fontSize:13.5, fontWeight:800, color:"#000" }}>{req.vendorName || "The vendor"} cancelled. We'll find you a replacement.</p>
                 <p style={{ margin:"4px 0 10px", fontSize:12.5, color:"#333", lineHeight:1.5 }}>
                   If you paid through PLUJ, every dollar comes back to your card. PLUJ will also send you other pros who are free on your date. You can look now:
@@ -5678,7 +5733,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                       serviceId: req.serviceId || null, date: req.eventDate || "", guests: req.guests || "", city: req.city || "" } }));
                     onClose && onClose();
                   }}
-                  style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
+                  style={{ background:"#1E40FF", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
                   Find a replacement
                 </button>
               </div>
@@ -5877,7 +5932,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                 const hasAddr  = req.streetAddress || cityLine;
                 const mapsQ    = encodeURIComponent(formatEventLocation(req).replace(/^.*? — /, "") || cityLine || req.venue || "");
                 return (
-                  <div style={{ marginTop:12, background:"#FFF7ED", border:`1px solid ${C.orangeBorder}`,
+                  <div style={{ marginTop:12, background:"#EEF2FF", border:`1px solid ${C.orangeBorder}`,
                                 borderRadius:12, padding:"12px 14px" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                       <span style={{ fontSize:11, fontWeight:800, color:C.orange, textTransform:"uppercase", letterSpacing:"0.05em" }}>
@@ -6915,7 +6970,7 @@ export function AvailabilityCalendar({ vendorId }) {
               <button key={x.id} type="button" className="btn" onClick={() => setFocus(on ? "all" : x.id)}
                 style={{ width:"100%", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", textAlign:"left",
                          padding:"5px 6px", borderRadius:8, cursor:"pointer", marginTop: i ? 3 : 0,
-                         border:`1.5px solid ${on ? C.orange : "transparent"}`, background: on ? "#FFF7ED" : "transparent" }}>
+                         border:`1.5px solid ${on ? C.orange : "transparent"}`, background: on ? "#EEF2FF" : "transparent" }}>
                 <span style={{ flex:"1 1 120px", minWidth:0, fontSize:11.5, fontWeight:800, color:C.black,
                                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                   {i + 1}. {x.name || x.service_type || "Listing"}
@@ -7173,7 +7228,7 @@ function NotificationBell({ userId, onClick, open, onOpenTarget }) {
                 if (onOpenTarget) onOpenTarget(notifTarget(n));
               }}
               style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, cursor:"pointer",
-                       background: (n.read || n.is_read) ? "#fff" : "#FFF7ED" }}>
+                       background: (n.read || n.is_read) ? "#fff" : "#EEF2FF" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                 <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>{n.title}</p>
                 {(!n.read && !n.is_read) && <div style={{ width:7, height:7, borderRadius:"50%",
@@ -7367,7 +7422,7 @@ function TimeGrid({ value, onChange, after, allowTime, sameDay = true }) {
             style={{ padding:"8px 4px", borderRadius:9, fontSize:12.5, fontWeight: sel?800:600,
                      cursor: off ? "not-allowed" : "pointer",
                      border:`1.5px solid ${sel ? C.orange : C.border}`,
-                     background: sel ? "#FFF7ED" : off ? "#F9FAFB" : "#fff",
+                     background: sel ? "#EEF2FF" : off ? "#F9FAFB" : "#fff",
                      color: sel ? C.orange : off ? "#D1D5DB" : C.black,
                      textDecoration: off ? "line-through" : "none" }}>
             {fmtTime12(t)}
@@ -7771,7 +7826,7 @@ export function EventsCalendar({ bookings, role }) {
                 style={{ minHeight:44, border: isToday ? `1.5px solid ${C.orange}` : "1px solid transparent",
                          borderRadius:9, padding:"3px 0 4px", display:"flex", flexDirection:"column",
                          alignItems:"center", gap:2, cursor: evts.length ? "pointer" : "default",
-                         background: sel ? "#FFF7ED" : evts.length ? "#FAFAFA" : "transparent",
+                         background: sel ? "#EEF2FF" : evts.length ? "#FAFAFA" : "transparent",
                          opacity: isPast && !evts.length ? 0.45 : 1 }}>
                 <span style={{ fontSize:12, fontWeight: isToday ? 800 : 600,
                                color: isToday ? C.orange : isPast ? C.lightGray : C.black }}>{d.getDate()}</span>
@@ -7929,7 +7984,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
               <button type="button" key={n} onClick={() => setWizGuests(String(n))}
                 style={{ padding:"8px 15px", borderRadius:99, fontSize:12.5, fontWeight:700,
                          cursor:"pointer", border:`1.5px solid ${on ? C.orange : C.border}`,
-                         background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                         background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                 {n}
               </button>
             );
@@ -7976,7 +8031,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
                     onClick={()=>{ setWizEndDate(same ? "" : nextDayIso(wizDate)); setWizEnd(""); }}
                     style={{ padding:"8px 15px", borderRadius:99, fontSize:12.5, fontWeight:700,
                              cursor:"pointer", border:`1.5px solid ${on ? C.orange : C.border}`,
-                             background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                             background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                     {label}
                   </button>
                 );
@@ -8360,7 +8415,7 @@ function EventPackagesPage({ onSelectPackage, onPickCat }) {
     <div className="fade-up">
       {/* Hero */}
       <div style={{ textAlign:"center", padding:"40px 20px 32px" }}>
-        <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#FFF7ED",
+        <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#EEF2FF",
                       borderRadius:99, padding:"6px 16px", marginBottom:16 }}>
           <span style={{ fontSize:14 }}>✦</span>
           <span style={{ fontSize:12, fontWeight:700, color:C.orange }}>One-stop event marketplace</span>
@@ -8929,7 +8984,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
               </div>
 
               {/* Event details form */}
-              <div style={{ background:"#FFF7ED", borderRadius:14, padding:"14px 16px",
+              <div style={{ background:"#EEF2FF", borderRadius:14, padding:"14px 16px",
                             border:`1px solid ${C.orangeBorder}`, marginBottom:14 }}>
                 <p style={{ margin:"0 0 10px", fontSize:12, fontWeight:800, color:C.orange }}>
                   📋 Event details — sent to all vendors
@@ -9068,7 +9123,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                             onClick={()=>{ if (city.trim()) { setAddrConfirmed(true); if (err) setErr(""); } }}
                             className="btn"
                             style={{ alignSelf:"flex-start", padding:"7px 14px", borderRadius:9,
-                                     border:`1px solid ${C.orange}`, background:"#FFF7ED",
+                                     border:`1px solid ${C.orange}`, background:"#EEF2FF",
                                      color:C.orange, fontSize:12, fontWeight:700 }}>
                             ✓ Use this address
                           </button>
@@ -9159,7 +9214,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                             onClick={()=>{ setEndDate(same ? "" : nextDayIso(eventDate)); setEndTime(""); }}
                             style={{ padding:"7px 14px", borderRadius:99, fontSize:12, fontWeight:700,
                                      cursor:"pointer", border:`1.5px solid ${on ? C.orange : C.border}`,
-                                     background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                                     background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                             {label}
                           </button>
                         );
@@ -9210,7 +9265,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                           onClick={() => setDeadlineHours(o.hours)}
                           style={{ flex:"1 1 28%", padding:"8px 10px", borderRadius:10, cursor:"pointer",
                                    border:`1.5px solid ${on ? C.orange : C.border}`,
-                                   background: on ? "#FFF7ED" : "#fff",
+                                   background: on ? "#EEF2FF" : "#fff",
                                    color: on ? C.black : C.midGray,
                                    fontSize:11, fontWeight: on ? 800 : 600, textAlign:"center",
                                    fontFamily:"'Figtree', system-ui, sans-serif", transition:"all .15s" }}>
@@ -9280,7 +9335,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                 const rows = cart.map(v => ({ v, at: start - (SETUP_MIN[v.cat] ?? 60) }))
                   .sort((a, b) => a.at - b.at);
                 return (
-                  <div style={{ border:"1.5px solid #000", borderRadius:10, padding:"10px 12px", margin:"0 0 12px" }}>
+                  <div style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:20, padding:"10px 12px", margin:"0 0 12px" }}>
                     <p style={{ margin:"0 0 6px", fontSize:13, fontWeight:800, color:"#000" }}>Your event day</p>
                     {rows.map(({ v, at }) => (
                       <div key={v.id} style={{ display:"grid", gridTemplateColumns:"72px 1fr", gap:8, fontSize:12.5, padding:"3px 0" }}>
@@ -9483,7 +9538,7 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
   if (!recs || recs.length === 0) return null;
   const picks = recs.slice(0, 3);
   return (
-    <section aria-label="Three we know" style={{ border:"2px solid #000", borderRadius:6, padding:"16px 18px", marginBottom:20 }}>
+    <section aria-label="Three we know" style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:24, padding:"16px 18px", marginBottom:20 }}>
       <p style={{ margin:"0 0 2px", fontSize:16, fontWeight:800, color:"#000" }}>
         {picks[0]._needs ? `Your checklist still needs ${subInfo(picks[0]._needs).label}.` : "Your event still needs these"}
       </p>
@@ -9502,7 +9557,7 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
               </div>
               <div style={{ display:"flex", gap:6 }}>
                 <button onClick={() => onView(v)} className="btn"
-                  style={{ flex:1, minHeight:36, borderRadius:999, background:"#fff", border:"1.5px solid #000", fontSize:12.5, fontWeight:700, color:"#000" }}>
+                  style={{ flex:1, minHeight:36, borderRadius:999, background:"#fff", border:"1.5px solid #1E40FF", fontSize:12.5, fontWeight:700, color:"#000" }}>
                   View
                 </button>
                 <button onClick={() => !added && onAdd(v)} className="btn" disabled={added}
@@ -9516,6 +9571,40 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
         })}
       </div>
     </section>
+  );
+}
+
+/* ─── ICONS ──────────────────────────────────────────────────────────────────
+   One family, drawn here: 24px grid, 1.6 stroke, round ends, currentColor.
+   Used for the categories and the hero's service row. */
+const ICON_PATHS = {
+  pin:        <><path d="M12 21s-6.5-5.8-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></>,
+  cloche:     <><path d="M4.5 16.5a7.5 7.5 0 0 1 15 0"/><path d="M3 16.5h18"/><path d="M12 9V7.2"/><path d="M10.3 7h3.4"/><path d="M5 19.5h14"/></>,
+  headphones: <><path d="M4.5 15v-2.5a7.5 7.5 0 0 1 15 0V15"/><rect x="3.5" y="14" width="4" height="6" rx="1.6"/><rect x="16.5" y="14" width="4" height="6" rx="1.6"/></>,
+  camera:     <><path d="M4.5 8h2.8l1.8-2.5h5.8L16.7 8h2.8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></>,
+  sparkle:    <><path d="M11 3.5l1.7 4.8 4.8 1.7-4.8 1.7L11 16.5l-1.7-4.8L4.5 10l4.8-1.7z"/><path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></>,
+  chair:      <><path d="M7.5 3.5h9v7.5h-9z"/><path d="M5.5 11h13v3h-13z"/><path d="M7.5 14v6.5M16.5 14v6.5"/></>,
+  speaker:    <><rect x="6" y="3" width="12" height="18" rx="2.5"/><circle cx="12" cy="14.2" r="3.3"/><circle cx="12" cy="7.6" r="1.1"/></>,
+  cocktail:   <><path d="M5 4.5h14l-7 7.5z"/><path d="M12 12v7.5"/><path d="M8.5 19.5h7"/><path d="M15.5 4.5l2-2"/></>,
+  lipstick:   <><rect x="8.5" y="11" width="7" height="9.5" rx="1.2"/><path d="M10 11V6.5l4-2.5V11"/></>,
+  car:        <><path d="M3.5 13.5l2.2-5.5h12.6l2.2 5.5V18h-17z"/><circle cx="7.5" cy="18" r="1.8"/><circle cx="16.5" cy="18" r="1.8"/><path d="M3.5 13.5h17"/></>,
+  balloon:    <><ellipse cx="12" cy="9" rx="5.5" ry="6.3"/><path d="M11 15.4h2l-1 1.6z"/><path d="M12 17c0 1.6-1.6 1.8-1.6 3.5"/></>,
+  clipboard:  <><rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11.5h7M8.5 15.5h5"/></>,
+  truck:      <><path d="M2.5 7h11v9.5h-11z"/><path d="M13.5 10h4.2l3 3.2v3.3h-7.2"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></>,
+  sun:        <><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></>,
+  dots:       <><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/></>,
+  wand:       <><path d="M4 20L15.5 8.5"/><path d="M14.5 3.5v3M18.5 5.5l-2 2M20.5 9.5h-3M13 7l4 4"/></>,
+  arrow:      <><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></>,
+};
+export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo:"camera", production:"sparkle",
+  rentals:"chair", av:"speaker", staff:"cocktail", beauty:"lipstick", transport:"car", kids:"balloon",
+  logistics:"clipboard", other:"dots", build:"wand", all:"sparkle" };
+export function Icon({ name, size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {ICON_PATHS[name] || ICON_PATHS.dots}
+    </svg>
   );
 }
 
@@ -9631,7 +9720,7 @@ export function RecapModal({ recap, names, onClose, onViewVendor }) {
             ))}
           </div>
           <button className="btn" onClick={() => { try { navigator.clipboard.writeText(link); } catch { /* no clipboard */ } }}
-            style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
+            style={{ background:"#1E40FF", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
             Copy link to this event
           </button>
         </div>
@@ -10103,7 +10192,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   style={{ flex:"0 0 auto", width:210, textAlign:"left", display:"flex", gap:9, alignItems:"center",
                            padding:"8px 10px", borderRadius:12, cursor:"pointer",
                            border:`1.5px solid ${on ? C.orange : C.border}`,
-                           background: on ? "#FFF7ED" : "#fff" }}>
+                           background: on ? "#EEF2FF" : "#fff" }}>
                   {pic
                     ? <img src={pic} alt="" style={{ width:42, height:42, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
                     : <span style={{ width:42, height:42, borderRadius:8, background:"#F3F4F6", flexShrink:0,
@@ -10303,7 +10392,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
           )}
 
           {pastEvents.length > 0 && (
-            <section aria-label="Past events" style={{ borderTop:"2px solid #000", paddingTop:14 }}>
+            <section aria-label="Past events" style={{ borderTop:"1px solid #CFD8F5", paddingTop:14 }}>
               <h2 style={{ margin:"0 0 12px", fontSize:28, lineHeight:1 }}>Past events</h2>
               <RecapCards recaps={pastEvents} names={pastNames} onOpen={setOpenPast} />
               {openPast && (
@@ -10546,7 +10635,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                       <button key={i} onClick={() => setPickedPkg(p)} className="btn"
                         style={{ textAlign:"left", padding:"10px 12px", borderRadius:11, cursor:"pointer",
                                  border:`1.5px solid ${on ? C.orange : C.border}`,
-                                 background: on ? "#FFF7ED" : "#fff" }}>
+                                 background: on ? "#EEF2FF" : "#fff" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                           <span style={{ fontSize:12.5, fontWeight:800, color: on ? C.orange : C.black }}>
                             {on ? "● " : "○ "}{p.name || `Option ${i+1}`}
@@ -10610,7 +10699,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             )}
             {(pickedPkg || basePrice) ? (
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8,
-                            borderTop:"2px solid #000", padding:"10px 0 12px", marginBottom:4 }}>
+                            borderTop:"1px solid #CFD8F5", padding:"10px 0 12px", marginBottom:4 }}>
                 <span style={{ fontSize:13, fontWeight:800 }}>
                   {pickedAddons.length ? `Total with ${pickedAddons.length} extra${pickedAddons.length !== 1 ? "s" : ""}` : "Total"}
                 </span>
@@ -10691,7 +10780,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             {/* What PLUJ actually checked, item by item, instead of a vague
                 "verified" badge. Each line is only shown when it is true. */}
             {isLiveVendor && (
-              <div style={{ marginTop:16, borderTop:"2px solid #000", paddingTop:12 }}>
+              <div style={{ marginTop:16, borderTop:"1px solid #CFD8F5", paddingTop:12 }}>
                 <p style={{ margin:"0 0 8px", fontSize:14, fontWeight:800, color:"#000" }}>What PLUJ checked</p>
                 {[
                   [true, "Business reviewed and approved by hand"],
@@ -10706,7 +10795,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   [true, "Reviews only from confirmed bookings, after the event"],
                 ].filter(([ok]) => ok).map(([, t]) => (
                   <p key={t} style={{ margin:"0 0 6px", fontSize:13, color:"#000", display:"flex", gap:8, alignItems:"baseline" }}>
-                    <span aria-hidden="true" style={{ width:8, height:8, background:"#FF5C28", transform:"rotate(45deg)", flex:"0 0 auto" }} />
+                    <span aria-hidden="true" style={{ width:8, height:8, background:"#1E40FF", borderRadius:"50%", flex:"0 0 auto" }} />
                     {t}
                   </p>
                 ))}
@@ -10752,7 +10841,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
                    opacity: imgLoaded ? 1 : 0, transition:"opacity 0.3s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1)" }}
           className="vendor-img" />
         {v.instant && (
-          <span style={{ position:"absolute", top:12, left:12, background:"#000", color:"#fff", fontSize:12,
+          <span style={{ position:"absolute", top:12, left:12, background:"#1E40FF", color:"#fff", fontSize:12,
                          fontWeight:800, padding:"4px 10px", borderRadius:99, boxShadow:"0 2px 8px rgba(23,18,15,0.15)" }}>
             ⚡ Instant booking
           </span>
@@ -11198,7 +11287,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
                     onClick={()=> set("service_areas", (on ? sel.filter(c=>c!==city) : [...sel, city]).join(", "))}
                     style={{ padding:"5px 11px", borderRadius:99, fontSize:11.5, fontWeight:600, cursor:"pointer",
                              border:`1.5px solid ${on ? C.orange : C.border}`,
-                             background: on ? "#FFF7ED" : "#fff", color: on ? C.orange : C.midGray }}>
+                             background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
                     {on ? "✓ " : ""}{city}
                   </button>
                 );
@@ -11268,7 +11357,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
               })}
             </div>
 
-            <div style={{ border:"1.5px solid #000", borderRadius:10, padding:"4px 12px 12px", marginTop:14 }}>
+            <div style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:20, padding:"4px 12px 12px", marginTop:14 }}>
               <p style={{ margin:"8px 0 0", fontSize:12.5, fontWeight:800, color:C.black }}>Checks that earn you a badge <Opt /></p>
               <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
                 PLUJ checks these by hand with the insurer or the state, then shows hosts a badge. Hosts see the badge, not your numbers.
@@ -11894,7 +11983,7 @@ export function InfoPageModal({ page, onClose }) {
                       touchAction:"pan-y" }}>
           {LEGAL_SUMMARY[page] && (
             <section aria-label="In plain words"
-              style={{ border:"2px solid #000", borderRadius:6, padding:"14px 16px 6px", margin:"0 0 22px" }}>
+              style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:20, padding:"14px 16px 6px", margin:"0 0 22px" }}>
               <h3 style={{ margin:"0 0 8px", fontSize:16, fontWeight:800 }}>In plain words</h3>
               <ul style={{ margin:0, padding:"0 0 0 18px" }}>
                 {LEGAL_SUMMARY[page].map(t => (
@@ -12272,7 +12361,7 @@ export function EmailLinkScreen({ link, onSession, onFinish, onRequestNew }) {
   };
   const primary = {
     width:"100%", border:"none", borderRadius:999, padding:"14px 24px", fontSize:15,
-    fontWeight:800, color:"#fff", background:"linear-gradient(135deg, #FF5C28 0%, #FF8C00 100%)",
+    fontWeight:800, color:"#fff", background:"linear-gradient(135deg, #1E40FF 0%, #6366F1 55%, #8B7CF6 100%)",
     cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1,
   };
   const quiet = {
@@ -13582,7 +13671,7 @@ export default function PlujApp() {
           position:"sticky", top:0, zIndex:200, height:64,
           display:"flex", alignItems:"center", justifyContent:"space-between", gap:12,
           padding:"0 20px",
-          background: isHero && !navScrolled ? "#FF5C28" : "rgba(255,255,255,0.96)",
+          background: isHero && !navScrolled ? "transparent" : "rgba(255,255,255,0.92)",
           borderBottom:`1px solid ${navScrolled ? C.border : "transparent"}`,
           backdropFilter:"blur(16px) saturate(160%)",
         }}>
@@ -13671,7 +13760,7 @@ export default function PlujApp() {
                   make a choice that made no difference. The modal has its own
                   Log in / Sign up switch at the top. */}
               <button onClick={() => setAuthModal(true)} className="btn"
-                style={{ background:"#000",
+                style={{ background:"#1E40FF", boxShadow:"0 8px 20px -10px rgba(30,64,255,0.7)",
                          border:"none", borderRadius:99, padding:"8px 18px", fontSize:13,
                          fontWeight:800, color:"#fff", whiteSpace:"nowrap" }}><span className="hide-mobile">Log in / Sign up</span><span className="show-mobile">Log in</span></button>
             </>
@@ -13755,7 +13844,7 @@ export default function PlujApp() {
                   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                 });
               }} className="btn sgo"
-              style={{ background:"#000", color:"#fff", borderRadius:12, padding:"0 20px",
+              style={{ background:"#1E40FF", color:"#fff", borderRadius:12, padding:"0 20px",
                        fontSize:14, fontWeight:800, whiteSpace:"nowrap", minHeight:44 }}>
               Search
             </button>
@@ -13771,18 +13860,21 @@ export default function PlujApp() {
       )}
 
       {/* ── HERO ─────────────────────────────────────────────────────────
-          A marigold field; the artwork is built from the logo's own shapes
-          (the dot, the bowl, the half moon) with the event photo set inside
-          the bowl. The thesis is the product's difference, one price for the
-          whole event, and the ticket shows what that means (an example). */}
+          The brand board's own composition: the promise in big black type,
+          "we know a guy", the white search pill with the cobalt arrow, and on
+          the right the brand light: a cobalt sphere carrying the white mark,
+          with the logo's dot and half moon as smaller spheres. The receipt
+          shows what one price means (an example). */}
       {isHero && (
-        <section className="hero-field">
+        <section className="hero-field grain">
           <div className="home-hero">
             <div>
-              <h1>One booking.<br />The whole party.</h1>
+              <span className="hero-kicker"><i aria-hidden="true" />Now booking in Houston, in English y en español</span>
+              <h1>Book the whole party, or just one thing.</h1>
+              <span className="tagline">we know a guy</span>
               <p className="lede">
-                Venues, food, music, photos, decor, rentals and staff for birthdays, weddings, showers,
-                graduations and office parties. Every pro is checked by PLUJ, and the price you see is the price you pay.
+                DJs, catering, food trucks, bartenders, venues, lighting and more, in one place. Every pro is
+                checked by PLUJ, and the price you see is the price you pay.
               </p>
 
               <div className="hero-search" role="search">
@@ -13794,7 +13886,7 @@ export default function PlujApp() {
                 <label>
                   <span>When</span>
                   <input type="date" value={qWhen} onChange={e=>setQWhen(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]} style={{ color: qWhen ? "#000" : "#6B6B6B" }} />
+                    min={new Date().toISOString().split("T")[0]} style={{ color: qWhen ? "#0B0C17" : "#5A6080" }} />
                 </label>
                 <label>
                   <span>What you need</span>
@@ -13808,13 +13900,13 @@ export default function PlujApp() {
                   <span>Guests</span>
                   <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)} placeholder="How many" />
                 </label>
-                <button className="btn go" onClick={() => {
+                <button className="btn go" aria-label="Find vendors" title="Find vendors" onClick={() => {
                     requestAnimationFrame(() => {
                       const el = document.getElementById("results-top");
                       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                     });
                   }}>
-                  Find vendors
+                  <span className="go-label">Find vendors</span><Icon name="arrow" size={20} />
                 </button>
               </div>
 
@@ -13836,12 +13928,9 @@ export default function PlujApp() {
             </div>
 
             <div className="hero-art" aria-hidden="true">
-              <span className="shape dot" />
-              <div className="hero-photo">
-                <img src={market?.hero || "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=1400&q=80"} alt="" />
-              </div>
-              <span className="shape moon" />
-              <div className="stamp"><Stamp /></div>
+              <span className="orb dot" />
+              <div className="orb main"><span className="mark"><PlujMark variant="mark" size={300} color="#fff" /></span></div>
+              <span className="orb lav" />
               <div className="ticket">
                 <div className="top">
                   <span className="ex">Example</span>
@@ -13853,16 +13942,41 @@ export default function PlujApp() {
                 </div>
                 <div className="tear" />
                 <div className="bottom">
-                  <div>
-                    <div className="ok">⚡ Booked instantly</div>
-                    <div className="total">$3,150</div>
-                    <div className="note">The total you pay. Nothing added.</div>
-                  </div>
-                  <div className="barcode" />
+                  <div className="ok">⚡ Booked instantly</div>
+                  <div className="total">$3,150</div>
+                  <div className="note">The total you pay. Nothing added.</div>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* The services people ask for most, one tap each (brand board). */}
+          <nav className="cat-icons" aria-label="Popular services">
+            {[
+              ["music","djs","headphones","DJ"],
+              ["food","catering","cloche","Catering"],
+              ["food","food-trucks","truck","Food truck"],
+              ["staff","bartenders","cocktail","Bartender"],
+              ["places",null,"pin","Venue"],
+              ["photo","photographers","camera","Photo"],
+              ["av","lighting","sun","Lighting"],
+              ["rentals",null,"chair","Rentals"],
+              [null,null,"dots","More"],
+            ].map(([cat, sub, icon, label]) => (
+              <button key={label} onClick={() => {
+                  if (!cat) {
+                    const el = document.querySelector(".dir");
+                    if (el) el.scrollIntoView({ behavior:"smooth", block:"start" });
+                    return;
+                  }
+                  pickCat(cat); if (sub) setActiveSub(sub);
+                  window.scrollTo({ top: 0 });
+                }}>
+                <span className="ic"><Icon name={icon} size={24} /></span>
+                <span className="lb">{label}</span>
+              </button>
+            ))}
+          </nav>
         </section>
       )}
 
@@ -13889,7 +14003,7 @@ export default function PlujApp() {
               services in it, so a host sees the whole event in one place. While
               browsing: one quiet row of pills. Black and white only. */}
           {isHero ? (
-            <nav aria-label="Categories" className="dir" style={{ margin:"48px 0 64px" }}>
+            <nav aria-label="Categories" className="dir" style={{ margin:"40px 0 64px" }}>
               <div className="dir-head">
                 <h2>Everything your event needs</h2>
                 <p>{`${CATEGORIES.filter(c => CAT_SUBS[c.id]?.length > 1).length} categories and ${Object.values(CAT_SUBS).reduce((n, s) => n + s.filter(x => x.id !== "other").length, 0)} kinds of vendors in ${market?.label?.split(",")[0] || "Houston"}. Mix them in one cart and pay one price.`}</p>
@@ -13903,8 +14017,11 @@ export default function PlujApp() {
                      or hand the whole thing to an event planner (a vendor). */
                   if (cat.id === "build") return (
                     <li key={cat.id} className="wide">
-                      <div className="build">
-                        <span className="dir-name">Not sure where to start?</span>
+                      <div className="build grain">
+                        <div>
+                          <span className="dir-name">Not sure where to start?</span>
+                          <span className="tagline">we know a guy</span>
+                        </div>
                         <div className="build-ways">
                           <button onClick={()=>pickCat("build")}>
                             <b>Build it step by step</b>
@@ -13923,6 +14040,7 @@ export default function PlujApp() {
                   return (
                     <li key={cat.id}>
                       <button onClick={()=>pickCat(cat.id)} aria-current={activeCat===cat.id ? "true" : undefined}>
+                        <span className="ic"><Icon name={CAT_ICON[cat.id] || "dots"} size={22} /></span>
                         <span className="dir-name">{cat.label}</span>
                         <span className="dir-subs">
                           {/* one text node per service, so each one translates on its own */}
@@ -14067,14 +14185,14 @@ export default function PlujApp() {
             const items = activePackage.subs.slice(0, 14);
             const done = items.filter(x => have.has(x)).length;
             return (
-              <section aria-label="Your checklist" style={{ border:"2px solid #000", borderRadius:6, padding:"14px 16px", marginBottom:20 }}>
+              <section aria-label="Your checklist" style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:24, padding:"14px 16px", marginBottom:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:12, flexWrap:"wrap", marginBottom:10 }}>
                   <p style={{ margin:0, fontSize:16, fontWeight:800, color:"#000" }}>
                     {`Your ${activePackage.label} checklist`}
                   </p>
                   <span style={{ fontSize:13, color:"#4B5260" }}>{`${done} of ${items.length} booked`}</span>
                   <button onClick={() => setActivePackage(null)} className="btn"
-                    style={{ background:"#fff", border:"1.5px solid #000", borderRadius:99, padding:"6px 14px", fontSize:12.5, fontWeight:700, color:"#000" }}>
+                    style={{ background:"#fff", border:"1.5px solid #1E40FF", borderRadius:99, padding:"6px 14px", fontSize:12.5, fontWeight:700, color:"#000" }}>
                     Close checklist
                   </button>
                 </div>
@@ -14164,7 +14282,7 @@ export default function PlujApp() {
                       </button>
                     ) : (
                       <button onClick={()=>setAuthModal(true)} className="btn"
-                        style={{ background:"#000", color:"#fff", border:"none", borderRadius:10,
+                        style={{ background:"#1E40FF", color:"#fff", border:"none", borderRadius:999,
                                  padding:"10px 18px", fontSize:13, fontWeight:700 }}>
                         List my business
                       </button>
@@ -14244,14 +14362,14 @@ export default function PlujApp() {
                 </div>
                 <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
                   <button onClick={() => setInfoPage("Terms")} className="btn promise-link"
-                    style={{ background:"#000", color:"#fff" }}>Read the guarantee</button>
+                    style={{ background:"#1E40FF", color:"#fff" }}>Read the guarantee</button>
                   <span className="tag">#weknowaguy</span>
                 </div>
               </section>
 
               <section className="vendor-band" style={{ marginTop:80 }}>
                 <div>
-                  <p style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:"#FF5C28" }}>Pros wanted in Houston</p>
+                  <p className="tagline" style={{ margin:"0 0 16px", fontSize:14, color:"rgba(255,255,255,0.9)" }}>pros wanted in houston</p>
                   <h2>No contracts.<br />No bidding wars.</h2>
                   <p style={{ fontSize:17, color:"rgba(255,255,255,0.78)", lineHeight:1.6, margin:"0 0 26px", maxWidth:"32em" }}>
                     You pay only when you get booked. No subscriptions, no paying for leads that never close, no year-long ad
@@ -14259,7 +14377,7 @@ export default function PlujApp() {
                   </p>
                   <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
                     <button onClick={() => setAuthModal(true)} className="btn"
-                      style={{ background:"#FF5C28", color:"#000", borderRadius:99, padding:"14px 24px", fontSize:15.5, fontWeight:800 }}>
+                      style={{ background:"#fff", color:"#1E40FF", borderRadius:99, padding:"14px 24px", fontSize:15.5, fontWeight:800 }}>
                       List your business
                     </button>
                     <button onClick={() => setInfoPage("Vendor guide")} className="btn"
@@ -14281,7 +14399,7 @@ export default function PlujApp() {
       )}
 
       {/* ── FOOTER ─────────────────────────────────────────────────────── */}
-      <footer className="foot">
+      <footer className="foot grain">
         <div className="foot-in">
           <div>
             <span onClick={goHome} title="Back to home" style={{ cursor:"pointer", display:"inline-flex" }}>
@@ -14309,7 +14427,8 @@ export default function PlujApp() {
           ))}
         </div>
         {/* The wordmark, the full width of the page. */}
-        <div className="wordmark" aria-hidden="true"><PlujMark variant="word" size={400} color="#FF5C28" /></div>
+        <div className="wordmark" aria-hidden="true"><PlujMark variant="word" size={400} color="#000" /></div>
+        <p className="tagline" style={{ maxWidth:1240, margin:"10px auto 0", padding:"0 28px", textAlign:"right" }}>we know a guy</p>
         <div style={{ maxWidth:1240, margin:"0 auto", padding:"16px 28px 30px",
                       display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, fontSize:13.5, color:"#4B5260" }}>
           <span>© 2026 PLUJ, Houston, Texas</span>
