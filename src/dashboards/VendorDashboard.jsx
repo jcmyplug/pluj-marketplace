@@ -1513,7 +1513,9 @@ function VendorDashboard({ user, onLogout }) {
                       </button>
                     </div>
                   )}
-                  {isConfirmedStatus(r.status) && isRealId(r.userId) && (
+                  {/* Rating the host opens after the event (the database checks too). */}
+                  {isConfirmedStatus(r.status) && isRealId(r.userId) && r.eventDate
+                    && r.eventDate <= new Date().toISOString().slice(0, 10) && (
                     <CustomerRating vendorId={user.id} customerId={r.userId}
                       customerName={r.userName || "the customer"} bookingId={r.id} />
                   )}

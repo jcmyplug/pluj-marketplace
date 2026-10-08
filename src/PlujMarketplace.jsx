@@ -792,6 +792,9 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .dir-grid .build { grid-template-columns: 1fr; padding: 22px 16px; }
   .dir-grid .build .dir-name { padding-top: 0; }
 }
+.occasions { margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.occasions h3 { margin: 0; font-size: 16px; font-weight: 800; color: #000; }
+.occasions .pills.sm button { font-size: 14px; padding: 8px 15px; }
 /* Categories while browsing: one row of pills that scrolls sideways on phones. */
 .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .pills::-webkit-scrollbar { display: none; }
@@ -823,6 +826,17 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .crow > span:first-child { grid-column: 1 / -1; margin-bottom: -8px; }
   .crow.head > span:first-child { display: none; }
 }
+/* Trust badges on cards: what PLUJ checked by hand. */
+.badge-chk { font-size: 11.5px; font-weight: 700; color: #000; border: 1px solid #000; border-radius: 999px; padding: 2px 8px; line-height: 1.4; }
+/* The PLUJ promise: one bordered block, the promise set big. */
+.promise-block { margin-top: 72px; border: 2px solid #000; border-radius: 4px; padding: 40px 40px 34px; background: #fff; }
+.promise-block .kicker { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #000; }
+.promise-block h2 { font-size: clamp(36px, 4.6vw, 64px); line-height: 0.95; margin: 0 0 22px; max-width: 16ch; text-wrap: balance; }
+.promise-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 40px; margin-bottom: 22px; }
+.promise-cols p { margin: 0; font-size: 16px; line-height: 1.6; color: #333; max-width: 46ch; }
+.promise-link { background: #000; color: #fff; border-radius: 999px; padding: 12px 20px; font-size: 14.5px; font-weight: 800; }
+.promise-block .tag { font-family: var(--display); font-weight: 800; font-size: 22px; color: var(--marigold); }
+@media (max-width: 640px) { .promise-block { padding: 26px 18px 22px; } }
 /* Vendors: a poster block */
 .vendor-band { background: #000; color: #fff; border-radius: 4px; padding: 56px 48px; display: grid;
                grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; align-items: end; position: relative; overflow: hidden; }
@@ -2568,16 +2582,21 @@ export function ratingSummary(reviews) {
   return { avg: Math.round(avg * 10) / 10, count: list.length };
 }
 
-/* Is there a CONFIRMED booking entitling authorId to review subjectId in this
-   direction? Client gate for UX; the RLS policy is the real enforcement. */
+/* The CONFIRMED booking, whose event date has passed, that entitles authorId
+   to review subjectId in this direction: its id, or null. Client gate for UX;
+   the RLS policy (sql/2026-10-08-blind-reviews-checks-languages.sql) is the
+   real enforcement, and it needs this booking id on the review. */
 async function canReviewSubject(authorId, subjectId, direction) {
-  if (IS_PREVIEW || !authorId || !subjectId) return false;
+  if (IS_PREVIEW || !authorId || !subjectId) return null;
   const col = direction === "vendor_to_user"
     ? { self: "vendor_id", other: "user_id" }
     : { self: "user_id",   other: "vendor_id" };
   const { data } = await sb.from("booking_requests")
-    .select("id, status").eq(col.self, authorId).eq(col.other, subjectId).get();
-  return (data || []).some(b => isConfirmedStatus(b.status));
+    .select("id, status, event_date").eq(col.self, authorId).eq(col.other, subjectId).get();
+  const today = new Date().toISOString().slice(0, 10);
+  const b = (data || []).filter(x => isConfirmedStatus(x.status) && x.event_date && x.event_date <= today)
+    .sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)))[0];
+  return b ? b.id : null;
 }
 
 /* Existing review by this author about this subject (to avoid duplicates). */
@@ -2610,7 +2629,13 @@ export async function submitReviewDB({ bookingId, authorId, subjectId, direction
     r_recommend:      d.recommend != null ? Number(d.recommend) : null,
     r_rebook:         d.rebook != null ? Number(d.rebook) : null,
   });
-  if (error) return { ok: false, error: error.message || "You can review only after a confirmed booking with this vendor." };
+  if (error) {
+    const m = String(error.message || "");
+    if (/row-level security|violates/i.test(m) || !m)
+      return { ok: false, error: "You can review only after the event, for a booking that was confirmed." };
+    if (/duplicate|unique/i.test(m)) return { ok: false, error: "You've already reviewed this booking." };
+    return { ok: false, error: m };
+  }
   return { ok: true };
 }
 
@@ -2718,6 +2743,11 @@ function dbServiceToCard(s, v) {
     tags:        (v.service_areas ? [v.service_areas] : []).concat(s.capacity || v.capacity ? [s.capacity || v.capacity] : []),
     /* Instant booking: confirmed on the spot for open dates 3+ days away. */
     instant:     s.instant_book === true,
+    /* Trust badges from vendor_public: what PLUJ checked by hand. */
+    langs:       Array.isArray(v.languages) ? v.languages : ["en"],
+    insured:     v.coi_checked === true,
+    dshsOk:      v.dshs_checked === true,
+    tabcOk:      v.tabc_checked === true,
     feat:        false,
     yearsInBiz:  v.years_in_biz || 0,
     travelMiles: (s.travel_miles != null ? s.travel_miles : v.travel_miles) || 0,
@@ -9297,6 +9327,8 @@ function FiltersBar({ filters, onChange, totalCount }) {
   return (
     <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:16 }}>
       <Pill id="instant"  label="⚡ Instant booking" active={filters.instant} />
+      <Pill id="spanish"  label="Habla español"      active={filters.spanish} />
+      <Pill id="insured"  label="Insurance checked"  active={filters.insured} />
       <Pill id="featured" label="✦ Top rated"        active={filters.featured} />
 
       {/* Price range */}
@@ -9354,44 +9386,43 @@ function FiltersBar({ filters, onChange, totalCount }) {
 
 /* ─── RECOMMENDATION STRIP ────────────────────────────────────────────────────── */
 function RecommendationStrip({ recs, onAdd, onView, cart }) {
+  /* "Your event still needs a photographer. Here are three we know." Curated,
+     not crowded: at most three picks, from the parts of the event not in the
+     cart yet. */
   if (!recs || recs.length === 0) return null;
+  const picks = recs.slice(0, 3);
   return (
-    <div style={{ background: C.orangeSoft, borderRadius:16, padding:"16px 18px",
-                  marginBottom:20, border:`1px solid ${C.orangeBorder}` }}>
-      <p style={{ margin:"0 0 10px", fontSize:13, fontWeight:800, color:C.orange }}>
-        ✦ You might also need for your event
-      </p>
+    <section aria-label="Three we know" style={{ border:"2px solid #000", borderRadius:6, padding:"16px 18px", marginBottom:20 }}>
+      <p style={{ margin:"0 0 2px", fontSize:16, fontWeight:800, color:"#000" }}>Your event still needs these</p>
+      <p style={{ margin:"0 0 12px", fontSize:14, color:"#4B5260" }}>Here are three we know.</p>
       <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4 }}>
-        {recs.map(v => (
-          <div key={v.id} style={{ flexShrink:0, background:"#fff", borderRadius:12,
-                                    padding:"10px 12px", width:180, border:`1px solid ${C.border}` }}>
-            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
-              <img src={v.img} alt={v.name}
-                style={{ width:36, height:36, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
-              <div>
-                <p style={{ margin:0, fontSize:11, fontWeight:800, lineHeight:1.2 }}>{v.name}</p>
-                <p style={{ margin:0, fontSize:10, color:C.midGray }}>{cardPrice(v)}</p>
+        {picks.map(v => {
+          const added = !!cart.find(c => c.id === v.id);
+          return (
+            <div key={v.id} style={{ flexShrink:0, background:"#fff", borderRadius:6, padding:"10px 12px", width:210, border:"1px solid #DADADA" }}>
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10 }}>
+                <img src={v.img} alt="" style={{ width:40, height:40, borderRadius:4, objectFit:"cover", flexShrink:0 }} />
+                <div style={{ minWidth:0 }}>
+                  <p style={{ margin:0, fontSize:13, fontWeight:800, lineHeight:1.25 }}>{v.name}</p>
+                  <p style={{ margin:"2px 0 0", fontSize:12.5, color:"#4B5260" }}>{cardPrice(v)}</p>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:6 }}>
+                <button onClick={() => onView(v)} className="btn"
+                  style={{ flex:1, minHeight:36, borderRadius:999, background:"#fff", border:"1.5px solid #000", fontSize:12.5, fontWeight:700, color:"#000" }}>
+                  View
+                </button>
+                <button onClick={() => !added && onAdd(v)} className="btn" disabled={added}
+                  style={{ flex:1, minHeight:36, borderRadius:999, background: added ? "#F2F2F2" : "#000",
+                           border:"none", fontSize:12.5, fontWeight:800, color: added ? "#4B5260" : "#fff" }}>
+                  {added ? "✓ In cart" : "Add"}
+                </button>
               </div>
             </div>
-            <div style={{ display:"flex", gap:6 }}>
-              <button onClick={() => onView(v)} className="btn"
-                style={{ flex:1, padding:"5px 0", borderRadius:8, background:C.bgAlt,
-                         border:`1px solid ${C.border}`, fontSize:10, fontWeight:600,
-                         color:C.midGray }}>
-                View
-              </button>
-              <button onClick={() => !cart.find(c=>c.id===v.id) && onAdd(v)} className="btn"
-                style={{ flex:1, padding:"5px 0", borderRadius:8,
-                         background: cart.find(c=>c.id===v.id) ? "#F3F4F6" : C.orange,
-                         border:"none", fontSize:10, fontWeight:700,
-                         color: cart.find(c=>c.id===v.id) ? C.midGray : "#fff" }}>
-                {cart.find(c=>c.id===v.id) ? "✓" : "+ Add"}
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -9402,7 +9433,7 @@ function HowItWorks() {
   const steps = [
     ["Choose your vendors", "Filter by date, place and guest count. Every listing shows its price, what's included and the days it works."],
     ["Book in one go", "Put the whole event in one cart. Instant-booking vendors confirm on the spot; the rest reply by your deadline."],
-    ["Enjoy the day", "Message your vendors in one place, in English or Spanish, and review them after the event."],
+    ["Enjoy the day", "Message your pros in one place, in English or Spanish. If anything goes wrong, real people at PLUJ help."],
   ];
   return (
     <section style={{ padding:"40px 0 56px" }}>
@@ -9736,7 +9767,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
     setRevErr("");
     if (isLiveVendor) {
       const res = await submitReviewDB({
-        authorId: user.id, subjectId: vendorId, direction: "user_to_vendor",
+        bookingId: canRev, authorId: user.id, subjectId: vendorId, direction: "user_to_vendor",
         rating: newRating, body: newText.trim(), dims: dimRatings,
         showName: showMyName,
         authorName: user.displayName || user.name || "",
@@ -10106,8 +10137,8 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             {isLiveVendor && !canReview && !isVendorOwner && user && user.type !== "guest" && (
               <p style={{ fontSize:12, color:C.lightGray, marginBottom:16, lineHeight:1.6 }}>
                 {mine
-                  ? "✓ You've reviewed this vendor. Thanks for the feedback!"
-                  : "You can leave a review once this vendor has confirmed a booking with you."}
+                  ? "✓ You've reviewed this vendor. It appears when they've reviewed you too, or in 14 days, so neither side writes in reply to the other."
+                  : "You can leave a review after your event, once this vendor has confirmed a booking with you."}
               </p>
             )}
 
@@ -10427,7 +10458,13 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   [true, "Business reviewed and approved by hand"],
                   [full?.legal_on_file === true, "Legal name, EIN, address and owners on file"],
                   [full?.license_on_file === true, "License or permit number on file"],
-                  [true, "Reviews only from confirmed bookings"],
+                  [full?.coi_checked === true, full?.coi_valid_until
+                      ? `Insurance certificate checked, valid until ${new Date(full.coi_valid_until + "T12:00:00").toLocaleDateString("en-US", { month:"short", year:"numeric" })}`
+                      : "Insurance certificate checked"],
+                  [full?.dshs_checked === true, "Texas DSHS food permit checked"],
+                  [full?.tabc_checked === true, "TABC alcohol permit checked"],
+                  [Array.isArray(full?.languages) && full.languages.includes("es"), "Habla español"],
+                  [true, "Reviews only from confirmed bookings, after the event"],
                 ].filter(([ok]) => ok).map(([, t]) => (
                   <p key={t} style={{ margin:"0 0 6px", fontSize:13, color:"#000", display:"flex", gap:8, alignItems:"baseline" }}>
                     <span aria-hidden="true" style={{ width:8, height:8, background:"#FF5C28", transform:"rotate(45deg)", flex:"0 0 auto" }} />
@@ -10512,6 +10549,14 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
           by <span data-no-translate style={{ fontWeight:700, color:C.black }}>{v.name}</span>
           {city ? <> · {city}</> : null}
         </p>
+        {(v.insured || v.dshsOk || v.tabcOk || (v.langs || []).includes("es")) && (
+          <p style={{ margin:"8px 0 0", display:"flex", gap:6, flexWrap:"wrap" }}>
+            {v.insured && <span className="badge-chk">Insured</span>}
+            {v.dshsOk && <span className="badge-chk">DSHS permit</span>}
+            {v.tabcOk && <span className="badge-chk">TABC permit</span>}
+            {(v.langs || []).includes("es") && <span className="badge-chk">Habla español</span>}
+          </p>
+        )}
         {(guests || v.travelMiles) && (
           <p style={{ margin:"8px 0 0", fontSize:12.5, color:C.midGray, display:"flex", gap:12, flexWrap:"wrap" }}>
             {guests && <span>{`👥 ${guests}`}</span>}
@@ -10704,6 +10749,20 @@ function ResetPasswordScreen({ token, onDone }) {
    that also provides rentals, A/V and a DJ. Each row is one vendor_services
    record; the business details live on vendor_profiles and are shared. */
 /* ServicesManager moved to src/dashboards/VendorDashboard.jsx (23 Sep 2026) - loaded on demand. */
+/* Languages a vendor can mark (Houston's most spoken). Codes match the
+   database check vendor_profiles_languages_known. */
+export const VENDOR_LANGUAGES = [
+  ["en","English"], ["es","Spanish"], ["vi","Vietnamese"], ["zh","Chinese"], ["ar","Arabic"], ["fr","French"],
+  ["hi","Hindi"], ["ur","Urdu"], ["tl","Tagalog"], ["ko","Korean"], ["pt","Portuguese"],
+];
+function CheckStatus({ at, filled }) {
+  if (!filled) return null;
+  return (
+    <p style={{ margin:"4px 0 0", fontSize:11, fontWeight:700, color: at ? C.green : C.midGray }}>
+      {at ? "✓ Checked by PLUJ" : "Waiting for PLUJ to check it"}
+    </p>
+  );
+}
 export function VendorListingEditor({ user, onClose, onSaved }) {
   /* Business profile = WHO you are. Since 30 Sep 2026 this no longer asks for
      service types, prices, capacity or availability: those belong to each
@@ -10737,6 +10796,14 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
         managing_members: d?.managing_members || "",
         license_not_required: d?.license_not_required === true,
         photos:        parsePhotos(d?.photos),
+        languages:     Array.isArray(d?.languages) && d.languages.length ? d.languages : ["en"],
+        coi_insurer:   d?.coi_insurer    || "",
+        coi_expires_on:d?.coi_expires_on || "",
+        dshs_permit:   d?.dshs_permit    || "",
+        tabc_permit:   d?.tabc_permit    || "",
+        coi_checked_at:  d?.coi_checked_at  || null,
+        dshs_checked_at: d?.dshs_checked_at || null,
+        tabc_checked_at: d?.tabc_checked_at || null,
       });
       setLoad(false);
     })();
@@ -10786,6 +10853,8 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
     if (f.biz_zip.trim() && !/^\d{5}(-\d{4})?$/.test(f.biz_zip.trim())) missing.push("a 5-digit ZIP code");
     if (f.biz_phone.replace(/\D/g, "").length < 10) missing.push("a 10-digit business phone");
     if (!f.biz_license.trim() && !f.license_not_required) missing.push("licence / permit number (or tick that you don't need one)");
+    if (f.coi_insurer.trim() && !f.coi_expires_on) missing.push("the date your insurance certificate expires");
+    if (!f.coi_insurer.trim() && f.coi_expires_on) missing.push("your insurance company's name");
     if (missing.length) { setErr("Please add " + missing.join(", ") + "."); return; }
     setSaving(true);
     const yrs = String(f.years_in_biz || "").replace(/[^0-9]/g, "");
@@ -10807,6 +10876,11 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
       managing_members: f.managing_members.trim(),
       license_not_required: f.license_not_required === true,
       photos:        f.photos,
+      languages:     f.languages && f.languages.length ? f.languages : ["en"],
+      coi_insurer:   f.coi_insurer.trim() || null,
+      coi_expires_on:f.coi_expires_on || null,
+      dshs_permit:   f.dshs_permit.trim() || null,
+      tabc_permit:   f.tabc_permit.trim() || null,
     });
     setSaving(false);
     if (!res.ok) { setErr(res.error); return; }
@@ -10938,6 +11012,41 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             </div>
             <label style={L}>Website or social page <Opt /></label>
             <input style={F} value={f.biz_website} onChange={e=>set("biz_website", e.target.value)} />
+
+            {/* Languages and the checks PLUJ does by hand (shown to hosts as badges). */}
+            <label style={L}>Languages you speak with clients *</label>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {VENDOR_LANGUAGES.map(([code, label]) => {
+                const on = (f.languages || []).includes(code);
+                return (
+                  <button type="button" key={code} aria-pressed={on}
+                    onClick={() => set("languages", on ? (f.languages || []).filter(x => x !== code) : [...(f.languages || []), code])}
+                    style={{ padding:"6px 12px", borderRadius:99, fontSize:12, fontWeight:700, cursor:"pointer", minHeight:32,
+                             border:`1.5px solid ${on ? "#000" : C.border}`, background: on ? "#000" : "#fff", color: on ? "#fff" : C.black }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ border:"1.5px solid #000", borderRadius:10, padding:"4px 12px 12px", marginTop:14 }}>
+              <p style={{ margin:"8px 0 0", fontSize:12.5, fontWeight:800, color:C.black }}>Checks that earn you a badge <Opt /></p>
+              <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
+                PLUJ checks these by hand with the insurer or the state, then shows hosts a badge. Hosts see the badge, not your numbers.
+                Changing a detail means it is checked again.
+              </p>
+              <label style={L}>Insurance company (certificate of insurance)</label>
+              <input style={F} value={f.coi_insurer} onChange={e=>set("coi_insurer", e.target.value)} placeholder="e.g. State Farm, policy GL-123456" />
+              <label style={L}>Certificate expires on</label>
+              <input style={F} type="date" value={f.coi_expires_on || ""} onChange={e=>set("coi_expires_on", e.target.value)} />
+              <CheckStatus at={f.coi_checked_at} filled={!!f.coi_insurer.trim()} />
+              <label style={L}>Texas DSHS food permit number <span style={{ fontWeight:400, color:C.lightGray }}>(food trucks and caterers)</span></label>
+              <input style={F} value={f.dshs_permit} onChange={e=>set("dshs_permit", e.target.value)} placeholder="Mobile food unit or food establishment permit" />
+              <CheckStatus at={f.dshs_checked_at} filled={!!f.dshs_permit.trim()} />
+              <label style={L}>TABC permit number <span style={{ fontWeight:400, color:C.lightGray }}>(if you serve alcohol)</span></label>
+              <input style={F} value={f.tabc_permit} onChange={e=>set("tabc_permit", e.target.value)} placeholder="e.g. caterer's or seller-server certificate" />
+              <CheckStatus at={f.tabc_checked_at} filled={!!f.tabc_permit.trim()} />
+            </div>
 
             <label style={L}>Business photos <span style={{fontWeight:400}}>({f.photos.length}/{MAX_PHOTOS} — logo or team photo; first is the cover)</span></label>
             <PhotoManager photos={f.photos} onChange={(next) => set("photos", next)} size={78} />
@@ -12179,7 +12288,7 @@ export default function PlujApp() {
 
   /* Filters */
   const [filters, setFilters] = useState({
-    instant: false, featured: false, topRated: false,
+    instant: false, featured: false, topRated: false, spanish: false, insured: false,
     nearMe: false, maxPrice: 99999,
   });
   function updateFilter(key, val) {
@@ -12908,6 +13017,8 @@ export default function PlujApp() {
       if (!matchesGuests(v, qGuests)) return false;
       if (!matchesEventType(v, qEventType)) return false;
       if (filters.instant  && !v.instant)              return false;
+      if (filters.spanish  && !(v.langs || []).includes("es")) return false;
+      if (filters.insured  && !v.insured)              return false;
       if (filters.featured && !v.feat)                 return false;
       /* "Top rated" only judges vendors that HAVE ratings — a new vendor with no
          reviews yet shouldn't be hidden as if it were poorly rated. */
@@ -13365,10 +13476,10 @@ export default function PlujApp() {
         <section className="hero-field">
           <div className="home-hero">
             <div>
-              <h1>Your whole event.<br />One price.</h1>
+              <h1>One booking.<br />The whole party.</h1>
               <p className="lede">
-                Venues, food trucks, DJs, photographers, decor, rentals and staff in one cart.
-                Every vendor is checked by PLUJ, and the price you see is the price you pay.
+                Venues, food, music, photos, decor, rentals and staff for birthdays, weddings, showers,
+                graduations and office parties. Every pro is checked by PLUJ, and the price you see is the price you pay.
               </p>
 
               <div className="hero-search" role="search">
@@ -13417,7 +13528,7 @@ export default function PlujApp() {
               <div className="promise-row">
                 <span className="promise"><span><b>One price.</b> Nothing added at checkout</span></span>
                 <span className="promise"><span><b>Instant booking</b> on open dates</span></span>
-                <span className="promise"><span><b>Checked by hand.</b> Every vendor</span></span>
+                <span className="promise"><span><b>Checked by hand.</b> Every pro</span></span>
               </div>
             </div>
 
@@ -13520,6 +13631,29 @@ export default function PlujApp() {
                   );
                 })}
               </ul>
+              {/* Every kind of celebration, not weddings or spaces alone. Picking
+                  one filters the vendors below to pros who work that occasion. */}
+              <div className="occasions">
+                <h3>For every kind of celebration</h3>
+                <div className="pills sm" role="group" aria-label="Occasions">
+                  {["birthday","wedding","baby","graduation","corporate","kids","social","quince","concert","seminar"].map(id => {
+                    const t = EVENT_TYPES.find(e => e.id === id);
+                    if (!t) return null;
+                    return (
+                      <button key={id} className={qEventType === id ? "on" : ""} aria-pressed={qEventType === id}
+                        onClick={() => {
+                          setQEventType(qEventType === id ? "" : id);
+                          requestAnimationFrame(() => {
+                            const el = document.getElementById("results-top");
+                            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                          });
+                        }}>
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </nav>
           ) : (
             <nav aria-label="Categories" className="pills" style={{ margin:"6px 0 28px" }}>
@@ -13767,11 +13901,14 @@ export default function PlujApp() {
                     <span role="columnheader" className="us">PLUJ</span>
                   </div>
                   {[
+                    ["Your event", "One piece per site: a venue here, a DJ there", "Every piece in one cart"],
+                    ["Celebrations", "Often one kind, like weddings", "Every kind, from birthdays to office parties"],
                     ["Price", "A quote, after you ask and wait", "Shown upfront, one total"],
                     ["Booking", "Wait for each vendor to reply", "Instant on open dates"],
                     ["Fees", "Added at checkout", "Already in the price"],
                     ["Vendors", "Little or no checking", "Legal details checked, approved by hand"],
-                    ["Reviews", "Anyone can post", "Only after a confirmed booking"],
+                    ["Reviews", "Anyone can post", "Only after a real booking, revealed together"],
+                    ["If a vendor cancels", "Usually up to you to fix", "We find you a replacement"],
                     ["Language", "English", "English and Spanish"],
                   ].map(([k, a, b]) => (
                     <div className="crow" role="row" key={k}>
@@ -13783,12 +13920,30 @@ export default function PlujApp() {
                 </div>
               </section>
 
+              {/* The PLUJ promise. Worded to what PLUJ delivers today: finding a
+                  replacement always; the full refund when the booking was paid
+                  through PLUJ (with payment off, money goes host to vendor). */}
+              <section className="promise-block" aria-labelledby="promise-h">
+                <p className="kicker">The PLUJ promise</p>
+                <h2 id="promise-h">If a pro cancels, we find you a replacement.</h2>
+                <div className="promise-cols">
+                  <p>Pay through PLUJ and you also get back every dollar you paid, fees included, from the pro's locked balance. Your money waits for the event either way: the last part is only paid out after it.</p>
+                  <p>It's written into our Terms, not hidden in a help article. And if something goes wrong on the day, you talk to real people at PLUJ, in English or Spanish.</p>
+                </div>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+                  <button onClick={() => setInfoPage("Terms")} className="btn promise-link"
+                    style={{ background:"#000", color:"#fff" }}>Read the guarantee</button>
+                  <span className="tag">#weknowaguy</span>
+                </div>
+              </section>
+
               <section className="vendor-band" style={{ marginTop:80 }}>
                 <div>
-                  <p style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:"#FF5C28" }}>Vendors wanted in Houston</p>
-                  <h2>Get booked.<br />Pay only when you are.</h2>
+                  <p style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:"#FF5C28" }}>Pros wanted in Houston</p>
+                  <h2>No contracts.<br />No bidding wars.</h2>
                   <p style={{ fontSize:17, color:"rgba(255,255,255,0.78)", lineHeight:1.6, margin:"0 0 26px", maxWidth:"32em" }}>
-                    No subscriptions and no paying for leads. The hosts who book you have a date, a guest count and a price.
+                    You pay only when you get booked. No subscriptions, no paying for leads that never close, no year-long ad
+                    contracts. The hosts who book you already have a date, a guest count and a price.
                   </p>
                   <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
                     <button onClick={() => setAuthModal(true)} className="btn"
@@ -13821,7 +13976,7 @@ export default function PlujApp() {
               <PlujMark size={28} />
             </span>
             <p style={{ fontSize:14, color:C.midGray, margin:"12px 0 14px", maxWidth:"26em", lineHeight:1.6 }}>
-              Houston's event marketplace. One price for your whole event, in English and Spanish.
+              One booking, the whole party. Houston's marketplace for every kind of celebration, in English and Spanish.
             </p>
             <LangToggle />
           </div>
@@ -13846,7 +14001,7 @@ export default function PlujApp() {
         <div style={{ maxWidth:1240, margin:"0 auto", padding:"16px 28px 30px",
                       display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, fontSize:13.5, color:"#4B5260" }}>
           <span>© 2026 PLUJ, Houston, Texas</span>
-          <span>Every vendor checked by hand</span>
+          <span>Every pro checked by hand · #weknowaguy</span>
         </div>
       </footer>
     </div>

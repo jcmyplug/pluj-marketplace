@@ -198,6 +198,19 @@ function VendorReview({ vendorId, onDecided }) {
     if (onDecided) onDecided(status);
   }
 
+  /* Badge checks (8 Oct 2026): an admin confirms a certificate of insurance,
+     a DSHS food permit or a TABC permit with the insurer or the state, then
+     marks it here. Hosts see a badge, never the numbers. The database lets
+     only an admin set these, and clears one if the vendor changes it. */
+  async function markCheck(field, on) {
+    setBusy(true); setErr("");
+    const { data, error } = await sb.from("vendor_profiles").eq("id", vendorId)
+      .update({ [field]: on ? new Date().toISOString() : null });
+    setBusy(false);
+    if (error || (Array.isArray(data) && data.length === 0)) { setErr((error && error.message) || "The check did not save."); return; }
+    load();
+  }
+
   if (!app) {
     return (
       <p style={{ margin:"10px 0 0", fontSize:12, color: err ? "#B91C1C" : C.midGray }}>
@@ -301,6 +314,40 @@ function VendorReview({ vendorId, onDecided }) {
           </>
         )}
       </div>
+
+      <H>Badge checks</H>
+      {[
+        ["coi_checked_at",  "Certificate of insurance",
+          v.coi_insurer ? `${v.coi_insurer}${v.coi_expires_on ? `, expires ${v.coi_expires_on}` : ""}` : "",
+          "Call or email the insurer to confirm the policy is active and the dates match."],
+        ["dshs_checked_at", "Texas DSHS food permit", v.dshs_permit || "",
+          "Look the permit up with Texas DSHS or the city health department."],
+        ["tabc_checked_at", "TABC permit", v.tabc_permit || "",
+          "Look it up in TABC's public license search."],
+      ].map(([field, label, detail, how]) => (
+        <div key={field} style={{ display:"flex", gap:10, alignItems:"center", justifyContent:"space-between",
+                                  padding:"7px 0", borderBottom:`1px solid ${C.border}` }}>
+          <div style={{ minWidth:0 }}>
+            <p style={{ margin:0, fontSize:12.5, fontWeight:700, color:C.black }}>
+              {label}{v[field] ? <span style={{ color:C.green }}>{"  ✓ checked " + fmtDate(v[field])}</span> : null}
+            </p>
+            <p style={{ margin:"2px 0 0", fontSize:11.5, color: detail ? C.black : C.midGray, wordBreak:"break-word" }}>
+              {detail || "Not given by the vendor"}
+            </p>
+            {detail && !v[field] && <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray }}>{how}</p>}
+          </div>
+          {detail && (
+            <button onClick={() => markCheck(field, !v[field])} disabled={busy} className="btn"
+              style={{ flexShrink:0, padding:"7px 12px", borderRadius:99, fontSize:12, fontWeight:800,
+                       border:"1.5px solid #000", background: v[field] ? "#fff" : "#000", color: v[field] ? "#000" : "#fff" }}>
+              {v[field] ? "Remove check" : "Mark checked"}
+            </button>
+          )}
+        </div>
+      ))}
+      <p style={{ margin:"6px 0 0", fontSize:11.5, color:C.midGray }}>
+        Speaks: {(Array.isArray(v.languages) && v.languages.length ? v.languages : ["en"]).join(", ")}
+      </p>
 
       <H>Listings ({listings.length})</H>
       {listings.length === 0 ? (
