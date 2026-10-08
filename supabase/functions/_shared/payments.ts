@@ -273,8 +273,15 @@ export async function markPlanPaid(bookingId: string, paymentIntentId: string, a
     const svc = booking?.service_name || "your booking";
     const total = money(rows.reduce((n: number, r: any) => n + r.amount_cents, 0));
     const pct = (k: string) => Number((rows.find((r: any) => r.kind === k) || {}).percent || 0);
-    const parts = `${pct("retainer")}% a week before the event, ${pct("event_day")}% the day after, `
-                + `and ${pct("final")}% when the host approves (or 3 days after)`;
+    /* Refund reserve: for vendors without a track record the database moves
+       the first part to the day after the event (sql/2026-10-08-refund-reserve.sql). */
+    const due = (k: string) => String((rows.find((r: any) => r.kind === k) || {}).due_at || "");
+    const reserve = due("retainer") !== "" && due("retainer") >= due("event_day");
+    const parts = reserve
+      ? `${pct("retainer") + pct("event_day")}% the day after the event (the first ${pct("retainer")}% is held until then as a refund reserve), `
+        + `and ${pct("final")}% when the host approves (or 3 days after)`
+      : `${pct("retainer")}% a week before the event, ${pct("event_day")}% the day after, `
+        + `and ${pct("final")}% when the host approves (or 3 days after)`;
     await notify(plan.vendor_id, "payment_received", "✅ Paid in full — booking secured",
       `The host paid ${total} for ${svc} on ${booking?.event_date || "the event date"}. It is locked in your Stripe balance `
       + `and PLUJ releases it to your bank in parts: ${parts}.`, bookingId);
