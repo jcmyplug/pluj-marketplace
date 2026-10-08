@@ -1523,3 +1523,178 @@ begin
 
   return new;
 end $function$;
+-- ── 15. Host cancellations (migrations "payments_host_cancel_rules", "payments_host_cancel_70") ──
+/* Host cancellations (migration "payments_host_cancel_rules"): PLUJ keeps
+   all its service fees; the host's refund shrinks as the event gets closer,
+   and the vendor gets nothing if the host cancels 7 or more days before.
+   Hosts can't cancel within 48 hours of the event. */
+
+create or replace function public.payments_guard_booking()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare
+  confirming boolean := new.status = any (array['confirmed','accepted','approved'])
+                        and not (old.status = any (array['confirmed','accepted','approved']));
+begin
+  if confirming and public.payments_enabled()
+     and not exists (select 1 from public.booking_payment_plans where booking_id = new.id) then
+    if new.event_date is null then
+      raise exception 'This request has no event date, so it cannot be confirmed with payment. Ask the host to add the date.';
+    end if;
+    if coalesce(new.total_price, 0) < 10 then
+      raise exception 'Enter the total price for this booking (at least $10) before confirming it.';
+    end if;
+    if not public.is_privileged_context() then
+      if not coalesce((select stripe_charges_enabled and stripe_payouts_locked from public.vendor_profiles where id = new.vendor_id), false) then
+        raise exception 'Set up payments with Stripe (in your dashboard) before confirming bookings. The host pays in full upfront into your Stripe balance.';
+      end if;
+      if not coalesce(new.payment_terms_accepted, false) then
+        raise exception 'Tick the box to accept the payment terms before confirming.';
+      end if;
+    end if;
+    /* Set here rather than by an UPDATE in the AFTER trigger, which would
+       re-fire the booking email and notification triggers. */
+    new.payment_status := 'awaiting';   -- allowed values: not_required, awaiting, deposit_paid, paid_in_full, refunded
+  end if;
+
+  /* A host can't cancel a paid booking within 48 hours of the event. */
+  if new.status = 'cancelled' and old.status <> 'cancelled'
+     and not public.is_privileged_context()
+     and coalesce(new.cancelled_by, '') = 'customer'
+     and exists (select 1 from public.booking_payment_plans where booking_id = new.id and status <> 'cancelled')
+     and public.booking_starts_at(new.event_date, new.start_time) - now() < interval '48 hours' then
+    raise exception 'This booking can''t be cancelled within 48 hours of the event. Message the vendor, or use Report a problem if something is wrong.';
+  end if;
+
+  if new.total_price is distinct from old.total_price
+     and exists (select 1 from public.booking_payment_plans where booking_id = new.id)
+     and not public.is_privileged_context() then
+    raise exception 'The price of a booking with a payment schedule can''t be changed. Contact PLUJ.';
+  end if;
+  return new;
+end $function$;
+
+create or replace function public.payments_on_booking_change()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare
+  plan        public.booking_payment_plans%rowtype;
+  split       numeric[];
+  total_c     integer;
+  r_c integer; e_c integer; f_c integer;
+  fees_by     text;
+  fin_at      timestamptz;
+  ev_at       timestamptz;
+  ret_at      timestamptz;
+  hrs         numeric;
+  pct         numeric;
+  less_fees   boolean := false;
+  any_paid    boolean;
+  vname       text;
+  done_n      integer;
+  is_conf_new boolean := new.status = any (array['confirmed','accepted','approved']);
+  is_conf_old boolean := old.status = any (array['confirmed','accepted','approved']);
+begin
+  select * into plan from public.booking_payment_plans where booking_id = new.id;
+
+  -- Confirmed (first time, or again after the host changed details)
+  if is_conf_new and not is_conf_old then
+    -- When each part of the full payment is released to the vendor's bank:
+    ret_at := greatest(public.booking_starts_at(new.event_date, new.start_time) - interval '7 days', now());  -- first part: a week before
+    ev_at  := public.booking_final_charge_at(new.event_date, new.end_date);                                   -- second part: noon the day after
+    fin_at := public.booking_release_at(new.event_date, new.end_date);                                        -- last part: 3 days after, or the host approves
+
+    if plan.booking_id is null then
+      if not public.payments_enabled() then return new; end if;
+
+      /* New vendors have more held until their first events are done:
+         a fully released booking counts as a completed event. */
+      select count(*) into done_n from public.booking_payment_plans
+       where vendor_id = new.vendor_id and status = 'released';
+      select array_agg(x::numeric) into split
+        from unnest(string_to_array(coalesce(
+          (select value from public.platform_settings
+            where key = case when done_n = 0 then 'payment_split_first'
+                             when done_n = 1 then 'payment_split_second'
+                             else 'payment_split' end),
+          case when done_n = 0 then '30,20,50' when done_n = 1 then '30,40,30' else '30,50,20' end), ',')) x;
+      fees_by := coalesce((select value from public.platform_settings where key = 'card_fees_paid_by'), 'vendor');
+      total_c := round(new.total_price * 100)::integer;
+      r_c := round(total_c * split[1] / 100.0)::integer;
+      e_c := round(total_c * split[2] / 100.0)::integer;
+      f_c := total_c - r_c - e_c;
+
+      insert into public.booking_payment_plans (booking_id, host_id, vendor_id, total_cents, card_fees_paid_by, release_at,
+                                                vendor_accepted_at, vendor_completed_before)
+      values (new.id, new.user_id, new.vendor_id, total_c, fees_by, fin_at,
+              case when new.payment_terms_accepted then now() end, done_n);
+
+      insert into public.booking_payments (booking_id, kind, percent, amount_cents, host_fee_cents, due_at) values
+        (new.id, 'retainer',  split[1], r_c, case when fees_by = 'host' then public.host_card_fee_cents(r_c) else 0 end, ret_at),
+        (new.id, 'event_day', split[2], e_c, case when fees_by = 'host' then public.host_card_fee_cents(e_c) else 0 end, ev_at),
+        (new.id, 'final',     split[3], f_c, case when fees_by = 'host' then public.host_card_fee_cents(f_c) else 0 end, fin_at);
+
+      select coalesce(nullif(business_name,''), nullif(biz_legal,''), 'Your vendor')
+        into vname from public.vendor_profiles where id = new.vendor_id;
+      insert into public.notifications (user_id, type, title, body, request_id)
+      values (new.user_id, 'payment_due', '💳 Pay to secure ' || coalesce(vname, 'your vendor'),
+              coalesce(vname, 'Your vendor') || ' confirmed. Pay the full $'
+                || to_char(total_c / 100.0, 'FM999,999,990.00') || ' to secure your date. It is locked in the vendor''s Stripe balance and released in parts: '
+                || split[1] || '% a week before the event, ' || split[2] || '% the day after, and the last ' || split[3]
+                || '% only when you approve it after the event (or 3 days after). Report a problem and everything not yet released is frozen.',
+              new.id);
+    else
+      -- Re-confirmed after a change: move the parts not yet released to the new dates.
+      update public.booking_payment_plans
+         set release_at = fin_at, status = case when status in ('cancelled','on_hold','released') then status else 'active' end, updated_at = now()
+       where booking_id = new.id;
+      update public.booking_payments set due_at = ret_at, updated_at = now()
+       where booking_id = new.id and kind = 'retainer' and transferred_at is null and status <> 'cancelled';
+      update public.booking_payments set due_at = ev_at, updated_at = now()
+       where booking_id = new.id and kind = 'event_day' and transferred_at is null and status <> 'cancelled';
+      update public.booking_payments set due_at = case when plan.host_approved_at is not null then now() else fin_at end, updated_at = now()
+       where booking_id = new.id and kind = 'final' and transferred_at is null and status <> 'cancelled';
+    end if;
+    return new;
+  end if;
+
+  -- Cancelled or declined after a schedule existed
+  if plan.booking_id is not null and plan.status <> 'cancelled'
+     and new.status = any (array['cancelled','canceled','declined','rejected'])
+     and not (old.status = any (array['cancelled','canceled','declined','rejected'])) then
+
+    update public.booking_payments set status = 'cancelled', updated_at = now()
+     where booking_id = new.id and status in ('scheduled','failed');
+
+    if new.status = 'cancelled' and coalesce(new.cancelled_by, '') = 'customer' then
+      /* Host cancels: PLUJ keeps its service fees and Stripe its card fee;
+         of the rest, the host gets back
+           7 days or more before the event   100%  (the vendor gets nothing)
+           5 to 7 days                         70%  (the 30% released a week before stays covered)
+           3 to 5 days                         50%
+           2 to 3 days                         25%
+         and can't cancel within 48 hours (payments_guard_booking). */
+      hrs := extract(epoch from (public.booking_starts_at(new.event_date, new.start_time) - now())) / 3600.0;
+      less_fees := true;
+      if hrs is null or hrs >= 168 then pct := 100;
+      elsif hrs >= 120 then pct := 70;
+      elsif hrs >= 72 then pct := 50;
+      elsif hrs >= 48 then pct := 25;
+      else pct := 0;
+      end if;
+    else
+      -- Vendor cancelled or declined, or PLUJ cancelled: everything back to the
+      -- host, from the vendor's Stripe balance; PLUJ keeps its fees.
+      pct := 100;
+    end if;
+
+    select exists (select 1 from public.booking_payments where booking_id = new.id and status = 'paid') into any_paid;
+
+    update public.booking_payment_plans
+       set status = 'cancelled', cancelled_by = coalesce(new.cancelled_by, new.status),
+           refund_percent = pct, refund_less_fees = less_fees,
+           refund_state = case when any_paid and pct > 0 then 'pending' else 'none' end,
+           updated_at = now()
+     where booking_id = new.id;
+  end if;
+
+  return new;
+end $function$;
