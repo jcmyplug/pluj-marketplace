@@ -4179,14 +4179,36 @@ function budgetColor(pct) {
 }
 
 /* ── Recommendation engine — gaps in cart vs event package ── */
+/* The service a sub id names ("photographers" → "Photographers") and the
+   category it sits in. */
+export function subInfo(subId) {
+  for (const [cat, list] of Object.entries(CAT_SUBS)) {
+    const hit = (list || []).find(x => x.id === subId);
+    if (hit) return { cat, label: hit.l };
+  }
+  return { cat: "all", label: String(subId || "").replace(/-/g, " ") };
+}
+/* What a cart item covers: its own sub, else the demo catalog's. */
+function cartSub(v, allVendors) { return v.sub || allVendors.find(vv => vv.id === v.id)?.sub || null; }
+function cartSubs(cart, allVendors) {
+  return new Set(cart.flatMap(v => (Array.isArray(v.subs) && v.subs.length ? v.subs : [cartSub(v, allVendors)])).filter(Boolean));
+}
+const coversSub = (v, sub) => (Array.isArray(v.subs) && v.subs.length ? v.subs : [v.sub]).includes(sub);
+
+/* "Your checklist still needs a photographer. Here are three we know."
+   The first service on the occasion's checklist that isn't in the cart and
+   has vendors, and up to three of them: instant booking first, then rating. */
 function getRecommendations(cart, activePackage, allVendors) {
   if (!activePackage) return [];
-  const cartSubs = new Set(cart.map(v => allVendors.find(vv=>vv.id===v.id)?.sub).filter(Boolean));
-  return activePackage.subs
-    .filter(sub => !cartSubs.has(sub))
-    .map(sub => allVendors.find(v => v.sub===sub && v.feat && v.instant))
-    .filter(Boolean)
-    .slice(0, 4);
+  const have = cartSubs(cart, allVendors);
+  for (const sub of activePackage.subs) {
+    if (have.has(sub)) continue;
+    const picks = allVendors.filter(v => coversSub(v, sub) && !cart.find(c => c.id === v.id))
+      .sort((a, b) => (b.instant === true) - (a.instant === true) || (Number(b.rating) || 0) - (Number(a.rating) || 0))
+      .slice(0, 3);
+    if (picks.length) return picks.map(p => ({ ...p, _needs: sub }));
+  }
+  return [];
 }
 
 /* ── Social proof stats ── */
@@ -9231,6 +9253,38 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                 })()}
               </div>
 
+              {/* The event day, in order: when each pro usually arrives for an
+                  event that starts at this time. A suggestion to agree with
+                  each pro in Messages, not a promise. */}
+              {startTime && cart.length > 0 && (() => {
+                const SETUP_MIN = { places:60, rentals:180, production:180, av:120, food:90, music:60, photo:30,
+                                    staff:60, beauty:180, transport:30, kids:30, logistics:240, other:60 };
+                const [h, m] = String(startTime).split(":").map(Number);
+                if (!Number.isFinite(h)) return null;
+                const start = h * 60 + (m || 0);
+                const fmt = (mins) => { const t = ((mins % 1440) + 1440) % 1440;
+                  return fmtTime12(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`); };
+                const rows = cart.map(v => ({ v, at: start - (SETUP_MIN[v.cat] ?? 60) }))
+                  .sort((a, b) => a.at - b.at);
+                return (
+                  <div style={{ border:"1.5px solid #000", borderRadius:10, padding:"10px 12px", margin:"0 0 12px" }}>
+                    <p style={{ margin:"0 0 6px", fontSize:13, fontWeight:800, color:"#000" }}>Your event day</p>
+                    {rows.map(({ v, at }) => (
+                      <div key={v.id} style={{ display:"grid", gridTemplateColumns:"72px 1fr", gap:8, fontSize:12.5, padding:"3px 0" }}>
+                        <span style={{ fontWeight:800 }}>{fmt(at)}</span>
+                        <span><span data-no-translate>{(v.name && v.name !== "Vendor") ? v.name : (v.serviceName || "Vendor")}</span> arrives to set up</span>
+                      </div>
+                    ))}
+                    <div style={{ display:"grid", gridTemplateColumns:"72px 1fr", gap:8, fontSize:12.5, padding:"3px 0" }}>
+                      <span style={{ fontWeight:800 }}>{fmt(start)}</span><span style={{ fontWeight:700 }}>Your event starts</span>
+                    </div>
+                    <p style={{ margin:"6px 0 0", fontSize:11.5, color:"#4B5260", lineHeight:1.5 }}>
+                      Usual arrival times. Agree the exact time with each pro in Messages.
+                    </p>
+                  </div>
+                );
+              })()}
+
               {(() => {
                 const conflicts = vendorsUnavailableOn(eventDate, startTime, endTime);
                 const blocked   = !!user && (!eventDate || conflicts.length > 0);
@@ -9417,7 +9471,9 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
   const picks = recs.slice(0, 3);
   return (
     <section aria-label="Three we know" style={{ border:"2px solid #000", borderRadius:6, padding:"16px 18px", marginBottom:20 }}>
-      <p style={{ margin:"0 0 2px", fontSize:16, fontWeight:800, color:"#000" }}>Your event still needs these</p>
+      <p style={{ margin:"0 0 2px", fontSize:16, fontWeight:800, color:"#000" }}>
+        {picks[0]._needs ? `Your checklist still needs ${subInfo(picks[0]._needs).label}.` : "Your event still needs these"}
+      </p>
       <p style={{ margin:"0 0 12px", fontSize:14, color:"#4B5260" }}>Here are three we know.</p>
       <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4 }}>
         {picks.map(v => {
@@ -13179,7 +13235,8 @@ export default function PlujApp() {
     setVendorPage(v);
   }
 
-  const recs = useMemo(() => getRecommendations(cart, activePackage, VENDORS), [cart, activePackage]);
+  const recs = useMemo(() => getRecommendations(cart, activePackage, dbVendors.length ? dbVendors : VENDORS),
+                       [cart, activePackage, dbVendors]);
 
   /* ── EMAIL LINK ──────────────────────────────────────────────────────────
      Ahead of the maintenance gate on purpose: confirming an address you
@@ -13698,7 +13755,10 @@ export default function PlujApp() {
                     return (
                       <button key={id} className={qEventType === id ? "on" : ""} aria-pressed={qEventType === id}
                         onClick={() => {
-                          setQEventType(qEventType === id ? "" : id);
+                          const off = qEventType === id;
+                          setQEventType(off ? "" : id);
+                          const pkg = EVENT_PACKAGES.find(p => p.id === id);
+                          if (off) setActivePackage(null); else if (pkg) handleSelectPackage(pkg);
                           requestAnimationFrame(() => {
                             const el = document.getElementById("results-top");
                             if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -13808,42 +13868,41 @@ export default function PlujApp() {
           )}
 
           {/* ── ACTIVE PACKAGE BANNER ── */}
-          {activePackage && activeCat !== "build" && !vendorPage && (
-            <div style={{ background: activePackage.color, borderRadius:14, padding:"12px 18px",
-                          marginBottom:20, border:`1.5px solid ${activePackage.accent}33`,
-                          display:"flex", alignItems:"center", justifyContent:"space-between",
-                          flexWrap:"wrap", gap:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ fontSize:22 }}>{activePackage.icon}</span>
-                <div>
-                  <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }}>
-                    Building: {activePackage.label}
+          {activePackage && activeCat !== "build" && !vendorPage && (() => {
+            /* The occasion's checklist, tied to booking: each service is
+               ticked once something in the cart covers it, and an open one
+               takes you straight to those vendors. */
+            const pool = dbVendors.length ? dbVendors : VENDORS;
+            const have = cartSubs(cart, pool);
+            const items = activePackage.subs.slice(0, 14);
+            const done = items.filter(x => have.has(x)).length;
+            return (
+              <section aria-label="Your checklist" style={{ border:"2px solid #000", borderRadius:6, padding:"14px 16px", marginBottom:20 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:12, flexWrap:"wrap", marginBottom:10 }}>
+                  <p style={{ margin:0, fontSize:16, fontWeight:800, color:"#000" }}>
+                    {`Your ${activePackage.label} checklist`}
                   </p>
-                  <p style={{ margin:0, fontSize:11, color:C.midGray }}>
-                    Suggested: {activePackage.checklist.slice(0,3).join(" · ")}{activePackage.checklist.length>3?` +${activePackage.checklist.length-3} more`:""}
-                  </p>
+                  <span style={{ fontSize:13, color:"#4B5260" }}>{`${done} of ${items.length} booked`}</span>
+                  <button onClick={() => setActivePackage(null)} className="btn"
+                    style={{ background:"#fff", border:"1.5px solid #000", borderRadius:99, padding:"6px 14px", fontSize:12.5, fontWeight:700, color:"#000" }}>
+                    Close checklist
+                  </button>
                 </div>
-              </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {activePackage.subs.map(s => {
-                  const count = cart.filter(v => VENDORS.find(vv=>vv.id===v.id)?.sub===s).length;
-                  return (
-                    <span key={s} style={{ fontSize:10, padding:"3px 9px", borderRadius:99, fontWeight:600,
-                                           background: count>0 ? C.greenSoft : "#fff",
-                                           color: count>0 ? C.green : C.lightGray,
-                                           border:`1px solid ${count>0 ? C.green+"44" : C.border}` }}>
-                      {count>0?"✓ ":""}{s.replace(/-/g," ")}
-                    </span>
-                  );
-                })}
-              </div>
-              <button onClick={() => setActivePackage(null)} className="btn"
-                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:99,
-                         padding:"4px 12px", fontSize:11, color:C.midGray }}>
-                Clear
-              </button>
-            </div>
-          )}
+                <div className="pills sm">
+                  {items.map(x => {
+                    const ok = have.has(x);
+                    const info = subInfo(x);
+                    return (
+                      <button key={x} className={ok ? "on" : ""} aria-pressed={ok}
+                        onClick={() => { if (!ok) { setActiveCat(info.cat); setActiveSub(x); } }}>
+                        {ok ? "✓ " : ""}{info.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })()}
 
 
 
