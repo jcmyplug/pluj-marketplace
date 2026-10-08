@@ -826,6 +826,15 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .crow > span:first-child { grid-column: 1 / -1; margin-bottom: -8px; }
   .crow.head > span:first-child { display: none; }
 }
+/* Event recaps */
+.recaps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+.recap-card { display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border: none; padding: 0; cursor: pointer; color: #000; }
+.recap-img { display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 4px; background: #F2F2F2; margin-bottom: 6px; }
+.recap-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 300ms ease; }
+.recap-card:hover .recap-img img { transform: scale(1.03); }
+.recap-title { font-family: var(--display); font-size: 24px; font-weight: 800; line-height: 1; }
+.recap-meta, .recap-by { font-size: 13px; color: #4B5260; }
+@media (prefers-reduced-motion: reduce) { .recap-card:hover .recap-img img { transform: none; } }
 /* Trust badges on cards: what PLUJ checked by hand. */
 .badge-chk { font-size: 11.5px; font-weight: 700; color: #000; border: 1px solid #000; border-radius: 999px; padding: 2px 8px; line-height: 1.4; }
 /* The PLUJ promise: one bordered block, the promise set big. */
@@ -1370,7 +1379,7 @@ const VENDORS = [
    The occasions a host can be planning. Vendors tag which they serve, and
    search matches host event-type → vendor tags. Ids are stable and stored in
    vendor_profiles.event_types. Kept in sync with the labels hosts pick. */
-const EVENT_TYPES = [
+export const EVENT_TYPES = [
   { id:"wedding",    icon:"💍", label:"Wedding" },
   { id:"quince",     icon:"👑", label:"Quinceañera / Sweet 16" },
   { id:"corporate",  icon:"💼", label:"Corporate Event" },
@@ -1827,6 +1836,8 @@ export const sb = (() => {
       order(col, { ascending = true } = {}) { _order = `&order=${col}.${ascending?"asc":"desc"}`; return this; },
       limit(n)       { _limit = `&limit=${n}`; return this; },
       single()       { _single = true; return this; },
+      /* A raw PostgREST filter, already encoded ("or=(a.eq.1,b.cs.%7B2%7D)"). */
+      filter(raw)    { _filters.push(raw); return this; },
 
       async get() {
         const q = _filters.length ? "?" + _filters.join("&") + `&select=${_select}` + _order + _limit
@@ -3642,6 +3653,7 @@ function parsePath(p) {
   const seg = String(p || "/").split("/").filter(Boolean);
   if (!seg.length) return { kind: "home" };
   if (seg[0] === "build") return { kind: "build" };
+  if (seg[0] === "event" && seg[1]) return { kind: "recap", id: decodeURIComponent(seg[1]) };
   if (seg[0] === "vendor" && seg[1]) {
     return { kind: "vendor", id: decodeURIComponent(seg[1]) };
   }
@@ -9506,6 +9518,128 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
   );
 }
 
+/* ─── EVENT RECAPS ───────────────────────────────────────────────────────────
+   A past event a pro posted, crediting the other PLUJ pros who worked it
+   (sql/2026-10-08-event-recaps.sql). Each one links to every credited pro, so
+   a good event sends hosts to all of them. Shown on the home page, on each
+   credited pro's profile, and at /event/<id>. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function fetchRecaps({ vendorId = null, id = null, limit = 12 } = {}) {
+  if (IS_PREVIEW) return [];
+  let q = sb.from("event_recaps").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (id) { if (!UUID_RE.test(id)) return []; q = q.eq("id", id); }
+  else if (vendorId) {
+    if (!UUID_RE.test(vendorId)) return [];
+    q = q.filter(`or=(vendor_id.eq.${vendorId},credited.cs.%7B${vendorId}%7D)`).eq("status", "published");
+  } else q = q.eq("status", "published");
+  const { data, error } = await q.get();
+  if (error) { console.warn("[PLUJ] recaps:", error); return []; }
+  return (data || []).map(r => ({ ...r, photos: parsePhotos(r.photos) }));
+}
+/* Business names for a set of vendor ids (public view only). */
+export async function vendorNames(ids) {
+  const list = [...new Set((ids || []).filter(x => UUID_RE.test(String(x))))];
+  if (IS_PREVIEW || !list.length) return {};
+  const { data } = await sb.from("vendor_public").select("id,business_name,biz_legal,category").in("id", list).get();
+  const out = {};
+  (data || []).forEach(v => { out[v.id] = { name: v.business_name || v.biz_legal || "PLUJ pro", cat: v.category }; });
+  return out;
+}
+export async function searchVendorsByName(text) {
+  const t = String(text || "").replace(/[*,()%]/g, " ").trim();
+  if (IS_PREVIEW || t.length < 2) return [];
+  const { data } = await sb.from("vendor_public").select("id,business_name,category")
+    .filter(`business_name=ilike.*${encodeURIComponent(t)}*`).limit(8).get();
+  return data || [];
+}
+export async function saveRecap(row, id = null) {
+  if (IS_PREVIEW) return { ok: true };
+  const res = id ? await sb.from("event_recaps").eq("id", id).update(row) : await sb.from("event_recaps").insert(row);
+  if (res.error) return { ok: false, error: res.error.message || "Couldn't save the event." };
+  return { ok: true };
+}
+export async function deleteRecap(id) {
+  if (IS_PREVIEW) return { ok: true };
+  const res = await sb.from("event_recaps").eq("id", id).delete();
+  return res.error ? { ok: false, error: res.error.message || "Couldn't delete it." } : { ok: true };
+}
+function recapMeta(r) {
+  const occ = EVENT_TYPES.find(t => t.id === r.occasion);
+  const when = r.event_date ? new Date(r.event_date + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
+  return [occ ? occ.label : null, r.city || null, when || null].filter(Boolean).join(" · ");
+}
+export function RecapCards({ recaps, names, onOpen }) {
+  if (!recaps || !recaps.length) return null;
+  return (
+    <div className="recaps">
+      {recaps.map(r => (
+        <button key={r.id} className="recap-card" onClick={() => onOpen(r)}>
+          <span className="recap-img"><img src={r.photos[0] || LISTING_PLACEHOLDER} alt="" loading="lazy" /></span>
+          <span className="recap-title" data-no-translate>{r.title}</span>
+          <span className="recap-meta">{recapMeta(r)}</span>
+          <span className="recap-by">
+            {`${1 + (r.credited || []).length} pro${(r.credited || []).length ? "s" : ""} · by `}
+            <span data-no-translate>{names[r.vendor_id]?.name || "a PLUJ pro"}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+export function RecapModal({ recap, names, onClose, onViewVendor }) {
+  const [photo, setPhoto] = useState(0);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!recap) return null;
+  const pros = [recap.vendor_id, ...(recap.credited || [])];
+  const link = `${SITE_ORIGIN}/event/${recap.id}`;
+  return (
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={recap.title}
+      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1400, display:"flex",
+               alignItems:"center", justifyContent:"center", padding:12 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background:"#fff", borderRadius:8, width:"100%", maxWidth:960, maxHeight:"94vh", overflowY:"auto" }}>
+        <div style={{ position:"relative", background:"#000" }}>
+          <img src={recap.photos[photo] || LISTING_PLACEHOLDER} alt=""
+            style={{ width:"100%", maxHeight:"58vh", objectFit:"contain", display:"block" }} />
+          <button onClick={onClose} className="btn" aria-label="Close"
+            style={{ position:"absolute", top:12, right:12, width:40, height:40, borderRadius:99, background:"#fff", color:"#000", fontSize:16 }}>✕</button>
+        </div>
+        {recap.photos.length > 1 && (
+          <div style={{ display:"flex", gap:6, padding:"8px 12px", overflowX:"auto" }}>
+            {recap.photos.map((p, i) => (
+              <button key={p} onClick={() => setPhoto(i)} className="btn" aria-label={`Photo ${i + 1}`}
+                style={{ padding:0, borderRadius:4, outline: i === photo ? "2px solid #000" : "none", flexShrink:0 }}>
+                <img src={p} alt="" style={{ width:64, height:48, objectFit:"cover", display:"block", borderRadius:4 }} />
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ padding:"18px 22px 24px" }}>
+          <h2 data-no-translate style={{ margin:"0 0 4px", fontSize:"clamp(30px,4vw,48px)", lineHeight:0.95 }}>{recap.title}</h2>
+          <p style={{ margin:"0 0 14px", fontSize:14, color:"#4B5260" }}>{recapMeta(recap)}</p>
+          {recap.story && <p data-no-translate style={{ margin:"0 0 18px", fontSize:15.5, lineHeight:1.65, color:"#222", maxWidth:"65ch", whiteSpace:"pre-wrap" }}>{recap.story}</p>}
+          <h3 style={{ margin:"0 0 8px", fontSize:16, fontWeight:800 }}>The pros on this event</h3>
+          <div className="pills sm" style={{ marginBottom:16 }}>
+            {pros.map(id => (
+              <button key={id} onClick={() => onViewVendor && onViewVendor(id)} data-no-translate>
+                {names[id]?.name || "PLUJ pro"}
+              </button>
+            ))}
+          </div>
+          <button className="btn" onClick={() => { try { navigator.clipboard.writeText(link); } catch { /* no clipboard */ } }}
+            style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
+            Copy link to this event
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── HOMEPAGE SECTIONS (hero supplement) ────────────────────────────────────── */
 function HowItWorks() {
   /* Three steps because there are three: choose, book, enjoy. Numbered
@@ -9619,7 +9753,7 @@ function SavedVendorsPanel({ userId, allCards }) {
 /* SecurityConfigPanel moved to src/dashboards/AdminPanel.jsx (23 Sep 2026) - loaded on demand. */
 /* AdminAccounts moved to src/dashboards/AdminPanel.jsx (23 Sep 2026) - loaded on demand. */
 /* AdminPanel moved to src/dashboards/AdminPanel.jsx (23 Sep 2026) - loaded on demand. */
-function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorReply, onAddToCart, inCart, onRequireAuth, isFav, onToggleFav }) {
+function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorReply, onAddToCart, inCart, onRequireAuth, isFav, onToggleFav, onOpenVendorId }) {
   if (!vendor) { if (onBack) onBack(); return null; }
 
   /* Always resolve to the clean vendor-account UUID. Some code paths carry a
@@ -9637,6 +9771,20 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
   const [services, setServices] = useState([]);
   const [selId,    setSelId]    = useState(vendor.serviceId || null);
   const [loadingV, setLoadingV] = useState(!!vendorId && !IS_PREVIEW);
+  /* Past events this pro posted or was credited on. */
+  const [pastEvents, setPastEvents] = useState([]);
+  const [pastNames,  setPastNames]  = useState({});
+  const [openPast,   setOpenPast]   = useState(null);
+  useEffect(() => {
+    let off = false;
+    fetchRecaps({ vendorId, limit: 6 }).then(async rs => {
+      if (off) return;
+      setPastEvents(rs);
+      const n = await vendorNames(rs.flatMap(r => [r.vendor_id, ...(r.credited || [])]));
+      if (!off) setPastNames(n);
+    });
+    return () => { off = true; };
+  }, [vendorId]);
 
   useEffect(() => {
     let cancel = false;
@@ -10152,6 +10300,17 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 ))}
               </div>
             </div>
+          )}
+
+          {pastEvents.length > 0 && (
+            <section aria-label="Past events" style={{ borderTop:"2px solid #000", paddingTop:14 }}>
+              <h2 style={{ margin:"0 0 12px", fontSize:28, lineHeight:1 }}>Past events</h2>
+              <RecapCards recaps={pastEvents} names={pastNames} onOpen={setOpenPast} />
+              {openPast && (
+                <RecapModal recap={openPast} names={pastNames} onClose={() => setOpenPast(null)}
+                  onViewVendor={(id) => { setOpenPast(null); if (id !== vendorId && onOpenVendorId) onOpenVendorId(id); }} />
+              )}
+            </section>
           )}
 
           {/* Reviews */}
@@ -12335,6 +12494,26 @@ export default function PlujApp() {
     window.addEventListener("pluj:find-replacement", on);
     return () => window.removeEventListener("pluj:find-replacement", on);
   }, []);
+  /* Event recaps: the latest on the home page, and /event/<id> links. */
+  const [homeRecaps, setHomeRecaps] = useState([]);
+  const [recapNames, setRecapNames] = useState({});
+  const [openRecap,  setOpenRecap]  = useState(null);
+  useEffect(() => {
+    const idsOf = rs => rs.flatMap(r => [r.vendor_id, ...(r.credited || [])]);
+    fetchRecaps({ limit: 6 }).then(async rs => {
+      setHomeRecaps(rs);
+      const n = await vendorNames(idsOf(rs));
+      setRecapNames(p => ({ ...p, ...n }));
+    });
+    if (BOOT_ROUTE.kind === "recap") {
+      fetchRecaps({ id: BOOT_ROUTE.id, limit: 1 }).then(async rs => {
+        if (!rs[0]) return;
+        const n = await vendorNames(idsOf(rs));
+        setRecapNames(p => ({ ...p, ...n }));
+        setOpenRecap(rs[0]);
+      });
+    }
+  }, []);
   const [authModal, setAuthModal] = useState(false);
   /* Password-recovery: set when arriving via a Supabase recovery email link */
   const [recoveryToken, setRecoveryToken] = useState(null);
@@ -12956,6 +13135,13 @@ export default function PlujApp() {
     setActiveCat(id); setActiveSub(null); setSearch(""); setVendorPage(null); setActivePackage(null);
     if (id==="build") { setWizStep(0); setWizAns({}); setWizDone(false); }
   }
+  /* Open a pro's profile from their vendor account id (recaps credit pros,
+     not listings): their first listing on the marketplace. */
+  function viewVendorById(id) {
+    const card = dbVendors.find(v => (v.vendorId || v.dbId) === id);
+    setOpenRecap(null);
+    if (card) { setVendorPage(card); window.scrollTo({ top: 0 }); }
+  }
   replacementRef.current = (d) => {
     const card = dbVendors.find(v => d.serviceId && v.serviceId === d.serviceId);
     setAccountOpen(false); setNotifOpen(false); setCartOpen(false);
@@ -13364,6 +13550,10 @@ export default function PlujApp() {
         />
       )}
 
+      {openRecap && (
+        <RecapModal recap={openRecap} names={recapNames} onClose={() => setOpenRecap(null)} onViewVendor={viewVendorById} />
+      )}
+
       {/* ── CART PANEL ─────────────────────────────────────────────── */}
       {cartOpen && (
         <CartPanel
@@ -13679,7 +13869,7 @@ export default function PlujApp() {
       {/* ── VENDOR PROFILE ─────────────────────────────────────────────── */}
       {vendorPage && (
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"32px 24px" }}>
-          <VendorProfile vendor={vendorPage} user={user} reviews={reviews}
+          <VendorProfile vendor={vendorPage} user={user} reviews={reviews} onOpenVendorId={viewVendorById}
             isFav={favorites.includes(vendorPage.id)}
             onToggleFav={handleToggleFav}
             onBack={()=>setVendorPage(null)}
@@ -14007,6 +14197,13 @@ export default function PlujApp() {
           {isHero && activeCat==="all" && !q && (
             <>
               <div style={{ marginTop:56 }}><HowItWorks /></div>
+              {homeRecaps.length > 0 && (
+                <section style={{ marginTop:24, marginBottom:56 }} aria-labelledby="recaps-h">
+                  <h2 id="recaps-h" style={{ fontSize:"clamp(36px,4.4vw,60px)", margin:"0 0 6px", lineHeight:0.95 }}>Real events by PLUJ pros</h2>
+                  <p style={{ margin:"0 0 20px", fontSize:16, color:"#333" }}>Every pro who worked each one is credited, so you can book the same team.</p>
+                  <RecapCards recaps={homeRecaps} names={recapNames} onOpen={setOpenRecap} />
+                </section>
+              )}
               <section style={{ marginTop:40 }}>
                 <h2 style={{ fontSize:"clamp(40px,5vw,68px)", margin:"0 0 22px" }}>The difference, line by line</h2>
                 <div className="compare" role="table" aria-label="PLUJ compared with typical event sites">

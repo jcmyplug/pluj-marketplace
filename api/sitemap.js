@@ -16,7 +16,8 @@ const SB_URL  = process.env.SUPABASE_URL      || process.env.REACT_APP_SUPABASE_
 const SB_ANON = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
   || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bXFnaHVkZmFrcGJicGxycWhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNjA1NTgsImV4cCI6MjA5NDczNjU1OH0.t3GgjjKy--BPMJ7Z5wPWB1UamG71F6FGzR_N2cfJpWw";
 
-const CATEGORIES = ["food", "music", "production", "logistics", "places", "rentals", "av", "other"];
+const CATEGORIES = ["places", "food", "music", "photo", "production", "rentals", "av", "staff",
+                    "beauty", "transport", "kids", "logistics", "other"];
 
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -43,6 +44,22 @@ async function vendorIds() {
   }
 }
 
+/* Event recaps (published, by approved pros): each has its own page. */
+async function recapIds() {
+  if (!SB_URL || !SB_ANON) return [];
+  try {
+    const r = await fetch(
+      SB_URL + "/rest/v1/event_recaps?select=id,updated_at&status=eq.published&order=updated_at.desc&limit=5000",
+      { headers: { apikey: SB_ANON, Authorization: "Bearer " + SB_ANON } }
+    );
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function handler(req, res) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
@@ -54,6 +71,10 @@ export default async function handler(req, res) {
     if (!v || !v.id) continue;
     const lastmod = v.created_at ? String(v.created_at).slice(0, 10) : "";
     urls.push(urlTag(SITE + "/vendor/" + encodeURIComponent(v.id), lastmod, "0.6"));
+  }
+  for (const e of await recapIds()) {
+    if (!e || !e.id) continue;
+    urls.push(urlTag(SITE + "/event/" + encodeURIComponent(e.id), e.updated_at ? String(e.updated_at).slice(0, 10) : "", "0.5"));
   }
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +

@@ -57,7 +57,193 @@ import {
   fmtHours,
   TIMED_CATEGORIES,
   getLegalMissing,
+  EVENT_TYPES,
+  fetchRecaps,
+  vendorNames,
+  searchVendorsByName,
+  saveRecap,
+  deleteRecap,
+  RecapCards,
+  RecapModal,
 } from "../PlujMarketplace.jsx";
+
+/* Past events (8 Oct 2026): a pro posts an event they worked, with photos,
+   and credits the other PLUJ pros on it. It shows on every credited pro's
+   profile and on the home page. sql/2026-10-08-event-recaps.sql */
+function RecapManager({ vendorId }) {
+  const blank = { title:"", occasion:"", event_date:"", city:"", story:"", photos:[], credited:[] };
+  const [list, setList]     = useState([]);
+  const [names, setNames]   = useState({});
+  const [form, setForm]     = useState(null);   // null = not editing; {..., id?}
+  const [busy, setBusy]     = useState(false);
+  const [err, setErr]       = useState("");
+  const [q, setQ]           = useState("");
+  const [hits, setHits]     = useState([]);
+  const [view, setView]     = useState(null);
+
+  async function load() {
+    const rs = await fetchRecaps({ vendorId, limit: 50 });
+    setList(rs);
+    setNames(await vendorNames(rs.flatMap(r => [r.vendor_id, ...(r.credited || [])])));
+  }
+  useEffect(() => { load(); }, [vendorId]);
+  useEffect(() => {
+    let off = false;
+    const t = setTimeout(async () => { const r = await searchVendorsByName(q); if (!off) setHits(r.filter(v => v.id !== vendorId)); }, 250);
+    return () => { off = true; clearTimeout(t); };
+  }, [q]);
+
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErr(""); };
+  async function addPhotos(e) {
+    const files = Array.from(e.target.files || []).slice(0, 12 - form.photos.length);
+    if (!files.length) return;
+    setBusy(true); setErr("");
+    const session = await loadSession();
+    const added = [];
+    for (const file of files) {
+      const { url, error } = await uploadVendorPhoto(vendorId, file, session?.access_token);
+      if (error) { setErr(error); break; }
+      if (url) added.push(url);
+    }
+    setForm(f => ({ ...f, photos: [...f.photos, ...added] }));
+    setBusy(false);
+  }
+  async function save() {
+    if (form.title.trim().length < 3) { setErr("Give the event a title, like \"Backyard 40th for 80 guests\"."); return; }
+    if (!form.photos.length) { setErr("Add at least one photo from the event."); return; }
+    setBusy(true);
+    const row = { vendor_id: vendorId, title: form.title.trim(), occasion: form.occasion || null,
+                  event_date: form.event_date || null, city: form.city.trim() || null,
+                  story: form.story.trim() || null, photos: form.photos, credited: form.credited };
+    const res = await saveRecap(row, form.id || null);
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    setForm(null); load();
+  }
+  async function remove(id) {
+    if (!window.confirm("Delete this event? It comes off your profile and the profiles of the pros you credited.")) return;
+    const res = await deleteRecap(id);
+    if (!res.ok) { setErr(res.error); return; }
+    load();
+  }
+
+  const F = { width:"100%", height:40, padding:"0 12px", border:`1px solid ${C.border}`, borderRadius:9, fontSize:13, boxSizing:"border-box", background:"#fff" };
+  const L = { display:"block", fontSize:11.5, fontWeight:700, color:C.midGray, margin:"10px 0 4px" };
+  const mine = list.filter(r => r.vendor_id === vendorId);
+  const creditedOn = list.filter(r => r.vendor_id !== vendorId);
+
+  return (
+    <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:"16px 18px" }}>
+      <h3 style={{ margin:"0 0 4px", fontSize:14, fontWeight:800 }}>Past events</h3>
+      <p style={{ margin:"0 0 12px", fontSize:12, color:C.midGray, lineHeight:1.55 }}>
+        Show hosts real events you worked. Credit the other PLUJ pros who were there: the event appears on their
+        profiles too and links back to yours, so a good event brings bookings to the whole team.
+      </p>
+      {err && <p style={{ margin:"0 0 10px", fontSize:12, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+
+      {!form ? (
+        <button onClick={() => setForm({ ...blank })} className="btn"
+          style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800, marginBottom:14 }}>
+          Add a past event
+        </button>
+      ) : (
+        <div style={{ border:"1.5px solid #000", borderRadius:10, padding:"6px 14px 14px", marginBottom:16 }}>
+          <label style={L}>Title *</label>
+          <input style={F} value={form.title} maxLength={120} onChange={e => set("title", e.target.value)} placeholder="e.g. Backyard 40th for 80 guests" />
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <div style={{ flex:"1 1 160px" }}>
+              <label style={L}>Occasion</label>
+              <select style={F} value={form.occasion} onChange={e => set("occasion", e.target.value)}>
+                <option value="">Choose…</option>
+                {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </div>
+            <div style={{ flex:"1 1 140px" }}>
+              <label style={L}>Date</label>
+              <input style={F} type="date" value={form.event_date} max={new Date().toISOString().slice(0,10)} onChange={e => set("event_date", e.target.value)} />
+            </div>
+            <div style={{ flex:"1 1 140px" }}>
+              <label style={L}>City</label>
+              <input style={F} value={form.city} onChange={e => set("city", e.target.value)} placeholder="Houston" />
+            </div>
+          </div>
+          <label style={L}>What happened <span style={{ fontWeight:400 }}>(optional)</span></label>
+          <textarea value={form.story} maxLength={2000} rows={3} onChange={e => set("story", e.target.value)}
+            placeholder="The setup, the menu, the moment everyone remembers."
+            style={{ ...F, height:"auto", padding:"10px 12px", resize:"vertical", fontFamily:"inherit" }} />
+          <label style={L}>Photos * <span style={{ fontWeight:400 }}>({form.photos.length}/12, the first is the cover; only photos you have the right to share)</span></label>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:6 }}>
+            {form.photos.map((p, i) => (
+              <span key={p} style={{ position:"relative" }}>
+                <img src={p} alt="" style={{ width:72, height:54, objectFit:"cover", borderRadius:4, display:"block" }} />
+                <button onClick={() => set("photos", form.photos.filter((_, j) => j !== i))} className="btn" aria-label="Remove photo"
+                  style={{ position:"absolute", top:-6, right:-6, width:22, height:22, borderRadius:99, background:"#000", color:"#fff", fontSize:11 }}>✕</button>
+              </span>
+            ))}
+          </div>
+          <input type="file" accept="image/*" multiple onChange={addPhotos} disabled={busy || form.photos.length >= 12} style={{ fontSize:12 }} />
+          <label style={L}>Credit the other PLUJ pros who worked it</label>
+          <input style={F} value={q} onChange={e => setQ(e.target.value)} placeholder="Type a business name" />
+          {hits.length > 0 && (
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:6 }}>
+              {hits.filter(h => !form.credited.includes(h.id)).map(h => (
+                <button key={h.id} className="btn" onClick={() => { set("credited", [...form.credited, h.id]); setNames(n => ({ ...n, [h.id]: { name: h.business_name } })); setQ(""); }}
+                  style={{ border:"1.5px solid #000", background:"#fff", borderRadius:99, padding:"5px 12px", fontSize:12, fontWeight:700 }}>
+                  + {h.business_name}
+                </button>
+              ))}
+            </div>
+          )}
+          {form.credited.length > 0 && (
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+              {form.credited.map(id => (
+                <span key={id} style={{ background:"#000", color:"#fff", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:700 }}>
+                  {names[id]?.name || "PLUJ pro"}{" "}
+                  <button className="btn" onClick={() => set("credited", form.credited.filter(x => x !== id))} aria-label="Remove credit"
+                    style={{ background:"none", color:"#fff", fontSize:12, padding:"0 2px" }}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ display:"flex", gap:8, marginTop:14 }}>
+            <button onClick={save} disabled={busy} className="btn"
+              style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
+              {busy ? "Saving…" : form.id ? "Save changes" : "Post event"}
+            </button>
+            <button onClick={() => { setForm(null); setErr(""); }} className="btn"
+              style={{ background:"#fff", color:"#000", border:"1.5px solid #000", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:700 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mine.length > 0 && (
+        <>
+          <p style={{ margin:"4px 0 8px", fontSize:13, fontWeight:800 }}>Posted by you</p>
+          <RecapCards recaps={mine} names={names} onOpen={setView} />
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:8 }}>
+            {mine.map(r => (
+              <span key={r.id} style={{ fontSize:12 }}>
+                <button className="btn" onClick={() => setForm({ ...blank, ...r, occasion: r.occasion || "", event_date: r.event_date || "", city: r.city || "", story: r.story || "" })}
+                  style={{ background:"none", textDecoration:"underline", fontSize:12, fontWeight:700 }}>Edit “{r.title}”</button>
+                <button className="btn" onClick={() => remove(r.id)}
+                  style={{ background:"none", color:"#B91C1C", textDecoration:"underline", fontSize:12, marginLeft:6 }}>Delete</button>
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+      {creditedOn.length > 0 && (
+        <>
+          <p style={{ margin:"16px 0 8px", fontSize:13, fontWeight:800 }}>Pros who credited you</p>
+          <RecapCards recaps={creditedOn} names={names} onOpen={setView} />
+        </>
+      )}
+      {view && <RecapModal recap={view} names={names} onClose={() => setView(null)} />}
+    </div>
+  );
+}
 
 function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
   const [mine,   setMine]   = useState(undefined);   // undefined = loading
@@ -1215,7 +1401,7 @@ function VendorDashboard({ user, onLogout }) {
   );
 
   const TABS = [["overview","Overview"],["requests","Requests"],["inquiries","Messages"],
-                ["listings","My listings"],["business","Business profile"],
+                ["listings","My listings"],["events","Past events"],["business","Business profile"],
                 ["reviews","Reviews"],["calendar","Availability"],["notifs","Notifications"],
                 ["account","Account settings"]];
 
@@ -1537,6 +1723,8 @@ function VendorDashboard({ user, onLogout }) {
               <ServicesManager vendorId={user.id} onOpenBusiness={() => setEditing(true)} legalKey={listing} />
             </div>
           )}
+
+          {tab === "events" && <RecapManager vendorId={user.id} />}
 
           {/* BUSINESS PROFILE — who you are. Nothing here repeats a listing field. */}
           {tab === "business" && (
