@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
         const { data: plan } = await db().from("booking_payment_plans").select("*").eq("booking_id", body.booking_id).single();
         if (!plan) throw new PaymentsError("No payments on this booking.");
         const { data: pays } = await db().from("booking_payments").select("*")
-          .eq("booking_id", body.booking_id).eq("status", "paid").order("paid_at", { ascending: false });
+          .eq("booking_id", body.booking_id).eq("status", "paid").order("due_at", { ascending: false });   // locked parts first
         const refundable = (pays || []).reduce((n: number, p: any) => n + chargedCents(p) - (p.refunded_cents || 0), 0);
         let left = body.amount_cents == null ? refundable : Math.min(Number(body.amount_cents), refundable);
         if (!(left > 0)) throw new PaymentsError("There is nothing left to refund.");
