@@ -509,7 +509,7 @@ function AdminPayments({ onChanged }) {
               if (!on && st && !st.configured) { setErr("Connect Stripe first (add the secret key), then turn payments on."); return; }
               const q = on
                 ? "Turn payments OFF?\n\nNew bookings won't be charged. Payments already scheduled on existing bookings still run."
-                : `Turn payments ON${st && st.mode === "live" ? " with REAL money" : " (Stripe TEST mode)"}?\n\nFrom now on, vendors need their own Stripe account to confirm bookings. The host pays in full upfront into the vendor's locked Stripe balance, released 30% a week before, 50% the day after and 20% when the host approves. PLUJ only collects its service fees.\n\nOnly turn on LIVE payments after Stripe confirms vendors can't pay themselves out.`;
+                : `Turn payments ON${st && st.mode === "live" ? " with REAL money" : " (Stripe TEST mode)"}?\n\nFrom now on, vendors need their own Stripe account to confirm bookings. The host pays in full upfront into the vendor's locked Stripe balance, released in parts (30/50/20; 30/20/50 and 30/40/30 on a vendor's first two bookings). PLUJ only collects its service fees.\n\nOnly turn on LIVE payments after Stripe confirms vendors can't pay themselves out.`;
               if (!window.confirm(q)) return;
               act("sw", () => setPaymentsEnabled(!on), on ? "Payments turned off." : "Payments turned on.");
             }}>

@@ -9,9 +9,11 @@
      "application fees". The vendor's automatic payouts are switched off
      (manual payouts), so the money stays locked in the vendor's Stripe
      balance, and PLUJ pays it out to the vendor's bank in three parts:
-       retainer   30%  7 days before the event
-       event_day  50%  the day after the event
-       final      20%  when the host approves it, or 3 days after the event
+       retainer   7 days before the event
+       event_day  the day after the event
+       final      when the host approves it, or 3 days after the event
+     The parts are 30/50/20, except for new vendors: 30/20/50 on their
+     first booking and 30/40/30 on their second (set by the database).
      A problem report or a chargeback stops every release still to come, so
      the locked money is there for refunds. Vendor accounts are created with
      Stripe liable for their losses and the vendor paying Stripe's fees, so
@@ -211,7 +213,7 @@ export async function verifyStripeSignature(payload: string, header: string | nu
 
 // ── Payment bookkeeping ──────────────────────────────────────────────────────
 export const KIND_LABEL: Record<string, string> = {
-  retainer: "First release (30%)", event_day: "Second release (50%)", final: "Final release (20%)",
+  retainer: "First release", event_day: "Second release", final: "Final release",
 };
 
 /* Everything the host is charged for one part. */
@@ -270,13 +272,15 @@ export async function markPlanPaid(bookingId: string, paymentIntentId: string, a
   if (plan) {
     const svc = booking?.service_name || "your booking";
     const total = money(rows.reduce((n: number, r: any) => n + r.amount_cents, 0));
+    const pct = (k: string) => Number((rows.find((r: any) => r.kind === k) || {}).percent || 0);
+    const parts = `${pct("retainer")}% a week before the event, ${pct("event_day")}% the day after, `
+                + `and ${pct("final")}% when the host approves (or 3 days after)`;
     await notify(plan.vendor_id, "payment_received", "✅ Paid in full — booking secured",
       `The host paid ${total} for ${svc} on ${booking?.event_date || "the event date"}. It is locked in your Stripe balance `
-      + "and PLUJ releases it to your bank in parts: 30% a week before the event, 50% the day after, and 20% when the host approves (or 3 days after).",
-      bookingId);
+      + `and PLUJ releases it to your bank in parts: ${parts}.`, bookingId);
     await notify(plan.host_id, "payment_received", "✅ Paid in full — your date is secured",
-      `You paid ${money(chargedCents({ amount_cents: rows.reduce((n: number, r: any) => n + chargedCents(r), 0) }))} for ${svc}. `
-      + "The vendor can't touch it yet: it is released in parts, and the last 20% only when you approve it after the event. "
+      `You paid ${money(rows.reduce((n: number, r: any) => n + chargedCents(r), 0))} for ${svc}. `
+      + `The vendor can't touch it yet: it is released in parts, and the last ${pct("final")}% only when you approve it after the event. `
       + "If something goes wrong, press Report a problem and everything not yet released is frozen.", bookingId);
   }
   // Anything already due (an event less than a week away): release it now.
@@ -437,8 +441,11 @@ export async function releaseDue(bookingId: string, opts: { force?: boolean } = 
 }
 
 /* Refund what the cancellation rules say. The refund comes out of the
-   vendor's Stripe balance, where the locked money is; PLUJ's service fees
-   are not returned. Called by the scheduler for plans with
+   vendor's Stripe balance, where the locked money is. When the HOST
+   cancelled, PLUJ keeps only the host's 1% service fee: the vendor's 3% fee
+   on the refunded share goes back to the vendor (an application fee refund,
+   from fees PLUJ received on this payment). When the vendor cancelled, PLUJ
+   keeps its fees. Called by the scheduler for plans with
    refund_state = 'pending'. */
 export async function runPendingRefund(plan: any) {
   const { data: pays } = await db().from("booking_payments").select("*")
@@ -448,15 +455,29 @@ export async function runPendingRefund(plan: any) {
     for (const p of pays || []) {
       const charged = chargedCents(p);
       let want = plan.refund_less_fees
-        ? charged - (p.stripe_fee_cents || 0) - (p.platform_fee_cents || 0)
+        ? charged - (p.stripe_fee_cents || 0) - (p.host_service_fee_cents || 0)   // less the card fee and PLUJ's 1%
         : Math.round(charged * Number(plan.refund_percent || 0) / 100);
       want = Math.min(want, charged - (p.refunded_cents || 0));
       if (want <= 0 || !p.stripe_payment_intent_id || !p.stripe_account_id) continue;
       await stripe("POST", "/refunds", { payment_intent: p.stripe_payment_intent_id, amount: want,
         metadata: { booking_id: plan.booking_id, payment_id: p.id, reason: "cancellation" } },
         `pluj-refund-${p.id}-${want}`, p.stripe_account_id);
+      let feeBack = 0;
+      if (plan.cancelled_by === "customer" && p.stripe_charge_id) {
+        const vendorFee = Math.max(0, (p.platform_fee_cents || 0) - (p.host_service_fee_cents || 0));
+        feeBack = Math.round(vendorFee * Math.min(100, Number(plan.refund_percent || 0)) / 100);
+        if (feeBack > 0) {
+          const ch = await stripe("GET", `/charges/${p.stripe_charge_id}`, {}, undefined, p.stripe_account_id);
+          const feeId = typeof ch.application_fee === "string" ? ch.application_fee : ch.application_fee?.id;
+          if (feeId) {
+            await stripe("POST", `/application_fees/${feeId}/refunds`, { amount: feeBack,
+              metadata: { booking_id: plan.booking_id, payment_id: p.id, reason: "host cancelled" } },
+              `pluj-feeback-${p.id}-${feeBack}`);
+          } else feeBack = 0;
+        }
+      }
       await db().from("booking_payments").update({ refunded_cents: (p.refunded_cents || 0) + want,
-        updated_at: new Date().toISOString() }).eq("id", p.id);
+        platform_fee_cents: (p.platform_fee_cents || 0) - feeBack, updated_at: new Date().toISOString() }).eq("id", p.id);
       total += want;
     }
     await db().from("booking_payment_plans").update({ refund_state: "done", last_error: null,
