@@ -2009,7 +2009,10 @@ const LISTING_PLACEHOLDER = "https://images.unsplash.com/photo-1511795409834-ef0
    defensively so listings never fall back to the placeholder by mistake. */
 /* ── Service pricing options (packages) ──────────────────────────────────────
    Stored as JSON on vendor_services.packages:
-     [{ name, description, price }, ...]
+     [{ name, description, price, hours, requirements }, ...]
+   description   what's included
+   hours         how long the option lasts (music, rentals, food trucks…), or null
+   requirements  what the host must provide or know (power, space, access…)
    A price of null / "" / 0 means the vendor hasn't finished that option, so it
    stays hidden from customers — visiblePackages() is the single gate for that
    rule, used by every customer-facing surface. */
@@ -2023,8 +2026,27 @@ export function parsePackages(raw) {
     name:        (p.name || "").toString(),
     description: (p.description || "").toString(),
     price:       p.price === "" || p.price == null ? null : Number(p.price),
+    hours:       p.hours === "" || p.hours == null || !(Number(p.hours) > 0) ? null : Number(p.hours),
+    requirements:(p.requirements || "").toString(),
   }));
 }
+
+/* "4 hours", "1 day", "3 days", "1.5 hours". Up to 23 hours reads as hours. */
+export function fmtHours(h) {
+  const n = Number(h);
+  if (!(n > 0)) return "";
+  if (n >= 24 && n % 24 === 0) { const d = n / 24; return d === 7 ? "1 week" : `${d} day${d === 1 ? "" : "s"}`; }
+  return `${n} hour${n === 1 ? "" : "s"}`;
+}
+
+/* How many subcategories a listing may pick. Rental companies usually rent
+   many kinds of things, so Rentals has no practical cap; elsewhere 3 keeps
+   the filters meaningful. The database trigger applies the same rule. */
+export function subcatMax(category) { return category === "rentals" ? 20 : 3; }
+
+/* Categories where time is part of the offer (a set, a rental period, a
+   truck's service window). The editor asks for it first on these. */
+export const TIMED_CATEGORIES = ["music", "rentals", "food", "av", "logistics", "production", "other"];
 
 /* True when an option is complete enough to show a customer. */
 function packageHasPrice(p) {
@@ -2187,11 +2209,11 @@ export async function saveService(vendorId, svc) {
   const row = {
     vendor_id:    vendorId,
     category:     svc.category || "food",
-    /* Up to three, within this listing's category. The database trigger drops
-       blanks, de-duplicates, caps at 3 and mirrors the first entry back into
+    /* Up to three (any number for Rentals), within this listing's category.
+       The database trigger drops blanks, de-duplicates, caps and mirrors the first entry back into
        `subcategory`, so we deliberately do not repeat that logic here. */
     subcategories: Array.isArray(svc.subcategories)
-                     ? svc.subcategories.filter(Boolean).slice(0, 3)
+                     ? svc.subcategories.filter(Boolean).slice(0, subcatMax(svc.category))
                      : (svc.subcategory ? [svc.subcategory] : []),
     subcategory:  svc.subcategory || null,
     name:         svc.name || null,
@@ -2203,6 +2225,11 @@ export async function saveService(vendorId, svc) {
        so the label and the numbers can never drift apart. */
     capacity_min: toGuestCount(svc.capacity_min),
     capacity_max: toGuestCount(svc.capacity_max),
+    /* How long the starting price lasts, and what each extra hour costs. */
+    duration_hours:   svc.duration_hours === "" || svc.duration_hours == null || !(Number(svc.duration_hours) > 0)
+                        ? null : Number(svc.duration_hours),
+    extra_hour_price: svc.extra_hour_price === "" || svc.extra_hour_price == null || !(Number(svc.extra_hour_price) >= 0)
+                        ? null : Number(svc.extra_hour_price),
     photos:       svc.photos || [],
     /* Keep incomplete options — they stay private until priced. */
     packages:     parsePackages(svc.packages),
@@ -2462,6 +2489,18 @@ async function saveMyListing(vendorId, patch) {
   }
   return { ok: true, error: null };
 }
+
+/* The legal information still missing before this vendor may post a listing
+   (empty = complete). The database refuses a listing while anything is
+   missing; this is only so the dashboard can say so before they start. */
+export async function getLegalMissing(vendorId) {
+  if (IS_PREVIEW || !vendorId) return [];
+  const { data, error } = await sb.rpc("vendor_legal_missing", { p_vendor: vendorId });
+  if (error) { console.warn("[PLUJ] vendor_legal_missing:", error); return null; }
+  return Array.isArray(data) ? data : [];
+}
+
+export const BIZ_TYPES = ["Sole proprietor", "LLC", "Corporation", "Partnership", "Nonprofit"];
 
 /* Uploads an image to Supabase Storage bucket "vendor-photos" and returns its
    public URL. Requires the bucket to exist and be public (see setup SQL). */
@@ -6322,9 +6361,21 @@ export function AvailabilityCalendar({ vendorId }) {
   const [loading, setLoading] = useState(true);
   const [saved,   setSaved]   = useState(false);
 
+  /* The vendor's listings and the weekdays each one works, so the calendar
+     shows days nobody works as "Off" without the vendor blocking every
+     Tuesday by hand. A listing with no days marked hasn't said, so it counts
+     as working every day. */
+  const [svcs,    setSvcs]    = useState([]);
+  const [focus,   setFocus]   = useState("all");   // "all" or a listing id
   useEffect(() => {
     getVendorAvailability(vendorId).then(a => { setAvail(a); setLoading(false); });
+    getMyServices(vendorId).then(list => setSvcs(Array.isArray(list) ? list.filter(x => x.active !== false) : []));
   }, [vendorId]);
+  const daysOf = (svc) => { const d = parseEventTypes(svc.avail_days); return d.length ? d : AVAIL_DAYS; };
+  const shown = focus === "all" ? svcs : svcs.filter(x => x.id === focus);
+  const workDays = shown.length ? new Set(shown.flatMap(daysOf)) : new Set(AVAIL_DAYS);
+  /* getDay(): 0 = Sunday; AVAIL_DAYS starts on Monday. */
+  const dayKey = (y, m, d) => AVAIL_DAYS[(new Date(y, m, d).getDay() + 6) % 7];
 
   async function saveAvail(updated) {
     setAvail(updated);
@@ -6360,12 +6411,48 @@ export function AvailabilityCalendar({ vendorId }) {
     <div>
       <p style={{ margin:"0 0 8px", fontSize:11, color:C.midGray, lineHeight:1.6 }}>
         Set your availability so clients know when you're open to book.
-        <strong> Tap a date</strong> to toggle blocked / open.
+        <strong> Tap a date</strong> to toggle blocked / open. Days none of your listings work are shown as
+        <strong> Off</strong> automatically — change them in each listing's "When is this service offered?".
       </p>
+
+      {/* Working days per listing, each one named, so a vendor with several
+          listings can see which works when. */}
+      {svcs.length > 0 && (
+        <div style={{ background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:10, padding:"9px 11px", marginBottom:12 }}>
+          <p style={{ margin:"0 0 6px", fontSize:10.5, fontWeight:800, color:C.midGray, textTransform:"uppercase", letterSpacing:"0.05em" }}>
+            Working days by listing
+          </p>
+          {svcs.map((x, i) => {
+            const d = parseEventTypes(x.avail_days);
+            const on = focus === x.id;
+            return (
+              <button key={x.id} type="button" className="btn" onClick={() => setFocus(on ? "all" : x.id)}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", textAlign:"left",
+                         padding:"5px 6px", borderRadius:8, cursor:"pointer", marginTop: i ? 3 : 0,
+                         border:`1.5px solid ${on ? C.orange : "transparent"}`, background: on ? "#FFF7ED" : "transparent" }}>
+                <span style={{ flex:"1 1 120px", minWidth:0, fontSize:11.5, fontWeight:800, color:C.black,
+                               whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {i + 1}. {x.name || x.service_type || "Listing"}
+                </span>
+                <span style={{ display:"flex", gap:3 }}>
+                  {AVAIL_DAYS.map(k => {
+                    const w = !d.length || d.includes(k);
+                    return <span key={k} style={{ width:26, textAlign:"center", fontSize:9.5, fontWeight:800, borderRadius:5, padding:"2px 0",
+                                                  background: w ? "#DCFCE7" : "#F3F4F6", color: w ? "#065F46" : "#B0B0B0" }}>{k.slice(0, 2)}</span>;
+                  })}
+                </span>
+              </button>
+            );
+          })}
+          <p style={{ margin:"6px 0 0", fontSize:10, color:C.lightGray }}>
+            {focus === "all" ? "Tap a listing to see only its days on the calendar." : "Showing one listing's days. Tap it again to see all."}
+          </p>
+        </div>
+      )}
 
       {/* Legend */}
       <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-        {[["#F0FDF4","#065F46","✓ Available"],["#FEF2F2","#EF4444","✗ Blocked"],["#EFF6FF","#1D4ED8","✓ Confirmed"]].map(([bg,c,l]) => (
+        {[["#F0FDF4","#065F46","✓ Available"],["#FEF2F2","#EF4444","✗ Blocked"],["#EFF6FF","#1D4ED8","✓ Confirmed"],["#F3F4F6","#9CA3AF","Off (not a working day)"]].map(([bg,c,l]) => (
           <div key={l} style={{ display:"flex", alignItems:"center", gap:5 }}>
             <div style={{ width:14, height:14, borderRadius:4, background:bg, border:`1.5px solid ${c}` }} />
             <span style={{ fontSize:10, color:C.midGray }}>{l}</span>
@@ -6401,13 +6488,16 @@ export function AvailabilityCalendar({ vendorId }) {
           const isBlocked   = avail.blocked.includes(dateStr);
           const isConfirmed = avail.confirmed.includes(dateStr);
           const isPast      = new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const isOff       = !isConfirmed && !isBlocked && !workDays.has(dayKey(year, month, day));
           return (
-            <button key={day} onClick={() => !isPast && toggleDate(dateStr)} className="btn"
+            <button key={day} onClick={() => !isPast && !isOff && toggleDate(dateStr)} className="btn"
+              title={isOff ? "Off — none of these listings work this weekday" : undefined}
               style={{ padding:"6px 0", borderRadius:8, textAlign:"center", fontSize:11, fontWeight:700,
-                       border:`1.5px solid ${isConfirmed ? "#93C5FD" : isBlocked ? "#FCA5A5" : "#E5E7EB"}`,
-                       background: isConfirmed ? "#EFF6FF" : isBlocked ? "#FEF2F2" : "#F0FDF4",
-                       color: isConfirmed ? "#1D4ED8" : isBlocked ? "#EF4444" : "#065F46",
-                       opacity: isPast ? 0.35 : 1, cursor: isPast ? "default" : "pointer",
+                       border:`1.5px solid ${isConfirmed ? "#93C5FD" : isBlocked ? "#FCA5A5" : isOff ? "#E5E7EB" : "#E5E7EB"}`,
+                       background: isConfirmed ? "#EFF6FF" : isBlocked ? "#FEF2F2" : isOff ? "#F3F4F6" : "#F0FDF4",
+                       color: isConfirmed ? "#1D4ED8" : isBlocked ? "#EF4444" : isOff ? "#B0B0B0" : "#065F46",
+                       textDecoration: isOff ? "line-through" : "none",
+                       opacity: isPast ? 0.35 : 1, cursor: isPast || isOff ? "default" : "pointer",
                        transition:"all 0.1s ease" }}>
               {day}
             </button>
@@ -9117,6 +9207,10 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
   const priceLabel = pickedPkg ? "$" + pickedPkg.price.toLocaleString()
                    : (basePrice ? "$" + basePrice.toLocaleString() : (vendor.price || "Contact for pricing"));
 
+  /* The parent knows only whether the listing that opened this page is in
+     the cart; another listing picked on the page isn't, yet. */
+  const inCartHere = inCart && (!selService || !vendor.serviceId || selService.id === vendor.serviceId);
+
   /* Build the cart item for the currently-selected offering. */
   function offeringForCart() {
     const svcLabel = selService ? serviceLabel(selService) : (vendor.serviceName || vendor.type || "");
@@ -9126,8 +9220,14 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
     const bizName = (full?.business_name || full?.biz_legal)
                   || (vendor.name && vendor.name !== "Vendor" && vendor.name !== "New vendor" ? vendor.name : "")
                   || disp.name;
+    /* The page can be switched to another of the vendor's listings, so the
+       cart item is built from the listing on screen (its days, hours, limits
+       and options), not from the card that opened the page. */
+    const base = (selService && full && selService.id !== vendor.serviceId)
+      ? { ...vendor, ...dbServiceToCard(selService, { ...full, id: vendorId }) }
+      : vendor;
     return {
-      ...vendor,
+      ...base,
       vendorId:    vendorId,                       // clean account id (prefix-stripped)
       dbId:        vendorId,
       name:        bizName || "Vendor",
@@ -9322,6 +9422,56 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
         </div>
       </div>
 
+      {/* Every listing this vendor has, each named on its own, so a vendor with
+          a DJ listing and a photo-booth listing shows two clearly separate
+          things. Tapping one switches the whole page to it. */}
+      {services.length > 1 && (
+        <div style={{ marginBottom:18 }}>
+          <p style={{ margin:"0 0 8px", fontSize:11, fontWeight:800, color:C.midGray,
+                      textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            {services.length} listings by {disp.name}
+          </p>
+          <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
+            {services.map((s, i) => {
+              const on = s.id === selId;
+              const pic = parsePhotos(s.photos)[0];
+              const cheapest = cheapestPackage(s.packages);
+              const price = cheapest ? `From $${cheapest.price.toLocaleString()}`
+                          : (s.price_value != null ? `$${Number(s.price_value).toLocaleString()}` : "Contact for pricing");
+              return (
+                <button key={s.id} type="button" className="btn"
+                  onClick={() => { setSelId(s.id); track("vendor_listing_switched", {}); }}
+                  aria-pressed={on ? "true" : "false"}
+                  style={{ flex:"0 0 auto", width:210, textAlign:"left", display:"flex", gap:9, alignItems:"center",
+                           padding:"8px 10px", borderRadius:12, cursor:"pointer",
+                           border:`1.5px solid ${on ? C.orange : C.border}`,
+                           background: on ? "#FFF7ED" : "#fff" }}>
+                  {pic
+                    ? <img src={pic} alt="" style={{ width:42, height:42, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
+                    : <span style={{ width:42, height:42, borderRadius:8, background:"#F3F4F6", flexShrink:0,
+                                     display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
+                        {(CATEGORIES.find(c => c.id === s.category) || {}).icon || "🏪"}
+                      </span>}
+                  <span style={{ minWidth:0 }}>
+                    <span style={{ display:"block", fontSize:10, fontWeight:800, color: on ? C.orange : C.lightGray }}>
+                      Listing {i + 1}{on ? " · viewing" : ""}
+                    </span>
+                    <span style={{ display:"block", fontSize:12.5, fontWeight:800, color:C.black,
+                                   whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                      {serviceLabel(s)}
+                    </span>
+                    <span style={{ display:"block", fontSize:10.5, color:C.midGray,
+                                   whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                      {catLabelOf(s.category)} · {price}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Photo gallery */}
       {/* Every image here sits absolutely inside a box of a known size. Left in
           normal flow, `img { height: 100% }` inside a wrapper whose own height
@@ -9429,8 +9579,43 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.7 }}>{disp.serviceAreas || disp.city || "Houston, TX"}</p>
               </div>
               <div>
-                <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:800, color:C.midGray, textTransform:"uppercase", letterSpacing:"0.06em" }}>🗓 Schedule</p>
-                <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.7 }}>{vendor.schedule || "Contact for availability"}</p>
+                <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:800, color:C.midGray, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                  🗓 Days {selService ? "this listing works" : "worked"}
+                </p>
+                {(() => {
+                  /* The days the vendor marked on THIS listing. A listing with no
+                     days marked hasn't said, so it isn't shown as closed. */
+                  const days   = selService ? parseEventTypes(selService.avail_days) : parseEventTypes(vendor.availDays);
+                  const blocks = selService ? parseEventTypes(selService.avail_blocks) : parseEventTypes(vendor.availBlocks);
+                  if (!days.length) {
+                    return <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.7 }}>
+                      {(selService && selService.schedule) || vendor.schedule || "Ask the vendor"}
+                    </p>;
+                  }
+                  return (
+                    <>
+                      <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                        {AVAIL_DAYS.map(d => {
+                          const on = days.includes(d);
+                          return (
+                            <span key={d} title={on ? "Works this day" : "Doesn't work this day"}
+                              style={{ minWidth:34, textAlign:"center", padding:"4px 0", borderRadius:7, fontSize:11, fontWeight:800,
+                                       background: on ? C.greenSoft : "#F3F4F6", color: on ? "#065F46" : C.lightGray,
+                                       border:`1px solid ${on ? "#A7F3D0" : C.border}`,
+                                       textDecoration: on ? "none" : "line-through" }}>
+                              {d}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      {blocks.length > 0 && (
+                        <p style={{ margin:"6px 0 0", fontSize:12, color:C.midGray, lineHeight:1.6 }}>
+                          {TIME_BLOCKS.filter(([id]) => blocks.includes(id)).map(([, l]) => l).join(" · ")}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             {disp.travelMiles && (
@@ -9658,6 +9843,20 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             <p style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:800, color:C.black, margin:"0 0 4px" }}>
               {priceLabel}
             </p>
+            {selService && Number(selService.duration_hours) > 0 && !pickedPkg?.hours && (
+              <p style={{ fontSize:12, color:C.black, fontWeight:700, margin:"0 0 4px" }}>
+                ⏱ Includes {fmtHours(selService.duration_hours)}
+                {selService.extra_hour_price != null && Number(selService.extra_hour_price) > 0
+                  ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour ${Number(selService.extra_hour_price).toLocaleString()}</span> : null}
+              </p>
+            )}
+            {pickedPkg?.hours > 0 && (
+              <p style={{ fontSize:12, color:C.black, fontWeight:700, margin:"0 0 4px" }}>
+                ⏱ {fmtHours(pickedPkg.hours)}
+                {selService && Number(selService.extra_hour_price) > 0
+                  ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour ${Number(selService.extra_hour_price).toLocaleString()}</span> : null}
+              </p>
+            )}
             <p style={{ fontSize:11, color:C.lightGray, margin:"0 0 16px" }}>Prices vary by event size and date</p>
 
             {/* Pricing options — only ones the vendor has priced are listed */}
@@ -9682,9 +9881,18 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                             ${p.price.toLocaleString()}
                           </span>
                         </div>
+                        {p.hours > 0 && (
+                          <p style={{ margin:"3px 0 0", fontSize:11, color:C.black, fontWeight:700 }}>⏱ {fmtHours(p.hours)}</p>
+                        )}
                         {p.description && (
                           <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
-                            {p.description}
+                            <strong style={{ color:C.black }}>Included:</strong> {p.description}
+                          </p>
+                        )}
+                        {p.requirements && (
+                          <p style={{ margin:"4px 0 0", fontSize:11, color:"#92400E", lineHeight:1.5,
+                                      background:"#FFFBEB", borderRadius:7, padding:"4px 7px" }}>
+                            <strong>Needs from you:</strong> {p.requirements}
                           </p>
                         )}
                       </button>
@@ -9727,13 +9935,13 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             <button onClick={() => {
                 if (!user || user.type === "guest") { onRequireAuth?.(); return; }
                 if (user.blocked) { window.alert("Your account is blocked.\n\n" + (user.blockedReason || "Contact support for details.")); return; }
-                if (!inCart) onAddToCart(offeringForCart());
+                if (!inCartHere) onAddToCart(offeringForCart());
               }} className="btn"
               style={{ width:"100%", padding:"13px 0", borderRadius:13, border:"none",
-                       background: inCart ? "#F3F4F6" : C.orange,
-                       color: inCart ? C.midGray : "#fff",
+                       background: inCartHere ? "#F3F4F6" : C.orange,
+                       color: inCartHere ? C.midGray : "#fff",
                        fontSize:14, fontWeight:800, marginBottom:8,
-                       boxShadow: inCart ? "none" : C.shadowButton }}>
+                       boxShadow: inCartHere ? "none" : C.shadowButton }}>
               {/* A guest is NOT signed out - the header says "Guest" and offers
                   "Log out" - so telling them to log in is a contradiction they
                   cannot act on. They do not need to log in, they need an
@@ -9741,7 +9949,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   disagreed with it. */}
               {!user ? "🔒 Log in to book"
                 : user.type === "guest" ? "🔒 Sign up to book"
-                : inCart ? "✓ Added — set date & details in cart" : disp.instant ? "⚡ Book now" : "Start booking request"}
+                : inCartHere ? "✓ Added — set date & details in cart" : disp.instant ? "⚡ Book now" : "Start booking request"}
             </button>
             <p style={{ fontSize:11, color:C.midGray, textAlign:"center", margin:"0 0 4px", lineHeight:1.5 }}>
               {(!user || user.type === "guest")
@@ -10138,6 +10346,11 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
         biz_legal:     d?.biz_legal     || "",
         biz_license:   d?.biz_license   || "",
         biz_website:   d?.biz_website   || "",
+        biz_type:      d?.biz_type      || "",
+        biz_state:     d?.biz_state     || "TX",
+        ein:           d?.ein           || "",
+        managing_members: d?.managing_members || "",
+        license_not_required: d?.license_not_required === true,
         photos:        parsePhotos(d?.photos),
       });
       setLoad(false);
@@ -10178,6 +10391,16 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
     if (!f.biz_city.trim())      missing.push("city");
     if (!f.biz_zip.trim())       missing.push("ZIP code");
     if (!f.service_areas.trim()) missing.push("at least one service area");
+    /* Legal information: required before any listing can be posted. */
+    if (!f.biz_legal.trim())     missing.push("legal business name");
+    if (!f.biz_type)             missing.push("business type");
+    if (f.ein.replace(/\D/g, "").length !== 9) missing.push("EIN (9 digits)");
+    if (!f.managing_members.trim()) missing.push("owner / managing members");
+    if (!f.biz_address.trim())   missing.push("street address");
+    if (!f.biz_state.trim())     missing.push("state");
+    if (f.biz_zip.trim() && !/^\d{5}(-\d{4})?$/.test(f.biz_zip.trim())) missing.push("a 5-digit ZIP code");
+    if (f.biz_phone.replace(/\D/g, "").length < 10) missing.push("a 10-digit business phone");
+    if (!f.biz_license.trim() && !f.license_not_required) missing.push("licence / permit number (or tick that you don't need one)");
     if (missing.length) { setErr("Please add " + missing.join(", ") + "."); return; }
     setSaving(true);
     const yrs = String(f.years_in_biz || "").replace(/[^0-9]/g, "");
@@ -10191,8 +10414,13 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
       service_areas: f.service_areas,
       years_in_biz:  yrs === "" ? null : parseInt(yrs, 10),
       biz_legal:     f.biz_legal.trim() || null,
-      biz_license:   f.biz_license.trim() || null,
+      biz_license:   f.license_not_required ? (f.biz_license.trim() || null) : f.biz_license.trim(),
       biz_website:   f.biz_website.trim() || null,
+      biz_type:      f.biz_type,
+      biz_state:     f.biz_state.trim().toUpperCase(),
+      ein:           (() => { const d = f.ein.replace(/\D/g, ""); return d.slice(0, 2) + "-" + d.slice(2); })(),
+      managing_members: f.managing_members.trim(),
+      license_not_required: f.license_not_required === true,
       photos:        f.photos,
     });
     setSaving(false);
@@ -10245,12 +10473,16 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             <label style={L}>Business phone * <span style={{ fontWeight:400, color:C.lightGray }}>(private — only PLUJ sees it)</span></label>
             <input style={F} type="tel" value={f.biz_phone} onChange={e=>set("biz_phone", e.target.value)} />
 
-            <label style={L}>Street address <Opt /></label>
+            <label style={L}>Business street address * <span style={{ fontWeight:400, color:C.lightGray }}>(private — only PLUJ sees it)</span></label>
             <input style={F} value={f.biz_address} onChange={e=>set("biz_address", e.target.value)} />
             <div style={{ display:"flex", gap:8 }}>
               <div style={{ flex:2 }}>
                 <label style={L}>City *</label>
                 <input style={F} value={f.biz_city} onChange={e=>set("biz_city", e.target.value)} />
+              </div>
+              <div style={{ flex:"0 0 70px" }}>
+                <label style={L}>State *</label>
+                <input style={F} maxLength={2} value={f.biz_state} onChange={e=>set("biz_state", e.target.value.toUpperCase())} />
               </div>
               <div style={{ flex:1 }}>
                 <label style={L}>ZIP *</label>
@@ -10279,18 +10511,48 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             <input style={F} inputMode="numeric" maxLength={3} value={f.years_in_biz}
               onChange={e=>set("years_in_biz", e.target.value.replace(/[^0-9]/g, ""))} />
 
-            <div style={{ background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:10,
+            {/* Legal information. Required before any listing can be posted
+                (the database enforces it too: require_vendor_legal_info). */}
+            <div style={{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10,
                           padding:"4px 12px 12px", marginTop:14 }}>
-              <p style={{ margin:"8px 0 0", fontSize:11, fontWeight:700, color:C.midGray }}>
-                Helps us approve you faster <Opt />
+              <p style={{ margin:"8px 0 0", fontSize:12, fontWeight:800, color:"#92400E" }}>
+                ⚖️ Legal information — required before you can post a listing
               </p>
-              <label style={L}>Legal business name</label>
-              <input style={F} value={f.biz_legal} onChange={e=>set("biz_legal", e.target.value)} />
-              <label style={L}>Business license / permit number</label>
-              <input style={F} value={f.biz_license} onChange={e=>set("biz_license", e.target.value)} />
-              <label style={L}>Website or social page</label>
-              <input style={F} value={f.biz_website} onChange={e=>set("biz_website", e.target.value)} />
+              <p style={{ margin:"3px 0 0", fontSize:11, color:"#92400E", lineHeight:1.5 }}>
+                Private: only PLUJ sees it. Hosts never see your EIN, address or owners.
+              </p>
+              <label style={L}>Legal business name *</label>
+              <input style={F} value={f.biz_legal} onChange={e=>set("biz_legal", e.target.value)}
+                placeholder="As registered with the state or IRS" />
+              <label style={L}>Business type *</label>
+              <select style={F} value={f.biz_type} onChange={e=>set("biz_type", e.target.value)}>
+                <option value="">Choose…</option>
+                {BIZ_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <label style={L}>EIN (Employer Identification Number) *</label>
+              <input style={F} inputMode="numeric" maxLength={10} value={f.ein} placeholder="12-3456789"
+                onChange={e=>{ const d = e.target.value.replace(/\D/g, "").slice(0, 9);
+                               set("ein", d.length > 2 ? d.slice(0, 2) + "-" + d.slice(2) : d); }} />
+              <p style={{ margin:"3px 0 0", fontSize:10.5, color:C.midGray, lineHeight:1.5 }}>
+                Sole proprietors without one can get an EIN free from the IRS at irs.gov/ein in a few minutes.
+              </p>
+              <label style={L}>Owner / managing members *</label>
+              <input style={F} value={f.managing_members} onChange={e=>set("managing_members", e.target.value)}
+                placeholder="Full names, e.g. Maria Lopez, Juan Lopez" />
+              <label style={L}>Business license / permit number {f.license_not_required ? <Opt /> : "*"}</label>
+              <input style={F} value={f.biz_license} onChange={e=>set("biz_license", e.target.value)}
+                placeholder="e.g. food truck permit, TABC, sales tax permit" />
+              <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:8, cursor:"pointer" }}>
+                <input type="checkbox" checked={f.license_not_required}
+                  onChange={e=>set("license_not_required", e.target.checked)}
+                  style={{ marginTop:2, accentColor:C.orange }} />
+                <span style={{ fontSize:11.5, color:C.midGray, lineHeight:1.5 }}>
+                  My service doesn't need a license or permit, and I'm responsible if that's wrong.
+                </span>
+              </label>
             </div>
+            <label style={L}>Website or social page <Opt /></label>
+            <input style={F} value={f.biz_website} onChange={e=>set("biz_website", e.target.value)} />
 
             <label style={L}>Business photos <span style={{fontWeight:400}}>({f.photos.length}/{MAX_PHOTOS} — logo or team photo; first is the cover)</span></label>
             <PhotoManager photos={f.photos} onChange={(next) => set("photos", next)} size={78} />
@@ -10350,11 +10612,11 @@ const INFO_CONTENT = {
     ["Who this is for", "A vendor is a business that provides a service at events — a DJ, a caterer, a food truck, a venue, a photographer, rentals. On PLUJ you have one business account and as many listings as services you offer."],
     ["1. Create your account", "Press Log in / Sign up, choose Sign up, and pick Vendor. Enter your name, your business name, a short description of your business (at least 40 characters: what you offer, the events you work and how long you've been doing it), your website or social media if you have one, email, password, phone and date of birth. On the next screen answer the human check, accept PLUJ's terms, tick the box confirming your business information is true and that you're responsible for what you post, and press Create vendor account."],
     ["2. Confirm your email", "Open the newest Confirm your email address email, tap the link, and press Confirm my email on the page that opens. The link works once and expires after 10 minutes. You'll land in your vendor dashboard."],
-    ["3. Add your business details", "Your dashboard shows a short checklist. The first step is Add business details: business name, a short description of your business, business phone, city and ZIP, and the areas you work in. Your phone number is private — only PLUJ sees it. Legal name, license number and website are optional but help us approve you faster. You can change all of this later under Business profile."],
-    ["4. Create your listings", "A listing is one service hosts can book. A DJ who also rents a photo booth has two listings; a caterer with a taco truck and a dessert truck has two. Go to My listings and press Add listing. For each one set the category, a description, a starting price, guest capacity, photos (up to 10, the first is the cover), where you'll travel, and when you're available. Listings with good photos and a clear description get far more requests."],
+    ["3. Add your business details", "Your dashboard shows a short checklist. The first step is Add business details: business name, a short description of your business, business phone, city and ZIP, and the areas you work in. Then your legal information, which is required before you can post any listing: legal business name, business type, EIN, business street address, owners or managing members, and your license or permit number (or tick that your service doesn't need one). Your phone, address, EIN and owners are private — only PLUJ sees them. You can change all of this later under Business profile."],
+    ["4. Create your listings", "A listing is one service hosts can book. A DJ who also rents a photo booth has two listings; a caterer with a taco truck and a dessert truck has two. Go to My listings and press Add listing. For each one set its own name, the category (Rentals can pick as many types as apply, other categories up to 3), a description, a starting price and how long it covers (a 4-hour set, a 24-hour rental, 3 hours of truck service), guest capacity, photos (up to 10, the first is the cover), where you'll travel, and the days and times it's offered. Pricing options can each have their own time, what's included, and anything the host must provide (power, space, parking). Listings with good photos and a clear description get far more requests."],
     ["5. Approval", "PLUJ reviews your description, business details and listings, usually within 1–2 business days. We may message you to ask for proof that your business is real, such as a website, social media page or license. Your listings stay hidden until you're approved, then go live automatically. You'll get a notification in your dashboard and the checklist turns green."],
     ["6. Answer booking requests", "When a host sends a request it appears under Requests and in Notifications, and we email you. Open it to see the date, time, guest count, venue and message. Press Accept booking to confirm or Decline if you can't do it. Please answer quickly — hosts often send requests to several vendors and book whoever confirms first."],
-    ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
+    ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. Days none of your listings work are shown there as Off automatically, and you can tap a listing to see just its days. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
     ["8. Messages", "Use Messages to answer host questions before and after you accept. Conversations stay open until 3 days after the event."],
     ["9. Getting paid", "When online payment is on, press Set up payments with Stripe in your dashboard first: you need your own Stripe account (free) before you can confirm paid bookings, and Stripe checks your identity and bank account. When you confirm a booking you enter the total price and tick that you accept the payment terms. The host pays it all upfront into your Stripe balance, where it stays locked (your automatic payouts are off) until PLUJ releases it to your bank: 30% a week before the event, 50% the day after, and 20% when the host approves (or 3 days after). While you're new, more is held until the event is done: 50% on your first PLUJ booking and 30% on your second. Stripe's fees come out under your agreement with Stripe, and after your first 3 months PLUJ's 3% service fee does too. If a host cancels 7 or more days before the event they get their money back less fees and you get nothing; closer to the event you keep part of it (30% at 5–7 days, 50% at 3–5 days, 75% at 2–3 days of what is left after fees), and hosts can't cancel within 48 hours. If you cancel, the host is refunded in full from your Stripe balance. Refunds and card disputes are your responsibility; you answer disputes in your Stripe dashboard. If online payment isn't on, agree the price, deposit and payment method directly with the host, and put your cancellation terms in writing."],
     ["10. After the event", "Hosts can review you, and you can rate the host from the request. Reviews appear under Reviews."],

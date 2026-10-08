@@ -53,6 +53,10 @@ import {
   ConfirmPriceField,
   confirmPricePayload,
   VendorPayoutsCard,
+  subcatMax,
+  fmtHours,
+  TIMED_CATEGORIES,
+  getLegalMissing,
 } from "../PlujMarketplace.jsx";
 
 function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
@@ -165,7 +169,7 @@ function friendlySaveError(msg) {
   return m || "Something went wrong saving this listing. Please try again.";
 }
 
-function ServicesManager({ vendorId }) {
+function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
   const [services, setServices] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [editing,  setEditing]  = useState(null);   // service object or "new"
@@ -176,6 +180,12 @@ function ServicesManager({ vendorId }) {
   const [uploading,setUploading]= useState(false);
   const fieldRefs  = useRef({});
   const formErrRef = useRef(null);
+  /* Legal information still missing (null = unknown). No listing can be
+     posted until it is complete; the database refuses it as well. */
+  const [legalMissing, setLegalMissing] = useState(null);
+  const [legalNudge,   setLegalNudge]   = useState(false);
+  useEffect(() => { getLegalMissing(vendorId).then(setLegalMissing); }, [vendorId, legalKey]);
+  const legalBlocked = Array.isArray(legalMissing) && legalMissing.length > 0;
 
   /* Show an error where the vendor is looking: highlight the field it is
      about and scroll to it (or to the message next to Save), instead of only
@@ -191,7 +201,7 @@ function ServicesManager({ vendorId }) {
   }
 
   const blank = { category:"food", subcategory:"", subcategories:[], name:"", service_type:"", description:"",
-                  price_value:"", capacity_min:"", capacity_max:"", photos:[], packages:[], active:true, offsite:false, travel_miles:"", service_areas:"", addons:[], avail_days:[], avail_blocks:[], max_per_day:1, gap_hours:2, simultaneous:false, min_notice_hours:0 };
+                  price_value:"", duration_hours:"", extra_hour_price:"", capacity_min:"", capacity_max:"", photos:[], packages:[], active:true, offsite:false, travel_miles:"", service_areas:"", addons:[], avail_days:[], avail_blocks:[], max_per_day:1, gap_hours:2, simultaneous:false, min_notice_hours:0 };
 
   async function load() {
     setLoading(true);
@@ -204,9 +214,13 @@ function ServicesManager({ vendorId }) {
 
   function startEdit(s) {
     setErr(""); setOk("");
+    if (!s && legalBlocked) { setLegalNudge(true); return; }
+    setLegalNudge(false);
     setEditing(s ? {
       ...s,
       price_value: s.price_value != null ? String(s.price_value) : "",
+      duration_hours: s.duration_hours != null ? String(Number(s.duration_hours)) : "",
+      extra_hour_price: s.extra_hour_price != null ? String(Number(s.extra_hour_price)) : "",
       photos: parsePhotos(s.photos),
       packages: parsePackages(s.packages),
       subcategory: s.subcategory || "",
@@ -288,10 +302,19 @@ function ServicesManager({ vendorId }) {
     if (capMin !== null && capMax !== null && capMin > capMax) {
       fail(`Your minimum (${capMin}) is larger than your maximum (${capMax}). Swap them, or clear one.`, "capacity_min"); return;
     }
+    if (String(editing.extra_hour_price ?? "").trim() !== "" && !(Number(editing.extra_hour_price) >= 0)) {
+      fail("The extra-hour price must be a number, or leave it blank.", "extra_hour_price"); return;
+    }
     setBusy(true);
     const res = await saveService(vendorId, editing);
     setBusy(false);
-    if (!res.ok) { fail(res.error, fieldForSaveError(res.error)); return; }
+    if (!res.ok) {
+      if (/legal information/i.test(res.error || "")) {
+        setLegalNudge(true); getLegalMissing(vendorId).then(setLegalMissing);
+        fail(res.error, null); return;
+      }
+      fail(res.error, fieldForSaveError(res.error)); return;
+    }
     setOk("Service saved."); setEditing(null); load();
     setTimeout(() => setOk(""), 2500);
   }
@@ -332,6 +355,25 @@ function ServicesManager({ vendorId }) {
         )}
       </div>
 
+      {(legalNudge || (legalBlocked && !editing)) && legalBlocked && (
+        <div role="alert" style={{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10,
+                                   padding:"11px 13px", marginTop:10 }}>
+          <p style={{ margin:0, fontSize:12.5, fontWeight:800, color:"#92400E" }}>
+            ⚖️ Add your legal information before posting a listing
+          </p>
+          <p style={{ margin:"4px 0 8px", fontSize:11.5, color:"#92400E", lineHeight:1.55 }}>
+            Still missing: {legalMissing.join(", ")}. It's private — only PLUJ sees it.
+          </p>
+          {onOpenBusiness && (
+            <button type="button" onClick={onOpenBusiness} className="btn"
+              style={{ padding:"7px 14px", borderRadius:8, border:"none", background:C.black, color:"#fff",
+                       fontSize:12, fontWeight:700 }}>
+              Open Business details
+            </button>
+          )}
+        </div>
+      )}
+
       {err && !editing && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                             borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
       {ok  && <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
@@ -348,7 +390,7 @@ function ServicesManager({ vendorId }) {
               No listings yet. Tap "+ Add listing" to create your first one.
             </p>
           )}
-          {services.map(s => {
+          {services.map((s, idx) => {
             const pics = parsePhotos(s.photos);
             return (
               <div key={s.id} style={{ display:"flex", gap:10, alignItems:"center", background:"#F9FAFB",
@@ -359,11 +401,18 @@ function ServicesManager({ vendorId }) {
                                   display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏪</div>}
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ margin:0, fontSize:13, fontWeight:700, color:C.black }}>
+                    {services.length > 1 && (
+                      <span style={{ fontSize:10, fontWeight:800, color:C.orange, background:C.orangeSoft,
+                                     borderRadius:99, padding:"1px 7px", marginRight:6, verticalAlign:"middle" }}>
+                        Listing {idx + 1}
+                      </span>
+                    )}
                     {s.name || s.service_type || s.subcategory || catLabel(s.category)}
                   </p>
                   <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
                     {[s.service_type, catLabel(s.category)].filter(Boolean).join(" · ")}
                     {s.price_value != null ? ` · $${Number(s.price_value).toLocaleString()}` : " · Contact for pricing"}
+                    {Number(s.duration_hours) > 0 ? ` · ⏱ ${fmtHours(s.duration_hours)}` : ""}
                     {s.category !== "places" ? (s.offsite ? " · 🚗 off-site OK" : " · 📍 on-site only") : ""}
                     {s.active === false ? " · hidden" : ""}
                   </p>
@@ -412,10 +461,11 @@ function ServicesManager({ vendorId }) {
                One subcategory forced vendors to pick the single best lie about
                their business, and customers browsing "Catering" never saw them.
 
-               Three is the cap. Without one, the rational move for every vendor
-               is to tick everything, and then these filters stop meaning
-               anything for the customer. */
-            const MAX = 3;
+               Three is the cap (Rentals has none: a rental company really can
+               rent tables, tents, linens and dance floors). Without one, the
+               rational move for every vendor is to tick everything, and then
+               these filters stop meaning anything for the customer. */
+            const MAX = Math.min(subcatMax(editing.category), (CAT_SUBS[editing.category] || []).length);
             const picked = Array.isArray(editing.subcategories) ? editing.subcategories : [];
             const toggle = (id) => {
               const has = picked.includes(id);
@@ -429,7 +479,7 @@ function ServicesManager({ vendorId }) {
                 <label style={L}>
                   What this service covers{" "}
                   <span style={{ fontWeight:500, color:C.midGray }}>
-                    — pick up to {MAX} ({picked.length}/{MAX})
+                    — {MAX >= (CAT_SUBS[editing.category] || []).length ? "pick all that apply" : `pick up to ${MAX}`} ({picked.length}/{MAX})
                   </span>
                 </label>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:4 }}>
@@ -508,6 +558,43 @@ function ServicesManager({ vendorId }) {
             no limit, not zero. Customers searching for a headcount outside this range won't see
             this listing, and you won't be able to accept a request outside it.
           </p>
+
+          {/* Service time: how long the starting price lasts (a DJ's 4-hour set,
+              a 24-hour rental, a food truck's 3-hour service) and what each
+              extra hour costs. Pricing options can each set their own hours
+              below. */}
+          <div style={{ marginTop:12, background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 14px" }}>
+            <p style={{ margin:0, fontSize:12.5, fontWeight:800 }}>
+              {editing.category === "rentals" ? "⏱ Rental period" : "⏱ Service time"}
+              {TIMED_CATEGORIES.includes(editing.category) ? "" : <span style={{ fontWeight:500, color:C.lightGray }}> (optional)</span>}
+            </p>
+            <p style={{ margin:"3px 0 9px", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
+              {editing.category === "rentals"
+                ? "How long the starting price rents it for — e.g. 24 hours, or a full weekend."
+                : editing.category === "music"
+                  ? "How long you perform or play for the starting price — e.g. a 4-hour set."
+                  : editing.category === "food"
+                    ? "How long you serve for the starting price — e.g. 3 hours of truck service."
+                    : "How long the starting price covers. Hosts see it next to the price."}
+            </p>
+            <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+              <div style={{ flex:"1 1 160px" }}>
+                <label style={{ ...L, marginTop:0 }}>Starting price includes</label>
+                <select style={F} value={editing.duration_hours || ""}
+                  onChange={e => setField("duration_hours", e.target.value)}>
+                  <option value="">Not time-based</option>
+                  {[1,1.5,2,2.5,3,4,5,6,7,8,10,12,24,48,72,168].map(h => <option key={h} value={h}>{fmtHours(h)}</option>)}
+                </select>
+              </div>
+              <div style={{ flex:"1 1 160px" }}>
+                <label style={{ ...L, marginTop:0 }}>{editing.category === "rentals" ? "Each extra hour" : "Each extra hour"} ($)</label>
+                <input style={bad("extra_hour_price", F)} type="number" min="0" value={editing.extra_hour_price || ""}
+                  ref={el => { fieldRefs.current.extra_hour_price = el; }} aria-invalid={errField === "extra_hour_price"}
+                  onChange={e => setField("extra_hour_price", e.target.value)} placeholder="Blank = not offered" />
+              </div>
+            </div>
+            <FieldError on={errField === "extra_hour_price"} msg={err} />
+          </div>
 
           {/* Off-site availability — key for venues whose sub-services (decor,
               sound, DJs, catering…) can also travel to other events. */}
@@ -727,13 +814,13 @@ function ServicesManager({ vendorId }) {
               <div>
                 <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.black }}>Pricing options</p>
                 <p style={{ margin:"2px 0 0", fontSize:10.5, color:C.midGray, lineHeight:1.5 }}>
-                  Offer tiers — e.g. “4 hours”, “6 hours + lighting”. Customers only
-                  see an option once it has a price.
+                  Offer tiers — e.g. “4 hours”, “6 hours + lighting”. Under each one, say what's
+                  included and anything the host must provide. Customers only see an option once it has a price.
                 </p>
               </div>
               {(editing.packages || []).length < 6 && (
                 <button onClick={() => setEditing(e => ({ ...e,
-                    packages: [...(e.packages || []), { name:`Option ${(e.packages||[]).length + 1}`, description:"", price:"" }] }))}
+                    packages: [...(e.packages || []), { name:`Option ${(e.packages||[]).length + 1}`, description:"", price:"", hours:"", requirements:"" }] }))}
                   className="btn"
                   style={{ padding:"6px 11px", borderRadius:8, border:`1px solid ${C.orange}`,
                            background:"#fff", color:C.orange, fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>
@@ -769,10 +856,33 @@ function ServicesManager({ vendorId }) {
                       style={{ padding:"6px 9px", borderRadius:8, border:"1px solid #FCA5A5",
                                background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}>✕</button>
                   </div>
-                  <input value={p.description} placeholder="What's included in this option"
+                  <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:6 }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:C.midGray, whiteSpace:"nowrap" }}>⏱ Time</span>
+                    <select value={p.hours == null ? "" : p.hours}
+                      onChange={e => setEditing(ed => ({ ...ed,
+                        packages: ed.packages.map((x, j) => j===i ? { ...x, hours:e.target.value } : x) }))}
+                      style={{ ...F, height:34, flex:1 }}>
+                      <option value="">{TIMED_CATEGORIES.includes(editing.category) ? "Choose how long…" : "Not time-based"}</option>
+                      {[1,1.5,2,2.5,3,4,5,6,7,8,10,12,24,48,72,168].map(h => <option key={h} value={h}>{fmtHours(h)}</option>)}
+                    </select>
+                  </div>
+                  <label style={{ display:"block", fontSize:10.5, fontWeight:700, color:C.midGray, margin:"7px 0 3px" }}>
+                    What's included
+                  </label>
+                  <textarea value={p.description} rows={2}
+                    placeholder="e.g. DJ, sound system for 150 guests, 2 wireless mics, basic lighting"
                     onChange={e => setEditing(ed => ({ ...ed,
                       packages: ed.packages.map((x, j) => j===i ? { ...x, description:e.target.value } : x) }))}
-                    style={{ ...F, height:36, marginTop:6 }} />
+                    style={{ ...F, height:"auto", padding:"8px 10px", resize:"vertical", fontFamily:"inherit", fontSize:12 }} />
+                  <label style={{ display:"block", fontSize:10.5, fontWeight:700, color:"#92400E", margin:"7px 0 3px" }}>
+                    Requirements / notes for the host <span style={{ fontWeight:500, color:C.lightGray }}>(optional)</span>
+                  </label>
+                  <textarea value={p.requirements || ""} rows={2}
+                    placeholder="e.g. Needs a standard outlet within 50 ft, a 10×10 ft flat area, and parking for a 20 ft truck"
+                    onChange={e => setEditing(ed => ({ ...ed,
+                      packages: ed.packages.map((x, j) => j===i ? { ...x, requirements:e.target.value } : x) }))}
+                    style={{ ...F, height:"auto", padding:"8px 10px", resize:"vertical", fontFamily:"inherit", fontSize:12,
+                             background:"#FFFBEB", borderColor:"#FCD34D" }} />
                   {!priced && (
                     <p style={{ margin:"6px 0 0", fontSize:10.5, color:"#B45309", fontWeight:600 }}>
                       ⚠ Hidden from customers — add a price to show this option.
@@ -834,6 +944,15 @@ function ServicesManager({ vendorId }) {
               style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                        borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600, lineHeight:1.5 }}>
               ⚠ {err}{errField ? " The field is highlighted in red above." : ""}
+              {/legal information/i.test(err) && onOpenBusiness && (
+                <div style={{ marginTop:8 }}>
+                  <button type="button" onClick={onOpenBusiness} className="btn"
+                    style={{ padding:"7px 14px", borderRadius:8, border:"none", background:C.black, color:"#fff",
+                             fontSize:12, fontWeight:700 }}>
+                    Open Business details
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <div style={{ display:"flex", gap:8, marginTop:10 }}>
@@ -1035,8 +1154,11 @@ function VendorDashboard({ user, onLogout }) {
 
   /* The three things a new vendor has to do, in order. Business details are
      what PLUJ approves; a listing is what hosts book. */
+  const legalDone   = !!(listing?.biz_legal && listing?.biz_type && String(listing?.ein || "").replace(/\D/g, "").length === 9 &&
+                         listing?.managing_members && listing?.biz_address && listing?.biz_state &&
+                         (listing?.biz_license || listing?.license_not_required));
   const detailsDone = !!(listing?.business_name && listing?.description && listing?.biz_phone &&
-                         listing?.biz_city && listing?.biz_zip && listing?.service_areas);
+                         listing?.biz_city && listing?.biz_zip && listing?.service_areas) && legalDone;
   const hasListing  = (svcCount || 0) > 0;
   const setupDone   = detailsDone && hasListing && isApproved;
 
@@ -1108,8 +1230,8 @@ function VendorDashboard({ user, onLogout }) {
               </span>
             </p>
             {[
-              { done: detailsDone, n: 1, title: "Add your business details",
-                text: "Name, a short description, phone, city and where you work. This is what we review.",
+              { done: detailsDone, n: 1, title: "Add your business details and legal information",
+                text: "Name, a short description, phone, where you work, and your legal information (legal name, business type, EIN, address, owners, license). Required before you can post a listing.",
                 cta: "Add business details", go: () => setEditing(true) },
               { done: hasListing, n: 2, title: "Create your first listing",
                 text: "One listing per service you offer — a DJ set, a taco truck, a venue. Each has its own price, photos and availability.",
@@ -1367,7 +1489,7 @@ function VendorDashboard({ user, onLogout }) {
                 listings — each with its own price, photos and availability.
                 {!isApproved && " They go live when PLUJ approves your business."}
               </p>
-              <ServicesManager vendorId={user.id} />
+              <ServicesManager vendorId={user.id} onOpenBusiness={() => setEditing(true)} legalKey={listing} />
             </div>
           )}
 
