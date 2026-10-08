@@ -767,11 +767,18 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .dir-subs .more { white-space: nowrap; }
 .dir-grid button:hover, .dir-grid button[aria-current="true"] { background: #000; color: #fff; }
 .dir-grid button:hover .dir-subs, .dir-grid button[aria-current="true"] .dir-subs { color: rgba(255,255,255,0.78); }
-.dir-grid button.build { background: #000; color: #fff; flex-direction: row; align-items: baseline; justify-content: space-between;
-                         flex-wrap: wrap; gap: 8px 32px; padding: 26px 22px; }
-.dir-grid button.build .dir-subs { color: rgba(255,255,255,0.8); max-width: 52ch; font-size: 15.5px; }
-.dir-grid button.build .go { font-weight: 800; font-size: 15px; color: #000; background: #fff; border-radius: 999px; padding: 10px 18px; white-space: nowrap; }
-.dir-grid button.build:hover { background: #1F1F1F; }
+.dir-grid .build { background: #000; color: #fff; padding: 28px 22px; display: grid;
+                  grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); gap: 20px 40px; align-items: start; }
+.dir-grid .build .dir-name { color: #fff; padding-top: 18px; }
+.build-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.build-ways button { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; cursor: pointer;
+                     background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.32); border-radius: 6px;
+                     padding: 18px 18px 18px; transition: border-color 160ms ease, background-color 160ms ease; }
+.build-ways button:hover { border-color: #fff; background: rgba(255,255,255,0.06); }
+.build-ways b { font-size: 18px; font-weight: 800; }
+.build-ways span { font-size: 14.5px; line-height: 1.45; color: rgba(255,255,255,0.8); }
+.build-ways .go { margin-top: auto; font-weight: 800; font-size: 14.5px; color: #000; background: #fff; border-radius: 999px; padding: 9px 16px; }
+.build-ways button + button .go { background: transparent; color: #fff; box-shadow: inset 0 0 0 1.5px #fff; }
 .dir-grid.sub { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0; background: transparent;
                 border-left: 1px solid #DADADA; border-bottom: none; }
 .dir-grid.sub li { border-right: 1px solid #DADADA; border-bottom: 1px solid #DADADA; }
@@ -782,7 +789,8 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .dir-head p { justify-self: start; }
   .dir-name { font-size: 26px; }
   .dir-grid button { padding: 18px 16px 20px; }
-  .dir-grid button.build { padding: 22px 16px; }
+  .dir-grid .build { grid-template-columns: 1fr; padding: 22px 16px; }
+  .dir-grid .build .dir-name { padding-top: 0; }
 }
 /* Categories while browsing: one row of pills that scrolls sideways on phones. */
 .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
@@ -792,6 +800,9 @@ input::-ms-reveal, input::-ms-clear { display: none; }
                 transition: background-color 160ms ease, color 160ms ease; }
 .pills button:hover { background: #F2F2F2; }
 .pills button.on { background: #000; color: #fff; }
+.pills.sm { flex-wrap: wrap; overflow: visible; gap: 6px; }
+.pills.sm button { padding: 6px 13px; font-size: 13px; font-weight: 650; border-width: 1px; border-color: #C9C9C9; }
+.pills.sm button.on { border-color: #000; }
 /* How it works */
 .steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
 .steps3 .n { font-family: var(--display); font-size: 64px; font-weight: 900; color: var(--marigold); line-height: 0.8;
@@ -989,12 +1000,12 @@ const PRODUCTION_SUBS = [
   { id:"favors",      l:"Favors & Gifts",     e:"🎁", c:"#FDF2F8", a:"#BE185D", d:"Custom favors & guest gifts" },
 ];
 const LOGISTICS_SUBS = [
+  { id:"event-planner",  l:"Event Planners",           e:"🗓️", c:"#FFF4ED", a:"#C2410C", d:"Full-service planners for any event type" },
+  { id:"event-manager",  l:"Event Managers",           e:"📋", c:"#FEFCE8", a:"#A16207", d:"Day-of coordinators & on-site managers" },
   { id:"truck-rental",  l:"Truck & Van Rental",     e:"🚛", c:"#FFF4ED", a:"#C2410C", d:"Box trucks & cargo vans" },
   { id:"drivers",       l:"Drivers & Transport",     e:"🚗", c:"#EFF6FF", a:"#1D4ED8", d:"Drivers for gear & equipment" },
   { id:"contractors",   l:"Independent Contractors", e:"🔧", c:"#F0FDF4", a:"#15803D", d:"Setup crew & laborers" },
   { id:"decorators",    l:"Decorators",              e:"🎨", c:"#FDF2F8", a:"#BE185D", d:"Professional decorators for hire" },
-  { id:"event-planner",  l:"Event Planners",           e:"🗓️", c:"#FFF4ED", a:"#C2410C", d:"Full-service planners for any event type" },
-  { id:"event-manager",  l:"Event Managers",           e:"📋", c:"#FEFCE8", a:"#A16207", d:"Day-of coordinators & on-site managers" },
   { id:"security",      l:"Security",                e:"🛡️", c:"#FFF1F2", a:"#BE123C", d:"Event security & VIP detail" },
   { id:"valet",         l:"Valet & Parking",         e:"🅿️", c:"#F5F3FF", a:"#7C3AED", d:"Valet attendants & lot management" },
   { id:"cleanup",       l:"Cleanup Crews",           e:"🧹", c:"#ECFDF5", a:"#059669", d:"Pre/post event cleaning" },
@@ -13155,7 +13166,7 @@ export default function PlujApp() {
               <button onClick={() => setAuthModal(true)} className="btn"
                 style={{ background:"#000",
                          border:"none", borderRadius:99, padding:"8px 18px", fontSize:13,
-                         fontWeight:800, color:"#fff", whiteSpace:"nowrap" }}>Log in / Sign up</button>
+                         fontWeight:800, color:"#fff", whiteSpace:"nowrap" }}><span className="hide-mobile">Log in / Sign up</span><span className="show-mobile">Log in</span></button>
             </>
           )}
           <button onClick={() => { setCartOpen(true); setNotifOpen(false); }} className="btn"
@@ -13381,13 +13392,25 @@ export default function PlujApp() {
                   const list = (CAT_SUBS[cat.id] || []).filter(s => s.id !== "other");
                   const shown = list.slice(0, 5).map(s => s.l);
                   const more = list.length - shown.length;
+                  /* For hosts who don't know where to begin: plan it with PLUJ,
+                     or hand the whole thing to an event planner (a vendor). */
                   if (cat.id === "build") return (
                     <li key={cat.id} className="wide">
-                      <button onClick={()=>pickCat(cat.id)} className="build">
+                      <div className="build">
                         <span className="dir-name">Not sure where to start?</span>
-                        <span className="dir-subs">Answer a few questions about your event and PLUJ lines up a vendor for each part of it, in order.</span>
-                        <span className="go">Build my event</span>
-                      </button>
+                        <div className="build-ways">
+                          <button onClick={()=>pickCat("build")}>
+                            <b>Build it step by step</b>
+                            <span>Answer a few questions and PLUJ lines up a vendor for each part of your event, in order.</span>
+                            <span className="go">Build my event</span>
+                          </button>
+                          <button onClick={()=>{ pickCat("logistics"); setActiveSub("event-planner"); window.scrollTo({ top:0 }); }}>
+                            <b>Hand it to a planner</b>
+                            <span>No time or no idea where to begin? Hire an event planner and they take care of everything, from the vendors to the day itself.</span>
+                            <span className="go">Hire an event planner</span>
+                          </button>
+                        </div>
+                      </div>
                     </li>
                   );
                   return (
@@ -13449,28 +13472,20 @@ export default function PlujApp() {
           {activeSub && subObj && (
             <div style={{ marginBottom:20 }} className="fade-up">
               <button onClick={()=>setActiveSub(null)} className="btn"
-                style={{ background:"none", border:"none", fontSize:12, color:C.midGray, fontWeight:600, padding:0, marginBottom:12 }}>
+                style={{ background:"none", border:"none", fontSize:14, color:"#000", fontWeight:700, padding:"6px 0", marginBottom:8 }}>
                 ← {catObj?.label}
               </button>
-              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-                <div style={{ width:46, height:46, background:subObj.c, borderRadius:13,
-                              display:"flex", alignItems:"center", justifyContent:"center",
-                              flexShrink:0, border:`1px solid ${C.border}` }}>
-                  <Emoji e={subObj.e} size={26} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize:21, fontWeight:800, margin:0, letterSpacing:"-0.02em" }}>{subObj.l}</h2>
-                  <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray, fontWeight:500 }}>{subObj.d}</p>
-                </div>
-              </div>
-              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              <h2 style={{ fontSize:"clamp(34px, 4vw, 52px)", lineHeight:0.95, margin:"0 0 8px" }}>{subObj.l}</h2>
+              <p style={{ margin:"0 0 16px", fontSize:15, color:"#4B5260", maxWidth:"62ch", lineHeight:1.5 }}>
+                {subObj.id === "event-planner"
+                  ? "A planner takes the whole event off your hands: they set the budget with you, book every vendor, keep the timeline and run the day. Book them here like any other vendor, at one price."
+                  : subObj.d}
+              </p>
+              <div className="pills sm" role="group" aria-label={`Services in ${catObj?.label || ""}`}>
                 {subs.map(s=>(
-                  <button key={s.id} onClick={()=>setActiveSub(s.id)} className="pill btn"
-                    style={{ padding:"5px 13px", borderRadius:99, fontSize:11, fontWeight:600,
-                             border:`1.5px solid ${activeSub===s.id?s.a:C.border}`,
-                             background: activeSub===s.id?s.c:"#fff", color: activeSub===s.id?s.a:C.midGray,
-                             display:"inline-flex", alignItems:"center", gap:5 }}>
-                    <Emoji e={s.e} size={12} /> {s.l}
+                  <button key={s.id} onClick={()=>setActiveSub(s.id)} className={activeSub===s.id ? "on" : ""}
+                    aria-pressed={activeSub===s.id}>
+                    {s.l}
                   </button>
                 ))}
               </div>
@@ -13617,7 +13632,7 @@ export default function PlujApp() {
                       </button>
                     ) : (
                       <button onClick={()=>setAuthModal(true)} className="btn"
-                        style={{ background:C.orange, color:"#fff", border:"none", borderRadius:10,
+                        style={{ background:"#000", color:"#fff", border:"none", borderRadius:10,
                                  padding:"10px 18px", fontSize:13, fontWeight:700 }}>
                         List my business
                       </button>
