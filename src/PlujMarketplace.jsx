@@ -476,8 +476,8 @@ export const GLOBAL_CSS = `
   --line: #E7E7E9; --surface: #F6F6F7; --white: #FFFFFF;
   --accent: #D13F17; --accent-hover: #B83510; --flame: #FF5C28; --accent-soft: #FFF1EC;
   /* Celebration palette for the public pages: marigold (PLUJ orange) as a
-     surface, rosa mexicano for small moments, true black type. */
-  --marigold: #FF5C28; --rosa: #E4007C; --black: #000000;
+     surface, true black type, white paper. */
+  --marigold: #FF5C28; --black: #000000;
   --display: 'Big Shoulders Display', 'Figtree', system-ui, sans-serif;
   --ok: #0F7A55; --ok-soft: #E8F6EF;
   --r-sm: 10px; --r-md: 14px; --r-lg: 22px;
@@ -690,22 +690,16 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 /* ── Smooth page transitions ── */
 .page-enter { animation: fadeUp 0.32s cubic-bezier(0.16,1,0.3,1) both; }
 
-/* ── Home (Oct 2026 redesign): a Houston celebration ──
-   The hero is a marigold field with a papel picado banner strung across the
-   top; the example event is a real ticket stub; the categories are set like
-   a festival bill. Everything else stays quiet. */
+/* ── Home (Oct 2026 redesign) ──
+   A marigold field; the artwork is the logo's own geometry (dot, bowl, half
+   moon); the example event is a real ticket stub; the categories are set
+   like a festival bill. Everything else stays quiet. */
 .hero-field { background: var(--marigold); color: var(--black); position: relative; overflow: hidden; }
-.picado { display: block; width: 100%; height: 92px; }
-.picado .flag { transform-origin: 50% 0; }
-@keyframes sway { 0% { transform: rotate(-3deg); } 60% { transform: rotate(1.5deg); } 100% { transform: rotate(0deg); } }
-.picado .flag { animation: sway 1.6s var(--ease-out) both; }
-.home-hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr); gap: 48px;
-             align-items: center; max-width: 1240px; margin: 0 auto; padding: 18px 28px 64px; }
+.home-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 44px;
+             align-items: center; max-width: 1240px; margin: 0 auto; padding: 56px 28px 72px; }
 .home-hero h1 { font-size: clamp(56px, 7.2vw, 96px); line-height: 0.92; font-weight: 800; letter-spacing: -0.01em;
                 color: var(--black); margin: 0; }
-.home-hero .es { display: block; font-family: 'Figtree', system-ui, sans-serif; font-size: clamp(18px, 1.7vw, 22px);
-                 font-weight: 600; letter-spacing: 0; line-height: 1.3; margin: 14px 0 22px; color: rgba(0,0,0,0.72); }
-.home-hero .lede { font-size: 18px; line-height: 1.55; color: #000; max-width: 33em; margin: 0 0 28px; }
+.home-hero .lede { font-size: 18px; line-height: 1.55; color: #000; max-width: 33em; margin: 22px 0 28px; }
 .hero-search { display: grid; grid-template-columns: 1.25fr 1.15fr 1.2fr 0.85fr auto; background: #fff;
                border-radius: 16px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,0.9); border: 2px solid #000; }
 .hero-search > label { display: block; padding: 11px 16px 10px; border-right: 1.5px solid #E2E2E2; min-width: 0; cursor: text; }
@@ -721,16 +715,21 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .promise { font-size: 14.5px; color: #000; display: inline-flex; gap: 8px; align-items: baseline; }
 .promise b { font-weight: 800; }
 .promise::before { content: ""; width: 9px; height: 9px; background: #000; transform: rotate(45deg) translateY(-1px); flex: 0 0 auto; }
-.hero-art { position: relative; min-height: 470px; display: flex; align-items: center; justify-content: center; }
-.hero-photo { position: absolute; right: 0; top: 0; width: 78%; height: 86%; border-radius: 200px 200px 22px 22px;
-              overflow: hidden; border: 2px solid #000; background: #000; }
+.hero-art { position: relative; min-height: 590px; }
+/* The logo's geometry: the photo sits in the bowl (flat left, round right),
+   the dot floats to its left and the half moon hangs beneath. */
+.hero-photo { position: absolute; right: 0; top: 0; width: 76%; height: 50%; border-radius: 0 999px 999px 0;
+              overflow: hidden; background: #000; }
+.hero-art .shape { position: absolute; background: #000; }
+.hero-art .shape.dot { left: 0; top: 9%; width: 19%; aspect-ratio: 1; border-radius: 50%; }
+.hero-art .shape.moon { left: 24%; top: 51%; width: 22%; aspect-ratio: 1 / 2; border-radius: 0 999px 999px 0; background: #fff; }
 .hero-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.stamp { position: absolute; right: -6px; bottom: 6%; width: 138px; height: 138px; z-index: 3; }
+.stamp { position: absolute; right: -14px; top: -22px; width: 118px; height: 118px; z-index: 3; }
 .stamp svg { width: 100%; height: 100%; animation: spin 26s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 /* The ticket: a real stub. Notches at the tear line come from a mask, the
    barcode from stripes, the total is set in the poster face. */
-.ticket { position: relative; z-index: 2; align-self: flex-end; margin-right: 26%; width: min(320px, 82%);
+.ticket { position: absolute; z-index: 2; right: 0; bottom: 0; width: min(300px, 64%);
           background: #fff; color: #000; border: 2px solid #000; border-radius: 16px; transform: rotate(-3deg);
           transition: transform 400ms var(--ease-out); padding: 0;
           -webkit-mask: radial-gradient(circle 11px at 0 66%, transparent 10.5px, #000 11px) left / 51% 100% no-repeat,
@@ -749,25 +748,50 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .ticket .bottom { padding: 12px 18px 14px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; }
 .ticket .total { font-family: var(--display); font-size: 40px; font-weight: 900; line-height: 0.9; }
 .ticket .note { font-size: 12px; color: #333; margin-top: 4px; }
-.ticket .ok { font-size: 12.5px; font-weight: 800; color: var(--rosa); }
+.ticket .ok { font-size: 12.5px; font-weight: 800; color: #000; }
 .ticket .barcode { width: 64px; height: 38px; background: repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 4px, #000 4px 5px, transparent 5px 8px, #000 8px 11px, transparent 11px 12px); }
-/* Categories, set like a festival bill: big condensed names that wrap. */
-.bill { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 0; margin: 0; padding: 0; list-style: none; }
-.bill li { display: inline-flex; align-items: baseline; }
-.bill li:not(:last-child)::after { content: ""; width: 0.32em; height: 0.32em; background: var(--marigold);
-                        transform: rotate(45deg) translateY(-0.12em); margin: 0 0.55em 0 0.5em; font-size: clamp(30px, 4vw, 56px);
-                        display: inline-block; flex: 0 0 auto; }
-.bill button { background: none; border: none; padding: 0; cursor: pointer; font-family: var(--display); font-weight: 800;
-               font-size: clamp(30px, 4vw, 56px); line-height: 1.05; color: #000; letter-spacing: -0.005em;
-               text-decoration: none; background-image: linear-gradient(var(--marigold), var(--marigold));
-               background-size: 0% 0.2em; background-repeat: no-repeat; background-position: 0 88%;
-               transition: background-size 320ms var(--ease-out), color 200ms ease; }
-.bill button:hover, .bill button.on { background-size: 100% 0.2em; }
-.bill button.on { color: #000; }
-.bill button.build { color: var(--rosa); }
-.bill.sm button { font-size: clamp(22px, 2.4vw, 32px); }
-.bill.sm li:not(:last-child)::after { font-size: clamp(22px, 2.4vw, 32px); }
-.bill sup { font-family: 'Figtree', system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #6B6B6B; margin-left: 4px; vertical-align: super; }
+/* Categories on the home page: a directory. Each category is a name and the
+   services in it, under a black rule. Hover turns the whole entry black. */
+.dir-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 40px; align-items: end; margin-bottom: 22px; }
+.dir-head h2 { font-size: clamp(36px, 4.4vw, 60px); line-height: 0.95; margin: 0; color: #000; text-wrap: balance; }
+.dir-head p { margin: 0; font-size: 16px; line-height: 1.5; color: #333; max-width: 46ch; justify-self: end; }
+.dir-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1px; background: #DADADA; border-top: 2px solid #000; border-bottom: 1px solid #DADADA; }
+.dir-grid li { background: #fff; }
+.dir-grid li.wide { grid-column: 1 / -1; }
+.dir-grid button { display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%; text-align: left;
+                   background: #fff; border: none; padding: 22px 22px 24px; cursor: pointer; color: #000;
+                   transition: background-color 160ms ease, color 160ms ease; }
+.dir-name { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: -0.005em; }
+.dir-subs { font-size: 14.5px; line-height: 1.45; color: #4B5260; transition: color 160ms ease; }
+.dir-subs .more { white-space: nowrap; }
+.dir-grid button:hover, .dir-grid button[aria-current="true"] { background: #000; color: #fff; }
+.dir-grid button:hover .dir-subs, .dir-grid button[aria-current="true"] .dir-subs { color: rgba(255,255,255,0.78); }
+.dir-grid button.build { background: #000; color: #fff; flex-direction: row; align-items: baseline; justify-content: space-between;
+                         flex-wrap: wrap; gap: 8px 32px; padding: 26px 22px; }
+.dir-grid button.build .dir-subs { color: rgba(255,255,255,0.8); max-width: 52ch; font-size: 15.5px; }
+.dir-grid button.build .go { font-weight: 800; font-size: 15px; color: #000; background: #fff; border-radius: 999px; padding: 10px 18px; white-space: nowrap; }
+.dir-grid button.build:hover { background: #1F1F1F; }
+.dir-grid.sub { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0; background: transparent;
+                border-left: 1px solid #DADADA; border-bottom: none; }
+.dir-grid.sub li { border-right: 1px solid #DADADA; border-bottom: 1px solid #DADADA; }
+.dir-grid.sub .dir-name { font-size: 24px; }
+.dir-grid.sub button { padding: 18px 18px 20px; }
+@media (max-width: 720px) {
+  .dir-head { grid-template-columns: 1fr; }
+  .dir-head p { justify-self: start; }
+  .dir-name { font-size: 26px; }
+  .dir-grid button { padding: 18px 16px 20px; }
+  .dir-grid button.build { padding: 22px 16px; }
+}
+/* Categories while browsing: one row of pills that scrolls sideways on phones. */
+.pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.pills::-webkit-scrollbar { display: none; }
+.pills button { flex: 0 0 auto; background: #fff; border: 1.5px solid #000; border-radius: 999px; padding: 9px 16px;
+                font-size: 14px; font-weight: 700; color: #000; cursor: pointer; white-space: nowrap;
+                transition: background-color 160ms ease, color 160ms ease; }
+.pills button:hover { background: #F2F2F2; }
+.pills button.on { background: #000; color: #fff; }
 /* How it works */
 .steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
 .steps3 .n { font-family: var(--display); font-size: 64px; font-weight: 900; color: var(--marigold); line-height: 0.8;
@@ -806,7 +830,7 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .wordmark svg { width: 100% !important; height: auto !important; }
 @media (max-width: 980px) {
   .home-hero { grid-template-columns: 1fr; gap: 34px; padding: 8px 18px 44px; }
-  .hero-art { min-height: 380px; }
+  .hero-art { min-height: 520px; max-width: 520px; margin: 0 auto; width: 100%; }
   .hero-search { grid-template-columns: 1fr 1fr; }
   .hero-search > label { border-bottom: 1.5px solid #E2E2E2; }
   .hero-search > label:nth-child(2n) { border-right: none; }
@@ -814,13 +838,11 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .vendor-band { grid-template-columns: 1fr; padding: 36px 22px; }
   .steps3 { grid-template-columns: 1fr; gap: 26px; }
   .foot-in { grid-template-columns: 1fr 1fr; }
-  .picado { height: 64px; }
 }
 @media (max-width: 520px) {
-  .hero-photo { width: 92%; }
-  .ticket { margin-right: 10%; }
+  .hero-art { min-height: 480px; }
+  .ticket { width: 80%; right: 0; }
   .stamp { width: 104px; height: 104px; right: -10px; }
-  .bill li:not(:last-child)::after { margin: 0 0.45em; }
 }
 
 /* Phones: the logo mark alone, and the sticky search collapses to one row. */
@@ -831,6 +853,8 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .crit-toggle { display: inline-block; }
   .crit { display: none; }
   .crit.open { display: block; }
+  .sq { flex: 1 1 0 !important; min-width: 0 !important; }
+  .sgo { padding: 0 14px !important; }
 }
 
 /* ── Responsive grid ── */
@@ -904,17 +928,25 @@ export const C = {
 };
 
 /* ─── SEED DATA ──────────────────────────────────────────────────────────────── */
+/* Oct 2026: every kind of vendor the big event sites list (GigSalad, The
+   Bash, The Knot, PartySlate, Peerspace, Airbnb Services), grouped the way a
+   host thinks about an event. New ids: photo, staff, transport, beauty, kids. */
 export const CATEGORIES = [
-  { id:"all",        label:"All",                 icon:"✦" },
-  { id:"food",       label:"Food & Drinks",        icon:"🍽️" },
-  { id:"music",      label:"Music & Performance",  icon:"🎵" },
-  { id:"production", label:"Decor & Styling",     icon:"✨" },
-  { id:"logistics",  label:"Logistics",            icon:"📦" },
-  { id:"places",     label:"Places & Venues",      icon:"🏛️" },
-  { id:"rentals",    label:"Rentals",              icon:"🪑" },
-  { id:"av",         label:"Audio & Visual",       icon:"🔊" },
-  { id:"other",      label:"Other Services",       icon:"➕" },
-  { id:"build",      label:"Build My Event",       icon:"⚡" },
+  { id:"all",        label:"All",                   icon:"✦" },
+  { id:"places",     label:"Places & Venues",       icon:"🏛️" },
+  { id:"food",       label:"Food & Drinks",         icon:"🍽️" },
+  { id:"music",      label:"Music & Entertainment", icon:"🎵" },
+  { id:"photo",      label:"Photo & Video",         icon:"📷" },
+  { id:"production", label:"Decor & Design",        icon:"✨" },
+  { id:"rentals",    label:"Rentals",               icon:"🪑" },
+  { id:"av",         label:"Audio & Visual",        icon:"🔊" },
+  { id:"staff",      label:"Staff & Service",       icon:"🤵" },
+  { id:"beauty",     label:"Beauty & Style",        icon:"💄" },
+  { id:"transport",  label:"Transportation",        icon:"🚘" },
+  { id:"kids",       label:"Kids & Family",         icon:"🎈" },
+  { id:"logistics",  label:"Planning & Logistics",  icon:"📋" },
+  { id:"other",      label:"Other Services",        icon:"➕" },
+  { id:"build",      label:"Build My Event",        icon:"⚡" },
 ];
 
 const FOOD_SUBS    = [
@@ -926,6 +958,10 @@ const FOOD_SUBS    = [
   { id:"private-chef", l:"Private Chef",      e:"👨‍🍳", c:"#FFF1F2", a:"#BE123C", d:"Personal chefs for luxury events" },
   { id:"grazing",      l:"Grazing Tables",    e:"🧀", c:"#FFF7ED", a:"#C2410C", d:"Charcuterie boards & grazing spreads" },
   { id:"cultural",     l:"Cultural Cuisine",  e:"🌍", c:"#ECFDF5", a:"#059669", d:"Authentic international flavors" },
+  { id:"bbq",          l:"BBQ & Grill",        e:"🍖", c:"#FFF7ED", a:"#C2410C", d:"Pitmasters, smokers & live grills" },
+  { id:"cakes",        l:"Cakes & Bakers",     e:"🍰", c:"#FDF4FF", a:"#9333EA", d:"Wedding, birthday & custom cakes" },
+  { id:"coffee-bars",  l:"Coffee & Espresso Bars", e:"☕", c:"#FEFCE8", a:"#A16207", d:"Baristas and mobile espresso" },
+  { id:"treat-carts",  l:"Ice Cream & Treat Carts", e:"🍦", c:"#EFF6FF", a:"#1D4ED8", d:"Ice cream, snow cones, popcorn & more" },
 ];
 const MUSIC_SUBS = [
   { id:"djs",             l:"DJs",                  e:"🎧", c:"#F5F3FF", a:"#7C3AED", d:"Club, wedding & corporate DJs" },
@@ -936,12 +972,21 @@ const MUSIC_SUBS = [
   { id:"comedians",       l:"Comedians",             e:"😂", c:"#FEFCE8", a:"#A16207", d:"Stand-up comics & MC comedians" },
   { id:"kids-ent",        l:"Kids Entertainment",    e:"🎈", c:"#EFF6FF", a:"#1D4ED8", d:"Face painters, clowns & more" },
   { id:"instrumentalists",l:"Instrumentalists",      e:"🎻", c:"#F0FDF4", a:"#15803D", d:"Pianists, quartets & guitarists" },
+  { id:"mc-hosts",        l:"MCs & Hosts",           e:"🎙️", c:"#FFF4ED", a:"#C2410C", d:"Emcees for weddings, galas & parties" },
+  { id:"karaoke",         l:"Karaoke",               e:"🎤", c:"#F5F3FF", a:"#7C3AED", d:"Karaoke hosts and full setups" },
+  { id:"tribute-acts",    l:"Tribute Acts",          e:"⭐", c:"#FEFCE8", a:"#A16207", d:"Tribute bands & look-alikes" },
+  { id:"speakers",        l:"Speakers & Presenters", e:"🗣️", c:"#EFF6FF", a:"#1D4ED8", d:"Keynotes, panels & workshops" },
 ];
 const PRODUCTION_SUBS = [
   { id:"decor",      l:"Event Decor",        e:"✨", c:"#FFF1F2", a:"#BE123C", d:"Themed décor & centerpieces" },
   { id:"flowers",    l:"Flowers & Florals",  e:"💐", c:"#F0FDF4", a:"#15803D", d:"Floral arrangements & arches" },
   { id:"balloons",   l:"Balloons & Installs",e:"🎈", c:"#FFF7ED", a:"#B45309", d:"Balloon arches & installations" },
   { id:"draping",    l:"Draping & Backdrops",e:"🎀", c:"#F5F3FF", a:"#6D28D9", d:"Fabric draping, backdrops & arches" },
+  { id:"tablescapes", l:"Tablescapes",        e:"🕯️", c:"#FEFCE8", a:"#A16207", d:"Centerpieces & place settings" },
+  { id:"signage",     l:"Signs & Neon",       e:"🔆", c:"#EFF6FF", a:"#1D4ED8", d:"Welcome signs, neon & custom displays" },
+  { id:"special-fx",  l:"Special Effects",    e:"🎆", c:"#FFF1F2", a:"#BE123C", d:"Cold sparks, confetti, fog & bubbles" },
+  { id:"invitations", l:"Invitations & Stationery", e:"✉️", c:"#F0FDF4", a:"#15803D", d:"Invites, menus, programs & calligraphy" },
+  { id:"favors",      l:"Favors & Gifts",     e:"🎁", c:"#FDF2F8", a:"#BE185D", d:"Custom favors & guest gifts" },
 ];
 const LOGISTICS_SUBS = [
   { id:"truck-rental",  l:"Truck & Van Rental",     e:"🚛", c:"#FFF4ED", a:"#C2410C", d:"Box trucks & cargo vans" },
@@ -953,6 +998,7 @@ const LOGISTICS_SUBS = [
   { id:"security",      l:"Security",                e:"🛡️", c:"#FFF1F2", a:"#BE123C", d:"Event security & VIP detail" },
   { id:"valet",         l:"Valet & Parking",         e:"🅿️", c:"#F5F3FF", a:"#7C3AED", d:"Valet attendants & lot management" },
   { id:"cleanup",       l:"Cleanup Crews",           e:"🧹", c:"#ECFDF5", a:"#059669", d:"Pre/post event cleaning" },
+  { id:"officiants",    l:"Officiants & Ceremony",   e:"💍", c:"#FDF4FF", a:"#9333EA", d:"Officiants and ceremony coordinators" },
 ];
 const PLACES_SUBS = [
   { id:"venues",      l:"Event Venues",        e:"🏛️", c:"#F5F3FF", a:"#7C3AED", d:"Halls, ballrooms & event spaces" },
@@ -974,6 +1020,9 @@ const RENTALS_SUBS = [
   { id:"restrooms",    l:"Restroom Trailers",  e:"🚻", c:"#EFF6FF", a:"#1D4ED8", d:"Luxury portable restrooms" },
   { id:"power",        l:"Generators & Power", e:"🔌", c:"#ECFDF5", a:"#059669", d:"Generators, cabling & power distro" },
   { id:"inflatables",  l:"Inflatables & Bounce Houses", e:"🏰", c:"#F5F3FF", a:"#7C3AED", d:"Bounce houses, slides & obstacle courses" },
+  { id:"games",        l:"Games & Casino Tables", e:"🎲", c:"#FEFCE8", a:"#A16207", d:"Yard games, arcade & casino tables" },
+  { id:"bar-rentals",  l:"Bars & Bar Carts",   e:"🍸", c:"#EFF6FF", a:"#1D4ED8", d:"Portable bars, carts & back bars" },
+  { id:"catering-equipment", l:"Catering Equipment", e:"🍳", c:"#ECFDF5", a:"#059669", d:"Chafers, warmers, grills & coolers" },
 ];
 const AV_SUBS = [
   { id:"sound",       l:"Sound Systems",       e:"🔊", c:"#F5F3FF", a:"#7C3AED", d:"PA systems, speakers & audio crew" },
@@ -984,6 +1033,42 @@ const AV_SUBS = [
   { id:"cameras",     l:"Cameras & Live Stream",e:"🎥", c:"#FFF1F2", a:"#BE123C", d:"Cameras, switching & livestream" },
   { id:"microphones", l:"Mics & DJ Booths",    e:"🎤", c:"#F0FDF4", a:"#15803D", d:"Wireless mics & DJ setups" },
 ];
+const PHOTO_SUBS = [
+  { id:"photographers", l:"Photographers",      e:"📷", c:"#F5F3FF", a:"#7C3AED", d:"Weddings, parties & corporate events" },
+  { id:"videographers", l:"Videographers",      e:"🎬", c:"#EFF6FF", a:"#1D4ED8", d:"Films, highlights & live coverage" },
+  { id:"photo-booths",  l:"Photo Booths",       e:"🖼️", c:"#FFF7ED", a:"#C2410C", d:"Open-air, mirror & classic booths" },
+  { id:"booth-360",     l:"360 Video Booths",   e:"🔄", c:"#FDF2F8", a:"#BE185D", d:"Slow-motion 360 video platforms" },
+  { id:"drone",         l:"Drone Photo & Video",e:"🚁", c:"#F0FDF4", a:"#15803D", d:"Aerial shots of venues & crowds" },
+];
+const STAFF_SUBS = [
+  { id:"bartenders",    l:"Bartenders",          e:"🍸", c:"#EFF6FF", a:"#1D4ED8", d:"Licensed bartenders & mixologists" },
+  { id:"servers",       l:"Servers & Waitstaff", e:"🍽️", c:"#FEFCE8", a:"#A16207", d:"Plated, buffet & passed service" },
+  { id:"event-staff",   l:"Event Staff",         e:"🧑‍💼", c:"#F5F3FF", a:"#7C3AED", d:"Greeters, ushers & check-in" },
+  { id:"attendants",    l:"Attendants & Coat Check", e:"🧥", c:"#FFF1F2", a:"#BE123C", d:"Coat check, restroom & gift attendants" },
+  { id:"childcare",     l:"Event Childcare",     e:"🧸", c:"#ECFDF5", a:"#059669", d:"Sitters and kids' rooms at events" },
+];
+const BEAUTY_SUBS = [
+  { id:"hair",          l:"Hair Stylists",       e:"💇", c:"#FDF2F8", a:"#BE185D", d:"Bridal, party & on-site styling" },
+  { id:"makeup",        l:"Makeup Artists",      e:"💄", c:"#FFF1F2", a:"#BE123C", d:"Bridal, glam & airbrush makeup" },
+  { id:"nails",         l:"Nail Artists",        e:"💅", c:"#F5F3FF", a:"#7C3AED", d:"Manicures & nail art on location" },
+  { id:"barbers",       l:"Barbers & Grooming",  e:"💈", c:"#EFF6FF", a:"#1D4ED8", d:"Cuts, shaves & grooming on site" },
+  { id:"attire",        l:"Dress & Suit Rental", e:"🤵", c:"#FEFCE8", a:"#A16207", d:"Gowns, suits & tuxedo rental" },
+];
+const TRANSPORT_SUBS = [
+  { id:"limos",         l:"Limousines",          e:"🚘", c:"#F5F3FF", a:"#7C3AED", d:"Stretch limos & luxury sedans" },
+  { id:"party-buses",   l:"Party Buses",         e:"🚌", c:"#FFF7ED", a:"#C2410C", d:"Party buses & sprinter vans" },
+  { id:"classic-cars",  l:"Classic & Exotic Cars", e:"🏎️", c:"#FEFCE8", a:"#A16207", d:"Vintage, classic & exotic rides" },
+  { id:"shuttles",      l:"Guest Shuttles",      e:"🚐", c:"#EFF6FF", a:"#1D4ED8", d:"Shuttles between hotels & venues" },
+  { id:"carriages",     l:"Horse & Carriage",    e:"🐴", c:"#ECFDF5", a:"#059669", d:"Carriages for entrances & photos" },
+];
+const KIDS_SUBS = [
+  { id:"face-painting", l:"Face Painting",       e:"🎨", c:"#FDF2F8", a:"#BE185D", d:"Face painters & glitter artists" },
+  { id:"characters",    l:"Characters & Mascots",e:"🦸", c:"#EFF6FF", a:"#1D4ED8", d:"Costumed characters & mascots" },
+  { id:"balloon-artists", l:"Balloon Twisters",  e:"🎈", c:"#FFF7ED", a:"#C2410C", d:"Balloon animals & hats" },
+  { id:"petting-zoos",  l:"Petting Zoos & Pony Rides", e:"🐐", c:"#ECFDF5", a:"#059669", d:"Mobile petting zoos & ponies" },
+  { id:"game-trucks",   l:"Game Trucks",         e:"🎮", c:"#F5F3FF", a:"#7C3AED", d:"Video game trucks & laser tag" },
+  { id:"kids-crafts",   l:"Crafts & Activities", e:"✂️", c:"#FEFCE8", a:"#A16207", d:"Craft stations, science shows & more" },
+];
 /* Every category also gets an "Other" subcategory at the end, so a vendor whose
    service we haven't thought of can still list it (they name it themselves in
    the listing's Business name + description). Added programmatically so any
@@ -991,7 +1076,8 @@ const AV_SUBS = [
 export const CAT_SUBS = (() => {
   const base = { food: FOOD_SUBS, music: MUSIC_SUBS, production: PRODUCTION_SUBS,
                  logistics: LOGISTICS_SUBS, places: PLACES_SUBS, rentals: RENTALS_SUBS,
-                 av: AV_SUBS, other: [] };
+                 av: AV_SUBS, photo: PHOTO_SUBS, staff: STAFF_SUBS, beauty: BEAUTY_SUBS,
+                 transport: TRANSPORT_SUBS, kids: KIDS_SUBS, other: [] };
   const withOther = {};
   for (const [cat, subs] of Object.entries(base)) {
     const list = Array.isArray(subs) ? subs : [];
@@ -1297,56 +1383,56 @@ const EVENT_PACKAGES = [
   { id:"wedding", icon:"💍", label:"Wedding", color:"#FDF4FF", accent:"#9333EA",
     desc:"Ceremony, reception & everything in between",
     checklist:["Venue","DJ","Catering","Cake","Décor","Event Planner","Rentals (Linens, Chairs, Tables)","Audio & Visual","Photography","Live Band","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
-    subs:["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security"] },
+    subs:["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","officiants","bartenders","servers","invitations","cakes","attire"] },
   { id:"quince", icon:"👑", label:"Quinceañera / Sweet 16", color:"#FDF2F8", accent:"#BE185D",
     desc:"Elegant milestone celebrations",
     checklist:["Venue","DJ","Catering","Cake","Décor","Event Planner","Rentals (Linens, Chairs, Tables)","Audio & Visual","Photography","Live Band","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
-    subs:["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security"] },
+    subs:["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","bartenders","servers","invitations","cakes","attire","mc-hosts"] },
   { id:"corporate", icon:"💼", label:"Corporate Event", color:"#EFF6FF", accent:"#1D4ED8",
     desc:"Meetings, launches, team events & galas",
     checklist:["Venue","DJ / Live Music","Catering","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake","Portable Restrooms","Rentals (Generators / Tables / Chairs)","Security"],
-    subs:["venues","djs","live-bands","catering","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"] },
+    subs:["venues","djs","live-bands","catering","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","videographers","event-staff","bartenders","shuttles","speakers","signage","mc-hosts"] },
   { id:"birthday", icon:"🎂", label:"Birthday Party", color:"#FFF7ED", accent:"#EA580C",
     desc:"From intimate dinners to massive blowouts",
     checklist:["Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Generators / Tables / Chairs)","Security","Registry for Gifts"],
-    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"] },
+    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","photo-booths","bartenders","cakes","party-buses","karaoke"] },
   { id:"concert", icon:"🎤", label:"Concert / Festival", color:"#F5F3FF", accent:"#7C3AED",
     desc:"Live music events, shows & performances",
     checklist:["Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Stage / Generators / Tables / Chairs)","Security"],
-    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security"] },
+    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-staff","shuttles","photographers","videographers","special-fx"] },
   { id:"baby", icon:"🍼", label:"Baby Shower", color:"#ECFDF5", accent:"#059669",
     desc:"Intimate celebrations welcoming new life",
     checklist:["Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Generators / Tables / Chairs)","Security"],
-    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"] },
+    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","cakes","favors","balloon-artists"] },
   { id:"seminar", icon:"📊", label:"Seminar / Conference", color:"#F0FDF4", accent:"#15803D",
     desc:"Professional speaker events & workshops",
     checklist:["Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Stage / Generators / Tables / Chairs)","Security","Event Manager"],
-    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager"] },
+    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager","speakers","photographers","event-staff","signage"] },
   { id:"kids", icon:"🧸", label:"Kids Party", color:"#FFF7ED", accent:"#EA580C",
     desc:"Fun-packed parties for the little ones",
     checklist:["Inflatables","Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor (Balloons)","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Generators / Tables / Chairs)","Security","Face Painting"],
-    subs:["inflatables","venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","balloons","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","kids-ent"] },
+    subs:["inflatables","venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","balloons","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","kids-ent","face-painting","characters","petting-zoos","game-trucks","balloon-artists","kids-crafts","photo-booths","cakes"] },
   { id:"graduation", icon:"🎓", label:"Graduation", color:"#EFF6FF", accent:"#1D4ED8",
     desc:"Celebrate the big achievement",
     checklist:["Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Stage / Generators / Tables / Chairs)","Security","Event Manager"],
-    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager"] },
+    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager","photographers","photo-booths","cakes","party-buses"] },
   { id:"social", icon:"🥂", label:"Social Gathering", color:"#FFF1F2", accent:"#BE123C",
     desc:"Reunions, dinners & get-togethers",
     checklist:["Venue","DJ / Live Music","Catering / Food Truck","Bar Service","Décor","Valet / Parking","Audio & Visual","Photography","Clean Up","Animation / Entertainer","Cake / Desserts","Portable Restrooms","Rentals (Generators / Tables / Chairs)","Security"],
-    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"] },
+    subs:["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photo-booths","bartenders","karaoke","games"] },
 ];
 
 const RECS = {
-  "Wedding": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security"],
-  "Quinceañera / Sweet 16": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security"],
-  "Corporate Event": ["venues","djs","live-bands","catering","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"],
-  "Birthday Party": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"],
-  "Concert / Festival": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security"],
-  "Baby Shower": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"],
-  "Seminar / Conference": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager"],
-  "Kids Party": ["inflatables","venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","balloons","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","kids-ent"],
-  "Graduation": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager"],
-  "Social Gathering": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security"],
+  "Wedding": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","officiants","bartenders","servers","invitations","cakes","attire"],
+  "Quinceañera / Sweet 16": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","bartenders","servers","invitations","cakes","attire","mc-hosts"],
+  "Corporate Event": ["venues","djs","live-bands","catering","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","videographers","event-staff","bartenders","shuttles","speakers","signage","mc-hosts"],
+  "Birthday Party": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","photo-booths","bartenders","cakes","party-buses","karaoke"],
+  "Concert / Festival": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-staff","shuttles","photographers","videographers","special-fx"],
+  "Baby Shower": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","cakes","favors","balloon-artists"],
+  "Seminar / Conference": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager","speakers","photographers","event-staff","signage"],
+  "Kids Party": ["inflatables","venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","balloons","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","kids-ent","face-painting","characters","petting-zoos","game-trucks","balloon-artists","kids-crafts","photo-booths","cakes"],
+  "Graduation": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","stages","tables-chairs","power","security","event-manager","photographers","photo-booths","cakes","party-buses"],
+  "Social Gathering": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photo-booths","bartenders","karaoke","games"],
 };
 
 const WIZARD = [
@@ -2214,7 +2300,7 @@ export function subcatMax(category) { return category === "rentals" ? 20 : 3; }
 
 /* Categories where time is part of the offer (a set, a rental period, a
    truck's service window). The editor asks for it first on these. */
-export const TIMED_CATEGORIES = ["music", "rentals", "food", "av", "logistics", "production", "other"];
+export const TIMED_CATEGORIES = ["music", "rentals", "food", "av", "logistics", "production", "photo", "staff", "beauty", "transport", "kids", "other"];
 
 /* True when an option is complete enough to show a customer. */
 function packageHasPrice(p) {
@@ -5196,62 +5282,21 @@ function AuthModal({ onClose, onAuth }) {
 
 
 /* ─── REQUEST SENT MODAL ─────────────────────────────────────────────────────── */
-/* Papel picado: cut-paper flags strung across the top of the hero. Drawn as
-   one flag shape with holes punched by a mask, repeated along a string. */
-function PapelPicado() {
-  const colors = ["#FFFFFF", "#E4007C", "#FFFFFF", "#000000"];
-  const W = 110, N = 24;
-  const zig = Array.from({ length: 6 }, (_, i) => `L${96 - i * 16 - 8},96 L${96 - i * 16 - 16},84`).join(" ");
-  return (
-    <svg className="picado" viewBox={`0 0 ${W * N} 100`} preserveAspectRatio="xMidYMin slice" aria-hidden="true" focusable="false">
-      <defs>
-        <mask id="picado-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-          <rect x="0" y="0" width="100" height="100" fill="#fff" />
-          <circle cx="48" cy="46" r="8" fill="#000" />
-          {[0, 60, 120, 180, 240, 300].map(a => (
-            <circle key={a} cx={48 + 16 * Math.cos(a * Math.PI / 180)} cy={46 + 16 * Math.sin(a * Math.PI / 180)} r="5" fill="#000" />
-          ))}
-          {[[14, 30], [82, 30]].map(([x, y]) => (
-            <path key={x + "-" + y} d={`M${x},${y - 7} L${x + 6},${y} L${x},${y + 7} L${x - 6},${y} Z`} fill="#000" />
-          ))}
-          {[24, 36, 48, 60, 72].map(x => <circle key={x} cx={x} cy="16" r="2.4" fill="#000" />)}
-          {[20, 32, 44, 56, 68].map(x => <path key={"t" + x} d={`M${x},70 L${x + 8},70 L${x + 4},77 Z`} fill="#000" />)}
-        </mask>
-      </defs>
-      <path d={`M0,7 L${W * N},7`} stroke="#000" strokeWidth="1.5" />
-      {Array.from({ length: N }, (_, i) => (
-        <g key={i} transform={`translate(${i * W + 5},7)`}>
-          <g className="flag" style={{ animationDelay: `${(i % 12) * 40}ms` }}>
-            <path d={`M0,0 L96,0 L96,84 ${zig} L0,84 Z`.replace("L0,84 L0,84", "L0,84")}
-              fill={colors[i % colors.length]} mask="url(#picado-cut)" />
-          </g>
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-/* The ink stamp on the hero photo: the promise in both languages. */
+/* The stamp on the hero photo: the promise. */
 function Stamp() {
   return (
     <svg viewBox="0 0 140 140" aria-hidden="true" focusable="false" data-no-translate>
       <defs><path id="stamp-ring" d="M70,70 m-52,0 a52,52 0 1,1 104,0 a52,52 0 1,1 -104,0" /></defs>
-      <circle cx="70" cy="70" r="68" fill="#E4007C" />
+      <circle cx="70" cy="70" r="68" fill="#000" />
       <circle cx="70" cy="70" r="40" fill="none" stroke="#fff" strokeWidth="1.5" />
       <text fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:800, fontSize:17 }}>
-        <textPath href="#stamp-ring" textLength="318" lengthAdjust="spacing">ONE PRICE ✦ UN SOLO PRECIO ✦</textPath>
+        <textPath href="#stamp-ring" textLength="318" lengthAdjust="spacing">ONE PRICE ● NO FEES ADDED ●</textPath>
       </text>
-      <text x="70" y="84" textAnchor="middle" fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:900, fontSize:44 }}>$</text>
+      <text x="70" y="84" textAnchor="middle" fill="#FF5C28" style={{ fontFamily:"var(--display)", fontWeight:900, fontSize:44 }}>$</text>
     </svg>
   );
 }
 
-/* The headline in the other language, as part of the design. */
-function CounterLine({ en, es }) {
-  const [lang, setL] = useState(getLang());
-  useEffect(() => onLangChange(setL), []);
-  return <span className="es" data-no-translate lang={lang === "es" ? "en" : "es"}>{lang === "es" ? en : es}</span>;
-}
 
 /* English / Español switch. The page itself is translated in i18n.js; this
    only flips it and remembers the choice. Never translated itself. */
@@ -7036,7 +7081,7 @@ function NotificationBell({ userId, onClick, open, onOpenTarget }) {
    Step 2: walk every service category, one Yes/No at a time. On "Yes", the
            matching vendors for that category + event type are shown to add.
    Step 3: review every selection and send all booking requests at once. */
-const BUILD_CATEGORY_WALK = ["places","music","food","production","av","logistics","rentals"];
+const BUILD_CATEGORY_WALK = ["places","food","music","photo","production","rentals","av","staff","beauty","transport","kids","logistics"];
 
 /* ─── Click-only date & time pickers for Build My Event ─────────────────────
    No typing anywhere — the user taps a day on the calendar and taps time pills. */
@@ -10380,7 +10425,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
                    opacity: imgLoaded ? 1 : 0, transition:"opacity 0.3s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1)" }}
           className="vendor-img" />
         {v.instant && (
-          <span style={{ position:"absolute", top:12, left:12, background:"#E4007C", color:"#fff", fontSize:12,
+          <span style={{ position:"absolute", top:12, left:12, background:"#000", color:"#fff", fontSize:12,
                          fontWeight:800, padding:"4px 10px", borderRadius:99, boxShadow:"0 2px 8px rgba(23,18,15,0.15)" }}>
             ⚡ Instant booking
           </span>
@@ -13142,7 +13187,7 @@ export default function PlujApp() {
                       backdropFilter:"blur(16px)", borderBottom:`1px solid ${C.border}`,
                       padding:"10px 16px" }}>
           <div style={{ maxWidth:1240, margin:"0 auto", display:"flex", flexWrap:"wrap", gap:8, alignItems:"stretch" }}>
-            <label style={{ flex:"2 1 220px", minWidth:180, display:"flex", alignItems:"center", gap:8,
+            <label className="sq" style={{ flex:"2 1 220px", minWidth:180, display:"flex", alignItems:"center", gap:8,
                             border:`1px solid ${C.border}`, borderRadius:12, padding:"0 12px", background:"#fff" }}>
               <span aria-hidden="true">🔍</span>
               <input ref={searchRef} placeholder="Search DJs, catering, flowers, lighting..."
@@ -13191,8 +13236,8 @@ export default function PlujApp() {
                   const el = document.getElementById("results-top");
                   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                 });
-              }} className="btn"
-              style={{ background:C.orange, color:"#fff", borderRadius:12, padding:"0 20px",
+              }} className="btn sgo"
+              style={{ background:"#000", color:"#fff", borderRadius:12, padding:"0 20px",
                        fontSize:14, fontWeight:800, whiteSpace:"nowrap", minHeight:44 }}>
               Search
             </button>
@@ -13208,20 +13253,18 @@ export default function PlujApp() {
       )}
 
       {/* ── HERO ─────────────────────────────────────────────────────────
-          A marigold field with papel picado strung across the top: the look
-          of a Houston celebration. The thesis is the product's difference,
-          one price for the whole event, and the ticket on the right shows
-          what that means (marked as an example). */}
+          A marigold field; the artwork is built from the logo's own shapes
+          (the dot, the bowl, the half moon) with the event photo set inside
+          the bowl. The thesis is the product's difference, one price for the
+          whole event, and the ticket shows what that means (an example). */}
       {isHero && (
         <section className="hero-field">
-          <PapelPicado />
           <div className="home-hero">
             <div>
               <h1>Your whole event.<br />One price.</h1>
-              <CounterLine en="Your whole event. One price." es="Todo tu evento. Un solo precio." />
               <p className="lede">
-                Food trucks, DJs, mariachi, venues, decor and rentals in one cart. Every vendor is
-                checked by PLUJ, and the price you see is the price you pay.
+                Venues, food trucks, DJs, photographers, decor, rentals and staff in one cart.
+                Every vendor is checked by PLUJ, and the price you see is the price you pay.
               </p>
 
               <div className="hero-search" role="search">
@@ -13275,16 +13318,18 @@ export default function PlujApp() {
             </div>
 
             <div className="hero-art" aria-hidden="true">
+              <span className="shape dot" />
               <div className="hero-photo">
                 <img src={market?.hero || "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=1400&q=80"} alt="" />
               </div>
+              <span className="shape moon" />
               <div className="stamp"><Stamp /></div>
               <div className="ticket">
                 <div className="top">
                   <span className="ex">Example</span>
                   <span className="tag">Sat, Nov 14, 150 guests</span>
-                  <div className="ev">Sofía's quinceañera</div>
-                  <div className="row"><span>Taco truck, 3 hours</span><span className="lead" /><b>$1,500</b></div>
+                  <div className="ev">Wedding reception</div>
+                  <div className="row"><span>Food truck, 3 hours</span><span className="lead" /><b>$1,500</b></div>
                   <div className="row"><span>DJ and lighting, 5 hours</span><span className="lead" /><b>$1,200</b></div>
                   <div className="row"><span>Dance floor</span><span className="lead" /><b>$450</b></div>
                 </div>
@@ -13322,50 +13367,72 @@ export default function PlujApp() {
       {!vendorPage && (
         <div style={{ maxWidth:1280, margin:"0 auto", padding:`${isHero?"28px":"32px"} 24px 100px` }}>
 
-          {/* Categories, set like a festival bill: the names are the design. */}
-          <nav aria-label="Categories" style={{ margin: isHero ? "40px 0 56px" : "6px 0 28px" }}>
-            {isHero && (
-              <h2 style={{ fontSize:20, fontFamily:"'Figtree', system-ui, sans-serif", fontWeight:750, margin:"0 0 14px", color:"#4B5260" }}>
-                Build your lineup in {market?.label?.split(",")[0] || "Houston"}
-              </h2>
-            )}
-            <ul className={`bill${isHero ? "" : " sm"}`}>
-              {CATEGORIES.map(cat => {
-                const n = cat.id === "all" || cat.id === "build" ? 0 : dbVendors.filter(v => v.cat === cat.id).length;
-                return (
-                  <li key={cat.id}>
-                    <button onClick={()=>pickCat(cat.id)} aria-current={activeCat===cat.id ? "true" : undefined}
-                      className={`${activeCat===cat.id ? "on" : ""}${cat.id==="build" ? " build" : ""}`}>
-                      {cat.id === "all" ? "Everything" : cat.label}
-                    </button>
-                    {n > 0 && <sup>{n}</sup>}
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+          {/* Categories. On the home page: a directory, every category with the
+              services in it, so a host sees the whole event in one place. While
+              browsing: one quiet row of pills. Black and white only. */}
+          {isHero ? (
+            <nav aria-label="Categories" className="dir" style={{ margin:"48px 0 64px" }}>
+              <div className="dir-head">
+                <h2>Everything your event needs</h2>
+                <p>{`${CATEGORIES.filter(c => CAT_SUBS[c.id]?.length > 1).length} categories and ${Object.values(CAT_SUBS).reduce((n, s) => n + s.filter(x => x.id !== "other").length, 0)} kinds of vendors in ${market?.label?.split(",")[0] || "Houston"}. Mix them in one cart and pay one price.`}</p>
+              </div>
+              <ul className="dir-grid">
+                {CATEGORIES.filter(c => c.id !== "all" && c.id !== "other").map(cat => {
+                  const list = (CAT_SUBS[cat.id] || []).filter(s => s.id !== "other");
+                  const shown = list.slice(0, 5).map(s => s.l);
+                  const more = list.length - shown.length;
+                  if (cat.id === "build") return (
+                    <li key={cat.id} className="wide">
+                      <button onClick={()=>pickCat(cat.id)} className="build">
+                        <span className="dir-name">Not sure where to start?</span>
+                        <span className="dir-subs">Answer a few questions about your event and PLUJ lines up a vendor for each part of it, in order.</span>
+                        <span className="go">Build my event</span>
+                      </button>
+                    </li>
+                  );
+                  return (
+                    <li key={cat.id}>
+                      <button onClick={()=>pickCat(cat.id)} aria-current={activeCat===cat.id ? "true" : undefined}>
+                        <span className="dir-name">{cat.label}</span>
+                        <span className="dir-subs">
+                          {/* one text node per service, so each one translates on its own */}
+                          {shown.map((l, i) => <React.Fragment key={l}>{i ? ", " : ""}{l}</React.Fragment>)}
+                          {more > 0 && <span className="more">{` and ${more} more`}</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+          ) : (
+            <nav aria-label="Categories" className="pills" style={{ margin:"6px 0 28px" }}>
+              {CATEGORIES.map(cat => (
+                <button key={cat.id} onClick={()=>pickCat(cat.id)} aria-current={activeCat===cat.id ? "true" : undefined}
+                  className={activeCat===cat.id ? "on" : ""}>
+                  {cat.id === "all" ? "Everything" : cat.label}
+                </button>
+              ))}
+            </nav>
+          )}
 
           {/* ── SUBCATEGORY GRID ──────────────────────────────────────── */}
           {showSubGrid && (
             <div className="fade-up">
-              <div style={{ marginBottom:24 }}>
-                <h2 style={{ fontSize:22, fontWeight:800, margin:"0 0 4px", letterSpacing:"-0.03em" }}>{catObj?.label}</h2>
-                <p style={{ fontSize:13, color:C.midGray, margin:0, fontWeight:500 }}>Browse by type or use the search bar above.</p>
+              <div style={{ marginBottom:18 }}>
+                <h2 style={{ fontSize:"clamp(34px, 4vw, 52px)", lineHeight:0.95, margin:"0 0 8px" }}>{catObj?.label}</h2>
+                <p style={{ fontSize:15, color:"#4B5260", margin:0 }}>Pick a service, or search above.</p>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(170px, 1fr))", gap:10, marginBottom:36 }}>
-                {subs.map((s,i) => (
-                  <button key={s.id} onClick={()=>setActiveSub(s.id)} className="subcard btn"
-                    style={{ background:s.c, border:"1.5px solid transparent", borderRadius:16,
-                             padding:"18px 14px", textAlign:"left", width:"100%",
-                             animation:`fadeUp 0.3s ${i*0.035}s ease both` }}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=s.a}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
-                    <div style={{ marginBottom:10 }}><Emoji e={s.e} size={28} /></div>
-                    <div style={{ fontSize:13, fontWeight:800, color:s.a, marginBottom:2, fontFamily:"var(--display)" }}>{s.l}</div>
-                    <div style={{ fontSize:11, color:"#6B7280", lineHeight:1.5, marginTop:4 }}>{s.d}</div>
-                  </button>
+              <ul className="dir-grid sub" style={{ marginBottom:40 }}>
+                {subs.map(s => (
+                  <li key={s.id}>
+                    <button onClick={()=>setActiveSub(s.id)}>
+                      <span className="dir-name">{s.l}</span>
+                      <span className="dir-subs">{s.d}</span>
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
               {/* Featured for this category */}
               <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:24 }}>
                 <h3 style={{ fontSize:18, fontWeight:800, margin:"0 0 16px", letterSpacing:"-0.02em" }}>Featured in {catObj?.label}</h3>
