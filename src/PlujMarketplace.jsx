@@ -124,7 +124,7 @@ export function PlujMark({ size = 32, light = false }) {
       </svg>
       <span
         style={{
-          fontFamily: "'Playfair Display', Georgia, serif",
+          fontFamily: "var(--display)",
           fontWeight: 900,
           fontSize: Math.round(size * 0.86),
           letterSpacing: "-0.015em",
@@ -203,7 +203,7 @@ function OriginBlockedScreen() {
                     padding:"44px 36px", textAlign:"center",
                     border:"1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ fontSize:52, marginBottom:20, lineHeight:1 }}>🚫</div>
-        <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:800,
+        <h1 style={{ fontFamily:"var(--display)", fontSize:26, fontWeight:800,
                      color:"#fff", margin:"0 0 10px" }}>
           Access Denied
         </h1>
@@ -472,20 +472,54 @@ function fmtCurrency(amount, countryCode = "US") {
 }
 
 export const GLOBAL_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@400;500;600;700&display=swap');
+/* ── Type: Big Shoulders Display, a condensed poster face with the energy of
+   a dance-hall or festival bill, for display; Figtree for everything you
+   read, clear in English and Spanish with all the accents. ── */
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500..900&family=Figtree:wght@400..800&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #fff; }
-.pluj { font-family: 'Inter', sans-serif; color: #111; background: #fff; min-height: 100vh; }
-.pluj button, .pluj input, .pluj select, .pluj textarea { font-family: 'Inter', sans-serif; }
-.pluj h1, .pluj h2, .pluj h3 { font-family: 'Playfair Display', serif; }
+:root {
+  --ink: #17120F; --ink-2: #4B5260; --ink-3: #6B7280;
+  --line: #E7E7E9; --surface: #F6F6F7; --white: #FFFFFF;
+  --accent: #D13F17; --accent-hover: #B83510; --flame: #FF5C28; --accent-soft: #FFF1EC;
+  /* Celebration palette for the public pages: marigold (PLUJ orange) as a
+     surface, rosa mexicano for small moments, true black type. */
+  --marigold: #FF5C28; --rosa: #E4007C; --black: #000000;
+  --display: 'Big Shoulders Display', 'Figtree', system-ui, sans-serif;
+  --ok: #0F7A55; --ok-soft: #E8F6EF;
+  --r-sm: 10px; --r-md: 14px; --r-lg: 22px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* z-index scale */
+  --z-sticky: 200; --z-dropdown: 300; --z-drawer: 900; --z-modal: 1000; --z-toast: 1200;
+}
+html { -webkit-text-size-adjust: 100%; }
+body { background: #fff; color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.pluj { font-family: 'Figtree', system-ui, sans-serif; color: var(--ink); background: #fff; min-height: 100vh;
+        font-size: 15px; line-height: 1.5; }
+.pluj button, .pluj input, .pluj select, .pluj textarea { font-family: 'Figtree', system-ui, sans-serif; color: inherit; }
+.pluj h1, .pluj h2 { font-family: var(--display); font-weight: 800; letter-spacing: -0.005em;
+        text-wrap: balance; color: var(--ink); line-height: 1.02; }
+.pluj h3 { font-family: 'Figtree', system-ui, sans-serif; font-weight: 750; letter-spacing: -0.01em; text-wrap: balance; color: var(--ink); }
+.pluj ::selection { background: #FF5C28; color: #000; }
+.pluj p { text-wrap: pretty; }
+.pluj a { color: var(--accent); }
 input { outline: none; }
 
+/* ── Visible keyboard focus everywhere ── */
+.pluj button:focus-visible, .pluj a:focus-visible, .pluj [role="button"]:focus-visible,
+.pluj summary:focus-visible { outline: 3px solid rgba(209,63,23,0.45); outline-offset: 2px; border-radius: 10px; }
+
+/* ── Motion respects the visitor's setting ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+                           transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
 /* ── Focus rings only on keyboard navigation (Uber Eats pattern) ── */
-input:focus-visible { border-color: #276EF1 !important; box-shadow: 0 0 0 3px rgba(39,110,241,0.18) !important; }
+input:focus-visible { border-color: #D13F17 !important; box-shadow: 0 0 0 3px rgba(209,63,23,0.16) !important; }
 input:focus:not(:focus-visible) { border-color: #E5E7EB !important; box-shadow: none !important; }
-textarea:focus-visible { outline: 2px solid rgba(39,110,241,0.35) !important; outline-offset: 2px; }
+textarea:focus-visible { outline: 2px solid rgba(209,63,23,0.35) !important; outline-offset: 2px; }
 textarea:focus:not(:focus-visible) { outline: none !important; }
-select:focus-visible { outline: 2px solid rgba(39,110,241,0.35); outline-offset: 1px; }
+select:focus-visible { outline: 2px solid rgba(209,63,23,0.35); outline-offset: 1px; }
 select:focus:not(:focus-visible) { outline: none; }
 
 /* ── Password show/hide eye (PasswordInput) ──
@@ -496,11 +530,11 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .pw-eye:hover { opacity: 1; background: rgba(127,127,127,0.12) !important; }
 .pw-eye:focus-visible { outline: 2px solid rgba(39,110,241,0.6); outline-offset: 0; opacity: 1; }
 
-/* ── Buttons: 200ms cubic-bezier(0,0,1,1) — Uber Eats exact timing ── */
+/* ── Buttons ── */
 .btn {
-  transition: background 200ms cubic-bezier(0,0,1,1), color 200ms cubic-bezier(0,0,1,1),
-              border-color 200ms cubic-bezier(0,0,1,1), transform 0.1s ease,
-              box-shadow 0.15s ease, opacity 0.15s ease;
+  transition: background 180ms var(--ease-out), color 180ms var(--ease-out),
+              border-color 180ms var(--ease-out), transform 120ms var(--ease-out),
+              box-shadow 180ms var(--ease-out), opacity 150ms ease;
   cursor: pointer; border: none;
 }
 .btn:active { transform: scale(0.97); }
@@ -590,15 +624,12 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 
 /* ── Vendor card V2 ── */
 .vcard2 {
-  border-radius: 20px; overflow: hidden; background: #fff;
-  border: 1px solid #E5E7EB; transition: all 0.22s ease;
-  cursor: pointer;
+  border-radius: 18px; overflow: hidden; background: #fff;
+  border: 1px solid var(--line); cursor: pointer;
+  transition: transform 260ms var(--ease-out), box-shadow 260ms var(--ease-out), border-color 260ms var(--ease-out);
+  display: flex; flex-direction: column;
 }
-.vcard2:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 48px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
-  border-color: transparent;
-}
+.vcard2:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -18px rgba(23,18,15,0.28); border-color: #DADADD; }
 .vcard2:active { transform: translateY(-1px); }
 
 /* ── Heart / favorite button ── */
@@ -635,11 +666,7 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 }
 
 /* ── Gradient text ── */
-.gradient-text {
-  background: linear-gradient(135deg, #FF5C28 0%, #FF8C00 50%, #FFB800 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+.gradient-text { color: var(--accent); }
 
 /* ── Recommendation chip ── */
 .rec-chip {
@@ -668,6 +695,139 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 
 /* ── Smooth page transitions ── */
 .page-enter { animation: fadeUp 0.32s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* ── Home (Oct 2026 redesign): a Houston celebration ──
+   The hero is a marigold field with a papel picado banner strung across the
+   top; the example event is a real ticket stub; the categories are set like
+   a festival bill. Everything else stays quiet. */
+.hero-field { background: var(--marigold); color: var(--black); position: relative; overflow: hidden; }
+.picado { display: block; width: 100%; height: 92px; }
+.picado .flag { transform-origin: 50% 0; }
+@keyframes sway { 0% { transform: rotate(-3deg); } 60% { transform: rotate(1.5deg); } 100% { transform: rotate(0deg); } }
+.picado .flag { animation: sway 1.6s var(--ease-out) both; }
+.home-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 56px;
+             align-items: center; max-width: 1240px; margin: 0 auto; padding: 18px 28px 64px; }
+.home-hero h1 { font-size: clamp(56px, 7.2vw, 96px); line-height: 0.92; font-weight: 800; letter-spacing: -0.01em;
+                color: var(--black); margin: 0; }
+.home-hero .es { display: block; font-family: 'Figtree', system-ui, sans-serif; font-size: clamp(18px, 1.7vw, 22px);
+                 font-weight: 600; letter-spacing: 0; line-height: 1.3; margin: 14px 0 22px; color: rgba(0,0,0,0.72); }
+.home-hero .lede { font-size: 18px; line-height: 1.55; color: #000; max-width: 33em; margin: 0 0 28px; }
+.hero-search { display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.8fr auto; background: #fff;
+               border-radius: 16px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,0.9); border: 2px solid #000; }
+.hero-search > label { display: block; padding: 11px 16px 10px; border-right: 1.5px solid #E2E2E2; min-width: 0; cursor: text; }
+.hero-search > label span { display: block; font-size: 12.5px; font-weight: 800; color: #000; }
+.hero-search input, .hero-search select { width: 100%; border: none; outline: none; background: transparent;
+               font-size: 15px; padding: 3px 0 0; color: #000; min-width: 0; }
+.hero-search button.go { margin: 7px; border-radius: 11px; padding: 0 24px; background: #000; color: #fff;
+               font-weight: 800; font-size: 15px; white-space: nowrap; }
+.hero-search button.go:hover { background: #2b2b2b; }
+.hero-alt { background: none; border: none; padding: 0; font-size: 15px; font-weight: 700; color: #000;
+            text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; cursor: pointer; }
+.promise-row { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 26px; }
+.promise { font-size: 14.5px; color: #000; display: inline-flex; gap: 8px; align-items: baseline; }
+.promise b { font-weight: 800; }
+.promise::before { content: ""; width: 9px; height: 9px; background: #000; transform: rotate(45deg) translateY(-1px); flex: 0 0 auto; }
+.hero-art { position: relative; min-height: 470px; display: flex; align-items: center; justify-content: center; }
+.hero-photo { position: absolute; right: 0; top: 0; width: 78%; height: 86%; border-radius: 200px 200px 22px 22px;
+              overflow: hidden; border: 2px solid #000; background: #000; }
+.hero-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stamp { position: absolute; right: -6px; bottom: 6%; width: 138px; height: 138px; z-index: 3; }
+.stamp svg { width: 100%; height: 100%; animation: spin 26s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* The ticket: a real stub. Notches at the tear line come from a mask, the
+   barcode from stripes, the total is set in the poster face. */
+.ticket { position: relative; z-index: 2; align-self: flex-end; margin-right: 26%; width: min(320px, 82%);
+          background: #fff; color: #000; border: 2px solid #000; border-radius: 16px; transform: rotate(-3deg);
+          transition: transform 400ms var(--ease-out); padding: 0;
+          -webkit-mask: radial-gradient(circle 11px at 0 66%, transparent 10.5px, #000 11px) left / 51% 100% no-repeat,
+                        radial-gradient(circle 11px at 100% 66%, transparent 10.5px, #000 11px) right / 51% 100% no-repeat;
+                  mask: radial-gradient(circle 11px at 0 66%, transparent 10.5px, #000 11px) left / 51% 100% no-repeat,
+                        radial-gradient(circle 11px at 100% 66%, transparent 10.5px, #000 11px) right / 51% 100% no-repeat; }
+.ticket:hover { transform: rotate(0deg) translateY(-4px); }
+.ticket .top { padding: 16px 18px 12px; }
+.ticket .tag { font-size: 12px; font-weight: 800; color: #000; }
+.ticket .ex { font-size: 11.5px; font-weight: 700; color: #555; float: right; }
+.ticket .ev { font-family: var(--display); font-size: 30px; font-weight: 800; line-height: 1; margin: 6px 0 10px; }
+.ticket .row { display: flex; align-items: baseline; gap: 6px; font-size: 13.5px; padding: 3px 0; }
+.ticket .row .lead { flex: 1; border-bottom: 1.5px dotted #B5B5B5; transform: translateY(-3px); }
+.ticket .row b { font-weight: 800; white-space: nowrap; }
+.ticket .tear { border-top: 2px dashed #000; margin: 0 14px; }
+.ticket .bottom { padding: 12px 18px 14px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; }
+.ticket .total { font-family: var(--display); font-size: 40px; font-weight: 900; line-height: 0.9; }
+.ticket .note { font-size: 12px; color: #333; margin-top: 4px; }
+.ticket .ok { font-size: 12.5px; font-weight: 800; color: var(--rosa); }
+.ticket .barcode { width: 64px; height: 38px; background: repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 4px, #000 4px 5px, transparent 5px 8px, #000 8px 11px, transparent 11px 12px); }
+/* Categories, set like a festival bill: big condensed names that wrap. */
+.bill { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 0; margin: 0; padding: 0; list-style: none; }
+.bill li { display: inline-flex; align-items: baseline; }
+.bill li + li::before { content: "/"; font-family: var(--display); font-size: clamp(26px, 3.4vw, 46px); font-weight: 500;
+                        color: #C9C9C9; margin: 0 14px; }
+.bill button { background: none; border: none; padding: 0; cursor: pointer; font-family: var(--display); font-weight: 800;
+               font-size: clamp(30px, 4vw, 56px); line-height: 1.05; color: #000; letter-spacing: -0.005em;
+               text-decoration: none; background-image: linear-gradient(var(--marigold), var(--marigold));
+               background-size: 0% 0.2em; background-repeat: no-repeat; background-position: 0 88%;
+               transition: background-size 320ms var(--ease-out), color 200ms ease; }
+.bill button:hover, .bill button.on { background-size: 100% 0.2em; }
+.bill button.on { color: #000; }
+.bill button.build { color: var(--rosa); }
+.bill.sm button { font-size: clamp(22px, 2.4vw, 32px); }
+.bill.sm li + li::before { font-size: clamp(20px, 2.2vw, 28px); margin: 0 10px; }
+.bill sup { font-family: 'Figtree', system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #6B6B6B; margin-left: 4px; vertical-align: super; }
+/* How it works */
+.steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
+.steps3 .n { font-family: var(--display); font-size: 64px; font-weight: 900; color: var(--marigold); line-height: 0.8;
+             -webkit-text-stroke: 2px #000; }
+.steps3 h3 { margin: 14px 0 6px; font-size: 20px; }
+/* The comparison table */
+.compare { border-top: 2px solid #000; }
+.crow { display: grid; grid-template-columns: 0.7fr 1.15fr 1.15fr; gap: 16px; padding: 16px 0; border-bottom: 1px solid #E2E2E2; align-items: baseline; }
+.crow > span:first-child { font-weight: 800; font-size: 15px; }
+.crow .them { color: #6B6B6B; font-size: 16px; text-decoration: line-through; text-decoration-color: rgba(0,0,0,0.25); }
+.crow .us { font-family: var(--display); font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; line-height: 1.05; }
+.crow.head { padding: 10px 0; }
+.crow.head span { font-family: 'Figtree', system-ui, sans-serif !important; font-size: 13.5px !important; font-weight: 800 !important;
+                  color: #4B5260; text-decoration: none !important; }
+.crow.head .us { color: #000; }
+@media (max-width: 640px) {
+  .crow { grid-template-columns: 1fr 1fr; }
+  .crow > span:first-child { grid-column: 1 / -1; margin-bottom: -8px; }
+  .crow.head > span:first-child { display: none; }
+}
+/* Vendors: a poster block */
+.vendor-band { background: #000; color: #fff; border-radius: 4px; padding: 56px 48px; display: grid;
+               grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; align-items: end; position: relative; overflow: hidden; }
+.vendor-band h2 { color: #fff !important; font-size: clamp(44px, 6vw, 88px); line-height: 0.92; margin: 0 0 18px; }
+.vendor-band .big { font-family: var(--display); font-weight: 900; font-size: clamp(64px, 8vw, 120px); line-height: 0.85; color: var(--marigold); }
+.vendor-band .fact { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: baseline;
+                     padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.18); font-size: 15px; color: rgba(255,255,255,0.86); }
+.vendor-band .fact b { font-family: var(--display); font-size: 36px; font-weight: 800; color: #fff; min-width: 3.2ch; }
+/* Footer: the wordmark, full width */
+.foot { background: #fff; border-top: 2px solid #000; }
+.foot-in { max-width: 1240px; margin: 0 auto; padding: 44px 28px 18px; display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 28px; }
+.foot h4 { font-size: 14px; font-weight: 800; margin: 0 0 10px; color: #000; }
+.foot button.lnk { display: block; background: none; border: none; padding: 5px 0; font-size: 14.5px; color: #333; cursor: pointer; text-align: left; }
+.foot button.lnk:hover { color: #000; text-decoration: underline; text-underline-offset: 3px; }
+.wordmark { font-family: var(--display); font-weight: 900; font-size: clamp(120px, 26vw, 360px); line-height: 0.78;
+            letter-spacing: -0.02em; color: var(--marigold); margin: 0; padding: 0 20px; white-space: nowrap; overflow: hidden;
+            -webkit-text-stroke: 2px #000; user-select: none; }
+@media (max-width: 980px) {
+  .home-hero { grid-template-columns: 1fr; gap: 34px; padding: 8px 18px 44px; }
+  .hero-art { min-height: 380px; }
+  .hero-search { grid-template-columns: 1fr 1fr; }
+  .hero-search > label { border-bottom: 1.5px solid #E2E2E2; }
+  .hero-search > label:nth-child(2n) { border-right: none; }
+  .hero-search button.go { grid-column: 1 / -1; height: 50px; }
+  .vendor-band { grid-template-columns: 1fr; padding: 36px 22px; }
+  .steps3 { grid-template-columns: 1fr; gap: 26px; }
+  .foot-in { grid-template-columns: 1fr 1fr; }
+  .picado { height: 64px; }
+}
+@media (max-width: 520px) {
+  .hero-photo { width: 92%; }
+  .ticket { margin-right: 10%; }
+  .stamp { width: 104px; height: 104px; right: -10px; }
+  .bill li + li::before { margin: 0 9px; }
+}
 
 /* ── Responsive grid ── */
 @media (max-width: 768px) {
@@ -700,16 +860,19 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 const BUILD_VERSION = "v5-2026-08-06-anon-read-ok";
 export const C = {
   /* ── Primary ── */
-  orange: "#FF5C28", orangeHov: "#E84E1E", orangeSoft: "#FFF1EC",
-  orangeBorder: "rgba(255,92,40,0.22)", orangeGlow: "rgba(255,92,40,0.35)",
+  /* Oct 2026: the accent is a deeper PLUJ orange so white text on it and
+     orange text on white both pass WCAG AA (4.7:1). The bright brand orange
+     is kept as `flame` for marks and decoration, never for text. */
+  orange: "#D13F17", orangeHov: "#B83510", orangeSoft: "#FFF1EC", flame: "#FF5C28",
+  orangeBorder: "rgba(209,63,23,0.24)", orangeGlow: "rgba(209,63,23,0.30)",
 
-  /* ── Neutrals ── */
-  black: "#0A0A0A", darkGray: "#1A1A1A", midGray: "#6B7280",
-  lightGray: "#9CA3AF", border: "#E5E7EB", borderLight: "#F3F4F6",
-  bg: "#FAFAFA", bgAlt: "#F7F8FC", white: "#fff",
+  /* ── Neutrals (ink is a warm near-black; greys pass 4.5:1 on white) ── */
+  black: "#17120F", darkGray: "#2A2420", midGray: "#4B5260",
+  lightGray: "#6B7280", border: "#E7E7E9", borderLight: "#F2F2F3",
+  bg: "#F6F6F7", bgAlt: "#F4F4F5", white: "#fff",
 
   /* ── Semantic ── */
-  green: "#10B981", greenSoft: "#ECFDF5", greenDark: "#065F46",
+  green: "#0F7A55", greenSoft: "#E8F6EF", greenDark: "#065F46",
   red: "#EF4444",   redSoft: "#FEF2F2",
   amber: "#F59E0B", amberSoft: "#FFFBEB",
   blue: "#3B82F6",  blueSoft: "#EFF6FF",
@@ -726,13 +889,13 @@ export const C = {
 
   /* ── Elevation / shadows ── */
   shadowXs:     "0 1px 2px rgba(0,0,0,0.05)",
-  shadowCard:   "0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)",
+  shadowCard:   "0 1px 2px rgba(23,18,15,0.04)",
   shadowMd:     "0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
   shadowLg:     "0 12px 32px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)",
   shadowPopover:"0 0 8px rgba(0,0,0,0.10), 0 4px 4px rgba(0,0,0,0.04)",
   shadowDrawer: "-4px 0 40px rgba(0,0,0,0.12)",
   shadowModal:  "0 32px 80px rgba(0,0,0,0.24), 0 8px 24px rgba(0,0,0,0.10)",
-  shadowButton: "0 4px 18px rgba(255,92,40,0.42)",
+  shadowButton: "0 8px 18px -8px rgba(209,63,23,0.55)",
   shadowViolet: "0 4px 18px rgba(122,92,255,0.38)",
 };
 
@@ -3903,7 +4066,7 @@ function Avatar({ name, size=32, bg="#FF5C28" }) {
   return (
     <div style={{ width:size, height:size, borderRadius:"50%", background:bg, color:"#fff",
                   display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:size*0.37, fontWeight:700, flexShrink:0, fontFamily:"'Playfair Display', serif" }}>
+                  fontSize:size*0.37, fontWeight:700, flexShrink:0, fontFamily:"var(--display)" }}>
       {initials(name)}
     </div>
   );
@@ -4473,7 +4636,7 @@ function AuthModal({ onClose, onAuth }) {
               so this screen only has to tell the truth and get out of the way.
               There is no code to type and nothing here to get wrong. */}
           <div style={{ fontSize:48, marginBottom:12 }}>📧</div>
-          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:800, margin:"0 0 8px" }}>
+          <h2 style={{ fontFamily:"var(--display)", fontSize:20, fontWeight:800, margin:"0 0 8px" }}>
             Check your email
           </h2>
           <p style={{ fontSize:13, color:C.midGray, margin:"0 0 6px", lineHeight:1.65 }}>
@@ -4533,7 +4696,7 @@ function AuthModal({ onClose, onAuth }) {
             <div style={{ fontSize:52, lineHeight:1, marginBottom:14 }}>
               {isPending ? "⏳" : created.type==="admin" ? "🛡️" : "🎉"}
             </div>
-            <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, fontWeight:800, margin:"0 0 6px" }}>
+            <h2 style={{ fontFamily:"var(--display)", fontSize:22, fontWeight:800, margin:"0 0 6px" }}>
               {isPending ? "Your business profile is created!" : `Welcome to PLUJ!`}
             </h2>
             <p style={{ fontSize:13, color:C.midGray, margin:"0 0 18px", lineHeight:1.65 }}>
@@ -4712,7 +4875,7 @@ function AuthModal({ onClose, onAuth }) {
               placeholder="What you offer, the events you work and how long you've been doing it. For example: Houston DJ for weddings and quinceañeras since 2018, with my own sound and lights."
               style={{ width:"100%", padding:"10px 14px", border:`1px solid ${C.border}`, borderRadius:10,
                        fontSize:14, color:C.black, background:"#fff", resize:"vertical", lineHeight:1.5,
-                       fontFamily:"'Inter',sans-serif", boxSizing:"border-box" }} />
+                       fontFamily:"'Figtree', system-ui, sans-serif", boxSizing:"border-box" }} />
             {(() => {
               const n = form.bizDescription.trim().length;
               const ok = n >= VENDOR_DESC_MIN;
@@ -5029,6 +5192,63 @@ function AuthModal({ onClose, onAuth }) {
 
 
 /* ─── REQUEST SENT MODAL ─────────────────────────────────────────────────────── */
+/* Papel picado: cut-paper flags strung across the top of the hero. Drawn as
+   one flag shape with holes punched by a mask, repeated along a string. */
+function PapelPicado() {
+  const colors = ["#FFFFFF", "#E4007C", "#FFFFFF", "#000000"];
+  const W = 110, N = 24;
+  const zig = Array.from({ length: 6 }, (_, i) => `L${96 - i * 16 - 8},96 L${96 - i * 16 - 16},84`).join(" ");
+  return (
+    <svg className="picado" viewBox={`0 0 ${W * N} 100`} preserveAspectRatio="xMidYMin slice" aria-hidden="true" focusable="false">
+      <defs>
+        <mask id="picado-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+          <rect x="0" y="0" width="100" height="100" fill="#fff" />
+          <circle cx="48" cy="46" r="8" fill="#000" />
+          {[0, 60, 120, 180, 240, 300].map(a => (
+            <circle key={a} cx={48 + 16 * Math.cos(a * Math.PI / 180)} cy={46 + 16 * Math.sin(a * Math.PI / 180)} r="5" fill="#000" />
+          ))}
+          {[[14, 22], [82, 22], [14, 70], [82, 70]].map(([x, y]) => (
+            <path key={x + "-" + y} d={`M${x},${y - 7} L${x + 6},${y} L${x},${y + 7} L${x - 6},${y} Z`} fill="#000" />
+          ))}
+          {[24, 36, 48, 60, 72].map(x => <circle key={x} cx={x} cy="16" r="2.4" fill="#000" />)}
+          <path d="M30,74 Q48,62 66,74" stroke="#000" strokeWidth="3" fill="none" />
+        </mask>
+      </defs>
+      <path d={`M0,7 L${W * N},7`} stroke="#000" strokeWidth="1.5" />
+      {Array.from({ length: N }, (_, i) => (
+        <g key={i} transform={`translate(${i * W + 5},7)`}>
+          <g className="flag" style={{ animationDelay: `${(i % 12) * 40}ms` }}>
+            <path d={`M0,0 L96,0 L96,84 ${zig} L0,84 Z`.replace("L0,84 L0,84", "L0,84")}
+              fill={colors[i % colors.length]} mask="url(#picado-cut)" />
+          </g>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/* The ink stamp on the hero photo: the promise in both languages. */
+function Stamp() {
+  return (
+    <svg viewBox="0 0 140 140" aria-hidden="true" focusable="false" data-no-translate>
+      <defs><path id="stamp-ring" d="M70,70 m-52,0 a52,52 0 1,1 104,0 a52,52 0 1,1 -104,0" /></defs>
+      <circle cx="70" cy="70" r="68" fill="#E4007C" />
+      <circle cx="70" cy="70" r="40" fill="none" stroke="#fff" strokeWidth="1.5" />
+      <text fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:800, fontSize:15.5, letterSpacing:"0.08em" }}>
+        <textPath href="#stamp-ring">ONE PRICE ✦ UN SOLO PRECIO ✦ NO FEES ADDED ✦</textPath>
+      </text>
+      <text x="70" y="84" textAnchor="middle" fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:900, fontSize:44 }}>$</text>
+    </svg>
+  );
+}
+
+/* The headline in the other language, as part of the design. */
+function CounterLine({ en, es }) {
+  const [lang, setL] = useState(getLang());
+  useEffect(() => onLangChange(setL), []);
+  return <span className="es" data-no-translate lang={lang === "es" ? "en" : "es"}>{lang === "es" ? en : es}</span>;
+}
+
 /* English / Español switch. The page itself is translated in i18n.js; this
    only flips it and remembers the choice. Never translated itself. */
 function LangToggle({ light = false }) {
@@ -5070,7 +5290,7 @@ function RequestSentModal({ requests, onClose, onViewAccount }) {
                  boxShadow:C.shadowModal, overflow:"hidden" }}>
         <div style={{ padding:"36px 28px 32px", textAlign:"center" }}>
           <div style={{ fontSize:52, lineHeight:1, marginBottom:14 }}>{allBooked ? "⚡" : "📩"}</div>
-          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, fontWeight:800, margin:"0 0 8px" }}>
+          <h2 style={{ fontFamily:"var(--display)", fontSize:22, fontWeight:800, margin:"0 0 8px" }}>
             {allBooked ? (multi ? "You're booked!" : "You're booked!")
               : booked.length ? `${booked.length} booked, ${requests.length - booked.length} sent`
               : (multi ? "Requests sent!" : "Request sent!")}
@@ -5430,7 +5650,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                   placeholder="Gate code, parking, loading dock, which entrance…" rows={2}
                   style={{ width:"100%", padding:"9px 12px", marginTop:4,
                            border:`1px solid ${C.border}`, borderRadius:9, fontSize:12,
-                           color:C.black, resize:"none", fontFamily:"'Inter',sans-serif", background:"#fff" }} />
+                           color:C.black, resize:"none", fontFamily:"'Figtree', system-ui, sans-serif", background:"#fff" }} />
               </div>
               <div>
                 <label style={{ fontSize:11, fontWeight:600, color:C.midGray }}>Message to vendor</label>
@@ -5439,7 +5659,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                   rows={3}
                   style={{ width:"100%", padding:"9px 12px", marginTop:4,
                            border:`1px solid ${C.border}`, borderRadius:9, fontSize:12,
-                           color:C.black, resize:"none", fontFamily:"'Inter',sans-serif", background:"#fff" }} />
+                           color:C.black, resize:"none", fontFamily:"'Figtree', system-ui, sans-serif", background:"#fff" }} />
               </div>
               {err && <p style={{ fontSize:12, color:"#EF4444", fontWeight:600 }}>{err}</p>}
               <div style={{ display:"flex", gap:8 }}>
@@ -7519,7 +7739,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
     return (
       <div className="fade-up" style={{ maxWidth:640, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:22 }}>
-          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:30, fontWeight:900, margin:"0 0 6px" }}>
+          <h1 style={{ fontFamily:"var(--display)", fontSize:30, fontWeight:900, margin:"0 0 6px" }}>
             Build My Event
           </h1>
           <p style={{ fontSize:14, color:C.midGray, margin:0 }}>First, the where and when. Just tap — no typing needed.</p>
@@ -7641,7 +7861,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
             style={{ background:"none", border:"none", fontSize:13, color:C.midGray, fontWeight:600, marginBottom:8 }}>
             ← Back to details
           </button>
-          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:32, fontWeight:900, margin:"0 0 6px" }}>
+          <h1 style={{ fontFamily:"var(--display)", fontSize:32, fontWeight:900, margin:"0 0 6px" }}>
             Build My Event
           </h1>
           <p style={{ fontSize:14, color:C.midGray, margin:0 }}>
@@ -7671,7 +7891,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
     return (
       <div className="fade-up" style={{ maxWidth:520, margin:"0 auto", textAlign:"center" }}>
         <div style={{ fontSize:34, marginBottom:8 }}>🥂</div>
-        <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:24, fontWeight:800, margin:"0 0 6px" }}>
+        <h2 style={{ fontFamily:"var(--display)", fontSize:24, fontWeight:800, margin:"0 0 6px" }}>
           Tell us about your gathering
         </h2>
         <p style={{ fontSize:13, color:C.midGray, margin:"0 0 18px" }}>
@@ -7774,7 +7994,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
 
         <div style={{ textAlign:"center", marginBottom:20 }}>
           <div style={{ fontSize:34, marginBottom:6 }}>{curCatObj?.icon}</div>
-          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:26, fontWeight:800, margin:"0 0 4px" }}>
+          <h2 style={{ fontFamily:"var(--display)", fontSize:26, fontWeight:800, margin:"0 0 4px" }}>
             Do you need {curCatObj?.label}?
           </h2>
           <p style={{ fontSize:13, color:C.midGray, margin:0 }}>
@@ -7804,7 +8024,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
                 {vendors.length === 0 ? (
                   <>Nothing available for this step.</>
                 ) : (
-                  <><strong style={{ color:C.black }}>{vendors.length}</strong> {curCatObj?.label} vendor{vendors.length!==1?"s":""} free
+                  <><strong style={{ color:C.black }}>{vendors.length}</strong> {curCatObj?.label} {vendors.length!==1?"vendors":"vendor"} free
                   on your date for {wizGuests} guests — add any you like.</>
                 )}
               </p>
@@ -7826,7 +8046,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
                     <ul style={{ margin:"0 auto", padding:"0 0 0 20px", fontSize:13, color:C.black,
                                  lineHeight:1.9, maxWidth:380 }}>
                       {relaxed.map(r => (
-                        <li key={r.key}><strong>{r.n}</strong> fit{r.n===1?"s":""} if {r.label}</li>
+                        <li key={r.key}><strong>{r.n}</strong> {r.n===1?"fits":"fit"} if {r.label}</li>
                       ))}
                     </ul>
                   </>
@@ -7885,7 +8105,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
     <div className="fade-up" style={{ maxWidth:720, margin:"0 auto" }}>
       <div style={{ textAlign:"center", marginBottom:22 }}>
         <div style={{ fontSize:34, marginBottom:6 }}>{evt?.icon}</div>
-        <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:900, margin:"0 0 4px" }}>
+        <h1 style={{ fontFamily:"var(--display)", fontSize:28, fontWeight:900, margin:"0 0 4px" }}>
           Your {evt?.label}
         </h1>
         <p style={{ fontSize:13, color:C.midGray, margin:0 }}>
@@ -7949,13 +8169,13 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
           </div>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
                         padding:"14px 16px", background:"#F9FAFB", borderRadius:13, marginBottom:18 }}>
-            <span style={{ fontSize:13, fontWeight:700 }}>{picked.length} vendor{picked.length!==1?"s":""} selected</span>
+            <span style={{ fontSize:13, fontWeight:700 }}>{picked.length} {picked.length!==1?"vendors":"vendor"} selected</span>
             <span style={{ fontSize:15, fontWeight:800 }}>{total>0?`Est. ${fmtAllIn(total)}`:"Contact for pricing"}</span>
           </div>
           <button onClick={() => onReviewSend(detailsPayload())} className="btn"
             style={{ width:"100%", padding:"15px 0", borderRadius:14, border:"none", background:C.orange,
                      color:"#fff", fontSize:15, fontWeight:800, boxShadow:C.shadowButton }}>
-            Send all {picked.length} request{picked.length!==1?"s":""} →
+            Send all {picked.length} {picked.length!==1?"requests":"request"} →
           </button>
           <button onClick={() => { setCatIdx(0); setPhase("cats"); }} className="btn"
             style={{ width:"100%", marginTop:10, padding:"11px 0", borderRadius:12, border:`1px solid ${C.border}`,
@@ -7980,7 +8200,7 @@ function EventPackagesPage({ onSelectPackage, onPickCat }) {
           <span style={{ fontSize:14 }}>✦</span>
           <span style={{ fontSize:12, fontWeight:700, color:C.orange }}>One-stop event marketplace</span>
         </div>
-        <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:34, fontWeight:800,
+        <h1 style={{ fontFamily:"var(--display)", fontSize:34, fontWeight:800,
                      letterSpacing:"-0.03em", margin:"0 0 12px", color:C.black }}>
           What are you planning?
         </h1>
@@ -8460,10 +8680,10 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                       display:"flex", justifyContent:"space-between", alignItems:"center",
                       flexShrink:0 }}>
           <div>
-            <p style={{ margin:0, fontFamily:"'Playfair Display',serif", fontSize:17,
+            <p style={{ margin:0, fontFamily:"var(--display)", fontSize:17,
                         fontWeight:800 }}>Your request list</p>
             <p style={{ margin:0, fontSize:11, color:C.midGray }}>
-              {cart.length} vendor{cart.length!==1?"s":""} · Est. {fmtTotal(cart)}
+              {cart.length} {cart.length!==1?"vendors":"vendor"} · Est. {fmtTotal(cart)}
             </p>
           </div>
           <button onClick={onClose} className="btn"
@@ -8567,7 +8787,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                         rows={2} placeholder="e.g. Retirement dinner, church anniversary, product launch…"
                         style={{ width:"100%", boxSizing:"border-box", padding:"9px 12px",
                                  border:`1.5px solid ${C.orange}`, borderRadius:9, fontSize:12.5,
-                                 resize:"vertical", fontFamily:"'Inter',sans-serif", background:"#fff" }} />
+                                 resize:"vertical", fontFamily:"'Figtree', system-ui, sans-serif", background:"#fff" }} />
                     </div>
                   )}
                   <div>
@@ -8795,12 +9015,12 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                       placeholder="Directions to find it, how to get in, which entrance/gate, parking or loading dock, who to ask for, gate/callbox codes…"
                       value={access} onChange={e => setAccess(e.target.value)} rows={3}
                       style={{ width:"100%", boxSizing:"border-box", padding:"9px 12px", border:`1px solid ${C.border}`, borderRadius:9,
-                               fontSize:12, resize:"vertical", fontFamily:"'Inter',sans-serif", background:"#fff" }} />
+                               fontSize:12, resize:"vertical", fontFamily:"'Figtree', system-ui, sans-serif", background:"#fff" }} />
                   </div>
                   <textarea placeholder="Message to vendors (optional) — describe your event…"
                     value={message} onChange={e => setMessage(e.target.value)} rows={2}
                     style={{ padding:"9px 12px", border:`1px solid ${C.border}`, borderRadius:9,
-                             fontSize:12, resize:"none", fontFamily:"'Inter',sans-serif",
+                             fontSize:12, resize:"none", fontFamily:"'Figtree', system-ui, sans-serif",
                              background:"#fff" }} />
                 </div>
               </div>
@@ -8825,7 +9045,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                                    background: on ? "#FFF7ED" : "#fff",
                                    color: on ? C.black : C.midGray,
                                    fontSize:11, fontWeight: on ? 800 : 600, textAlign:"center",
-                                   fontFamily:"'Inter',sans-serif", transition:"all .15s" }}>
+                                   fontFamily:"'Figtree', system-ui, sans-serif", transition:"all .15s" }}>
                           {o.label}
                           {o.tag && (
                             <span style={{ display:"block", fontSize:9, fontWeight:600, marginTop:1,
@@ -8847,7 +9067,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
               <div style={{ padding:"10px 0", borderTop:`1px solid ${C.border}`, marginBottom:10 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                   <span style={{ fontSize:13, color:C.midGray, fontWeight:600 }}>Estimated total</span>
-                  <span style={{ fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:800, color:C.black }}>
+                  <span style={{ fontFamily:"var(--display)", fontSize:20, fontWeight:800, color:C.black }}>
                     {fmtTotal(cart)}
                   </span>
                 </div>
@@ -9047,7 +9267,7 @@ function FiltersBar({ filters, onChange, totalCount }) {
       {/* Results count */}
       <span style={{ fontSize:11, color:C.lightGray, marginLeft:"auto", fontWeight:600,
                      whiteSpace:"nowrap" }}>
-        {totalCount} vendor{totalCount!==1?"s":""}
+        {totalCount} {totalCount!==1?"vendors":"vendor"}
       </span>
     </div>
   );
@@ -9098,40 +9318,29 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
 
 /* ─── HOMEPAGE SECTIONS (hero supplement) ────────────────────────────────────── */
 function HowItWorks() {
+  /* Three steps because there are three: choose, book, enjoy. Numbered
+     because the order is the point. */
   const steps = [
-    { icon:"🔍", n:"1", title:"Browse & filter",  desc:"Search by event type, category, budget, location, and availability." },
-    { icon:"🛒", n:"2", title:"Build your lineup", desc:"Add multiple vendors to your cart. Mix and match food, music, decor & more." },
-    { icon:"📩", n:"3", title:"Send requests",     desc:"Submit booking requests to all vendors at once with your event details." },
-    { icon:"✅", n:"4", title:"Vendors confirm",   desc:"Each vendor reviews and confirms. You get notified instantly." },
+    ["Choose your vendors", "Filter by date, place and guest count. Every listing shows its price, what's included and the days it works."],
+    ["Book in one go", "Put the whole event in one cart. Instant-booking vendors confirm on the spot; the rest reply by your deadline."],
+    ["Enjoy the day", "Message your vendors in one place, in English or Spanish, and review them after the event."],
   ];
   return (
-    <div style={{ padding:"56px 0 48px" }}>
-      <div style={{ textAlign:"center", marginBottom:40 }}>
-        <p style={{ margin:"0 0 8px", fontSize:12, fontWeight:800, color:C.orange,
-                    textTransform:"uppercase", letterSpacing:"0.1em" }}>
-          How PLUJ works
-        </p>
-        <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:30, fontWeight:800,
-                     letterSpacing:"-0.03em", margin:0, color:C.black }}>
-          From idea to event in minutes
-        </h2>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:16 }}>
-        {steps.map((s, i) => (
-          <div key={i} className="step-card">
-            <div style={{ fontSize:36, marginBottom:12 }}>{s.icon}</div>
-            <div style={{ width:26, height:26, borderRadius:"50%", background:C.orange,
-                          color:"#fff", fontSize:11, fontWeight:800, display:"inline-flex",
-                          alignItems:"center", justifyContent:"center", marginBottom:8 }}>
-              {s.n}
-            </div>
-            <p style={{ fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:800,
-                        margin:"0 0 8px", color:C.black }}>{s.title}</p>
-            <p style={{ fontSize:12, color:C.midGray, lineHeight:1.65, margin:0 }}>{s.desc}</p>
+    <section style={{ padding:"40px 0 56px" }}>
+      <h2 style={{ fontSize:"clamp(26px,3vw,38px)", fontWeight:600, margin:"0 0 26px" }}>
+        From idea to booked in minutes
+      </h2>
+      <div className="steps3">
+        {steps.map(([t, d], i) => (
+          <div key={t}>
+            <span className="n">{i + 1}</span>
+            <div className="bar" />
+            <h3 style={{ fontSize:20, fontWeight:600, margin:"0 0 6px" }}>{t}</h3>
+            <p style={{ fontSize:14.5, color:C.midGray, lineHeight:1.6, margin:0, maxWidth:"30em" }}>{d}</p>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -9185,7 +9394,7 @@ function SavedVendorsPanel({ userId, allCards }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <p style={{ margin:"0 0 8px", fontSize:11, color:C.midGray, fontWeight:600 }}>
-        {favs.length} saved vendor{favs.length !== 1 ? "s" : ""}
+        {favs.length} saved {favs.length !== 1?"vendors":"vendor"}
       </p>
       {favs.map(v => (
         <div key={v.id} style={{ display:"flex", gap:10, alignItems:"center",
@@ -9429,7 +9638,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
       <p style={{ margin:0, fontSize:11, color:C.lightGray, fontWeight:700,
                   textTransform:"uppercase", letterSpacing:"0.05em" }}>{label}</p>
       <p style={{ margin:0, fontSize:15, fontWeight:800, color: accent || C.black,
-                  fontFamily:"'Playfair Display',serif", lineHeight:1.2 }}>{value}</p>
+                  fontFamily:"var(--display)", lineHeight:1.2 }}>{value}</p>
       {sub && <p style={{ margin:0, fontSize:10, color:C.midGray, lineHeight:1.4 }}>{sub}</p>}
     </div>
   );
@@ -9754,7 +9963,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   Reviews <span style={{ fontSize:13, color:C.midGray, fontWeight:500 }}>({vRevs.length})</span>
                 </h2>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <span style={{ fontSize:26, fontWeight:800, fontFamily:"'Playfair Display',serif" }}>{avgRating}</span>
+                  <span style={{ fontSize:26, fontWeight:800, fontFamily:"var(--display)" }}>{avgRating}</span>
                   <div>
                     <Stars r={parseFloat(avgRating)} size={14} />
                     <p style={{ margin:"2px 0 0", fontSize:10, color:C.lightGray }}>out of 5</p>
@@ -9840,7 +10049,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   value={newText} onChange={e => setNewText(e.target.value)}
                   style={{ width:"100%", minHeight:90, border:`1px solid ${C.border}`, borderRadius:10,
                            padding:"10px 12px", fontSize:13, color:C.black, resize:"vertical", marginTop:12,
-                           background:"#fff", fontFamily:"'Inter',sans-serif" }} />
+                           background:"#fff", fontFamily:"'Figtree', system-ui, sans-serif" }} />
                 {/* Named or not, decided here rather than assumed. Shows the
                     exact name that will appear, so there is no guessing about
                     whether it means a full name or a first name. */}
@@ -9910,7 +10119,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                               <textarea placeholder="Write your response..."
                                 value={replyText[rev.id] || ""}
                                 onChange={e => setReplyText(p => ({...p,[rev.id]:e.target.value}))}
-                                style={{ width:"100%", minHeight:70, border:`1px solid ${C.border}`, borderRadius:9, padding:"9px 11px", fontSize:12, color:C.black, resize:"vertical", fontFamily:"'Inter',sans-serif" }} />
+                                style={{ width:"100%", minHeight:70, border:`1px solid ${C.border}`, borderRadius:9, padding:"9px 11px", fontSize:12, color:C.black, resize:"vertical", fontFamily:"'Figtree', system-ui, sans-serif" }} />
                               <div style={{ display:"flex", gap:7, marginTop:7 }}>
                                 <button onClick={() => submitReply(rev.id)} className="btn"
                                   style={{ background:C.orange, color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700 }}>
@@ -9942,7 +10151,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:18, padding:"20px 20px 22px",
                         boxShadow:"0 0 0 1px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.08)" }}>
             <p style={{ fontSize:13, fontWeight:600, color:C.midGray, margin:"0 0 2px" }}>Starting at</p>
-            <p style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:800, color:C.black, margin:"0 0 4px" }}>
+            <p style={{ fontFamily:"var(--display)", fontSize:28, fontWeight:800, color:C.black, margin:"0 0 4px" }}>
               {priceLabel}
             </p>
             {selService && Number(selService.duration_hours) > 0 && !pickedPkg?.hours && (
@@ -10083,7 +10292,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                     value={inquiryMsg} onChange={e => setInquiryMsg(e.target.value)}
                     disabled={!user || user.type === "guest"}
                     style={{ width:"100%", minHeight:80, border:`1px solid ${C.border}`, borderRadius:10,
-                             padding:"9px 11px", fontSize:12, resize:"vertical", fontFamily:"'Inter',sans-serif",
+                             padding:"9px 11px", fontSize:12, resize:"vertical", fontFamily:"'Figtree', system-ui, sans-serif",
                              background: (!user || user.type === "guest") ? "#F9FAFB" : "#fff" }} />
                   <button onClick={async () => {
                       if (!user || user.type === "guest") { onRequireAuth?.(); return; }
@@ -10135,132 +10344,84 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
 function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const inCartNow = inCart;
+  const city = v.bizCity || (v.city || "").split(",")[0];
+  const guests = v.capacityMax ? `Up to ${v.capacityMax} guests`
+               : (v.capacity && typeof v.capacity === "string" ? `${v.capacity} guests` : "");
+  const hasRating = Number(v.revCount) > 0;
 
   return (
-    <div className="vcard2"
-      style={{ boxShadow: inCartNow ? `0 0 0 2.5px ${C.orange}, ${C.shadowCard}` : C.shadowCard }}>
-
-      {/* Image */}
-      <div style={{ position:"relative", height:190 }} onClick={() => onView(v)}>
+    <article className="vcard2" onClick={() => onView(v)}
+      style={{ boxShadow: inCartNow ? `0 0 0 2px ${C.orange}` : "none" }}>
+      {/* Photo */}
+      <div className="vendor-img-wrap" style={{ position:"relative", aspectRatio:"4 / 3", background:C.bgAlt }}>
         {!imgLoaded && <div className="skeleton" style={{ position:"absolute", inset:0 }} />}
-        <img src={v.img} alt={v.name}
+        <img src={v.img} alt={v.serviceName || v.name} loading="lazy"
           onLoad={() => setImgLoaded(true)}
-          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block",
-                   opacity: imgLoaded ? 1 : 0, transition:"opacity 0.3s ease, transform 0.4s ease" }}
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", display:"block",
+                   opacity: imgLoaded ? 1 : 0, transition:"opacity 0.3s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1)" }}
           className="vendor-img" />
-        <div style={{ position:"absolute", inset:0,
-                      background:"linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%)" }} />
-
-        {/* Badges top-left */}
-        <div style={{ position:"absolute", top:10, left:10, display:"flex", gap:5 }}>
-          {v.feat && (
-            <span style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)",
-                           color:"#fff", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:99 }}>
-              ✦ Featured
-            </span>
-          )}
-          {v.instant && (
-            <span style={{ background:C.green, color:"#fff", fontSize:10, fontWeight:700,
-                           padding:"2px 8px", borderRadius:99, display:"flex",
-                           alignItems:"center", gap:3 }}>
-              ⚡ Instant
-            </span>
-          )}
-        </div>
-
-        {/* Heart button */}
+        {v.instant && (
+          <span style={{ position:"absolute", top:12, left:12, background:"#E4007C", color:"#fff", fontSize:12,
+                         fontWeight:800, padding:"4px 10px", borderRadius:99, boxShadow:"0 2px 8px rgba(23,18,15,0.15)" }}>
+            ⚡ Instant booking
+          </span>
+        )}
         <button className={`heart-btn${isFav ? " active" : ""}`}
           onClick={e => { e.stopPropagation(); onToggleFav?.(v.id); }}
-          title={isFav ? "Remove from favorites" : "Save to favorites"}>
+          aria-pressed={isFav ? "true" : "false"}
+          title={isFav ? "Remove from favorites" : "Save to favorites"}
+          aria-label={isFav ? "Remove from favorites" : "Save to favorites"}>
           {isFav ? "❤️" : "🤍"}
         </button>
-
-        {/* Price bottom-right */}
-        <div style={{ position:"absolute", bottom:10, right:10,
-                      background:"rgba(255,255,255,0.95)", backdropFilter:"blur(4px)",
-                      borderRadius:10, padding:"4px 10px" }}>
-          <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }}>{cardPrice(v)}</p>
-        </div>
-
-        {/* In-cart checkmark */}
         {inCartNow && (
-          <div style={{ position:"absolute", bottom:10, left:10, background:C.orange,
-                        color:"#fff", borderRadius:"50%", width:26, height:26,
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        fontSize:12, fontWeight:800 }}>✓</div>
+          <span style={{ position:"absolute", bottom:12, left:12, background:C.orange, color:"#fff",
+                         fontSize:12, fontWeight:800, padding:"4px 10px", borderRadius:99 }}>✓ In your cart</span>
         )}
       </div>
 
-      {/* Body */}
-      <div style={{ padding:"12px 14px 14px" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-                      gap:8, marginBottom:2 }}>
-          <p onClick={() => onView(v)} style={{ margin:0, fontSize:15, fontWeight:800, color:C.black,
-                      lineHeight:1.2, flex:1, cursor:"pointer" }}>
+      {/* Details */}
+      <div style={{ padding:"14px 16px 16px", display:"flex", flexDirection:"column", flex:1 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+          <h3 style={{ margin:0, fontSize:18, fontWeight:600, lineHeight:1.2, letterSpacing:"-0.01em" }}>
             {v.serviceName || v.name}
-          </p>
-          <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
-            <span style={{ fontSize:12 }}>⭐</span>
-            <span style={{ fontSize:12, fontWeight:800, color:C.black }}>{v.rating}</span>
-            <span style={{ fontSize:10, color:C.lightGray }}>({v.revCount})</span>
-          </div>
+          </h3>
+          <span style={{ fontSize:13, fontWeight:700, color:C.black, whiteSpace:"nowrap", flexShrink:0 }}>
+            {hasRating ? <>★ {v.rating} <span style={{ color:C.lightGray, fontWeight:500 }}>({v.revCount})</span></>
+                       : <span style={{ color:C.green, fontWeight:700 }}>New</span>}
+          </span>
         </div>
-
-        {/* Service type · category · experience */}
-        <p style={{ margin:"0 0 1px", fontSize:11, color:C.midGray, lineHeight:1.4 }}>
-          {[catLabelOf(v.cat), v.serviceType].filter(Boolean).join(" · ") || v.type}
-          {v.yearsInBiz ? <span style={{ color:C.lightGray }}> · {v.yearsInBiz}y exp</span> : null}
+        <p style={{ margin:"4px 0 0", fontSize:13.5, color:C.midGray, lineHeight:1.45 }}>
+          {[catLabelOf(v.cat), v.serviceType && v.serviceType !== catLabelOf(v.cat) ? v.serviceType : null].filter(Boolean).join(" · ")}
         </p>
-
-        {/* Which vendor provides it */}
-        <p style={{ margin:"0 0 8px", fontSize:11, color:C.lightGray }}>
-          by <span style={{ fontWeight:700, color:C.midGray }}>{v.name}</span>
+        <p style={{ margin:"2px 0 0", fontSize:13.5, color:C.midGray }}>
+          by <span data-no-translate style={{ fontWeight:700, color:C.black }}>{v.name}</span>
+          {city ? <> · {city}</> : null}
         </p>
-
-        {/* Service area + travel */}
-        {(v.bizCity || v.travelMiles) && (
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
-            {v.bizCity && (
-              <span style={{ fontSize:10, color:C.midGray, display:"flex", alignItems:"center", gap:3 }}>
-                📍 {v.bizCity || v.city?.split(",")[0]}
-              </span>
-            )}
-            {v.travelMiles && (
-              <span style={{ fontSize:10, color:C.midGray }}>· 🚗 {v.travelMiles}mi radius</span>
-            )}
-          </div>
-        )}
-
-        {/* Capacity */}
-        {v.capacity && typeof v.capacity === "string" && (
-          <p style={{ margin:"0 0 8px", fontSize:10, color:C.midGray }}>
-            👥 {v.capacity}
+        {(guests || v.travelMiles) && (
+          <p style={{ margin:"8px 0 0", fontSize:12.5, color:C.midGray, display:"flex", gap:12, flexWrap:"wrap" }}>
+            {guests && <span>{`👥 ${guests}`}</span>}
+            {v.travelMiles ? <span>{`🚗 Travels ${v.travelMiles} mi`}</span> : null}
           </p>
         )}
 
-        {/* Tags */}
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:10 }}>
-          {(v.tags||[]).slice(0,3).map(t => (
-            <span key={t} style={{ fontSize:9, background:C.bgAlt, color:C.midGray,
-                                    padding:"2px 7px", borderRadius:99, fontWeight:600,
-                                    border:`1px solid ${C.border}` }}>
-              {t}
-            </span>
-          ))}
+        {/* The price stub: torn off along the dashes. */}
+        <div style={{ marginTop:"auto", paddingTop:14 }} />
+        <div style={{ margin:"0 -16px -16px", padding:"12px 16px 14px", borderTop:"2px dashed #DCDCDE",
+                      display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <div>
+            <p style={{ margin:0, fontFamily:"var(--display)", fontSize:28, lineHeight:1, fontWeight:800, color:"#000" }}>{cardPrice(v)}</p>
+            {Number(v.pv) > 0 && <p style={{ margin:0, fontSize:11.5, color:C.lightGray }}>One price, no fees added</p>}
+          </div>
+          <button onClick={e => { e.stopPropagation(); inCartNow ? onRemove(v.id) : onAdd(v); }}
+            className="btn"
+            style={{ padding:"10px 16px", borderRadius:99, fontSize:13.5, fontWeight:800, whiteSpace:"nowrap",
+                     background: inCartNow ? C.bgAlt : "#000",
+                     color: inCartNow ? C.midGray : "#fff", minHeight:40 }}>
+            {inCartNow ? "✓ Added" : v.instant ? "⚡ Book now" : "Request to book"}
+          </button>
         </div>
-
-        {/* CTA */}
-        <button onClick={e => { e.stopPropagation(); inCartNow ? onRemove(v.id) : onAdd(v); }}
-          className="btn"
-          style={{ width:"100%", padding:"9px 0", borderRadius:11, border:"none", fontSize:12,
-                   fontWeight:700, background: inCartNow ? "#F3F4F6" : C.orange,
-                   color: inCartNow ? C.midGray : "#fff",
-                   boxShadow: inCartNow ? "none" : C.shadowButton,
-                   transition:"all 0.18s ease" }}>
-          {inCartNow ? "✓ Added" : v.instant ? "⚡ Book now" : "Request to book"}
-        </button>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -11023,7 +11184,7 @@ export function BookingPayments({ req, user, onChanged }) {
           <textarea value={details} onChange={e => setDetails(e.target.value)} maxLength={2000}
             placeholder="Tell us what happened: dates, what was promised, what you've tried. False reports breach PLUJ's Terms."
             style={{ width:"100%", minHeight:70, borderRadius:8, border:`1px solid ${C.border}`, fontSize:12.5,
-                     padding:"7px 9px", resize:"vertical", boxSizing:"border-box", fontFamily:"'Inter',sans-serif" }} />
+                     padding:"7px 9px", resize:"vertical", boxSizing:"border-box", fontFamily:"'Figtree', system-ui, sans-serif" }} />
           <div style={{ display:"flex", gap:6, marginTop:6 }}>
             <button className="btn" disabled={!!busy || !kind || details.trim().length < 10} style={btn("#B91C1C", "#fff")}
               onClick={() => run("rep", () => paymentsRpc("report_booking_problem",
@@ -11420,7 +11581,7 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
               onKeyDown={e=>{ if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               placeholder="Write a message…" rows={2}
               style={{ flex:1, padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:10,
-                       fontSize:13, resize:"none", fontFamily:"'Inter',sans-serif" }} />
+                       fontSize:13, resize:"none", fontFamily:"'Figtree', system-ui, sans-serif" }} />
             <button onClick={send} disabled={busy || !draft.trim()} className="btn"
               style={{ padding:"0 18px", borderRadius:10, border:"none", background:C.orange,
                        color:"#fff", fontSize:13, fontWeight:800, cursor:"pointer",
@@ -12829,45 +12990,44 @@ export default function PlujApp() {
       )}
 
 
-      {/* ── NAV — glassmorphism, market selector ─────────────────────── */}
+      {/* ── NAV ────────────────────────────────────────────────────────
+          Light and quiet: the logo, the market, the two things people come
+          for (find vendors, build an event), the language, the account and
+          the cart. Categories live on the page, not in the header. */}
       <nav className={`pluj-nav${navScrolled ? " nav-glass" : ""}`}
         style={{
           position:"sticky", top:0, zIndex:200, height:64,
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-          padding:"0 28px",
-          background: navOnHero ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.88)",
-          borderBottom: `1px solid ${navOnHero ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)"}`,
-          backdropFilter: navOnHero ? "none" : "blur(20px) saturate(180%)",
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:12,
+          padding:"0 20px",
+          background: isHero && !navScrolled ? "#FF5C28" : "rgba(255,255,255,0.96)",
+          borderBottom:`1px solid ${navScrolled ? C.border : "transparent"}`,
+          backdropFilter:"blur(16px) saturate(160%)",
         }}>
-
-        {/* Logo + market selector */}
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <span onClick={goHome} title="Back to home"
+        <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
+          <span onClick={goHome} title="Back to home" role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === "Enter") goHome(); }}
             style={{ cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <PlujMark size={28} light={navOnHero} />
+            <PlujMark size={28} />
           </span>
-          <MarketSelector market={market} onSelect={setMarket} light={navOnHero} />
+          <span className="hide-mobile"><MarketSelector market={market} onSelect={setMarket} light={false} /></span>
         </div>
 
-        {/* Category pills — hide on mobile */}
-        <div className="hide-mobile"
-          style={{ display:"flex", gap:4, background: navOnHero ? "rgba(255,255,255,0.1)" : C.bgAlt,
-                   borderRadius:99, padding:4, border:`1px solid ${navOnHero ? "rgba(255,255,255,0.2)" : C.border}` }}>
-          {CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => pickCat(cat.id)} className="btn"
-              style={{ padding:"6px 14px", borderRadius:99, fontSize:12, fontWeight:600,
-                       border:"none", cursor:"pointer",
-                       background: activeCat===cat.id ? (navOnHero ? "rgba(255,255,255,0.2)" : C.black) : "transparent",
-                       color: navOnHero ? "#fff" : (activeCat===cat.id ? "#fff" : C.midGray),
-                       boxShadow: activeCat===cat.id ? C.shadowXs : "none" }}>
-              {cat.icon} {cat.label}
+        <div className="hide-mobile" style={{ display:"flex", alignItems:"center", gap:4 }}>
+          {[["all","Find vendors"],["build","Build my event"]].map(([id, label]) => (
+            <button key={id} onClick={() => id === "all" ? goBrowseVendors() : pickCat(id)} className="btn"
+              style={{ padding:"8px 14px", borderRadius:99, fontSize:14, fontWeight:700,
+                       background: activeCat === id && !isHero ? C.bgAlt : "transparent", color:C.black }}>
+              {label}
             </button>
           ))}
+          <button onClick={() => setInfoPage("Vendor guide")} className="btn"
+            style={{ padding:"8px 14px", borderRadius:99, fontSize:14, fontWeight:700, background:"transparent", color:C.midGray }}>
+            For vendors
+          </button>
         </div>
 
-        {/* Right side */}
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <LangToggle light={navOnHero} />
+          <LangToggle />
           {user ? (
             <>
               {user.type !== "guest" && (
@@ -12888,8 +13048,8 @@ export default function PlujApp() {
               <button onClick={() => { setAccountOpen(o=>!o); setNotifOpen(false); }}
                 className="btn"
                 style={{ display:"flex", alignItems:"center", gap:7, cursor:"pointer",
-                          background: navOnHero ? "rgba(255,255,255,0.12)" : user.type==="admin" ? "#0A0A0A" : C.bgAlt,
-                          border:`1px solid ${navOnHero ? "rgba(255,255,255,0.2)" : user.type==="admin" ? "#333" : C.border}`,
+                          background: user.type==="admin" ? "#000" : "#fff",
+                          border:`1px solid ${user.type==="admin" ? "#000" : C.border}`,
                           borderRadius:99, padding:"5px 14px 5px 7px" }}>
                 {/* Admins don't need an avatar letter — the 🛡️ badge already
                     identifies the account. Users and vendors keep theirs. */}
@@ -12897,8 +13057,8 @@ export default function PlujApp() {
                   <Avatar name={user.displayName||user.name} size={26}
                     bg={user.type==="vendor"?"#7C3AED":C.orange} />
                 )}
-                <span style={{ fontSize:12, fontWeight:700,
-                               color: "#fff", marginLeft: user.type==="admin" ? 7 : 0 }}>
+                <span style={{ fontSize:13, fontWeight:700,
+                               color: user.type==="admin" ? "#fff" : C.black, marginLeft: user.type==="admin" ? 7 : 0 }}>
                   {(user.displayName||user.name||"").split(" ")[0]}
                 </span>
                 {user.type==="admin"  && <span style={{ fontSize:10, background:"rgba(255,255,255,0.15)", color:"#fff", padding:"1px 7px", borderRadius:99, fontWeight:800 }}>🛡️ Admin</span>}
@@ -12914,9 +13074,9 @@ export default function PlujApp() {
                 )}
               </button>
               <button onClick={async()=>{await clearSession();setUser(null);}} className="btn"
-                style={{ background: navOnHero ? "rgba(255,255,255,0.1)" : "#F3F4F6",
+                style={{ background:"transparent",
                          border:"none", borderRadius:99, padding:"7px 13px", fontSize:12,
-                         fontWeight:600, color: navOnHero ? "rgba(255,255,255,0.8)" : C.midGray }}>
+                         fontWeight:700, color:C.black }}>
                 Log out
               </button>
             </>
@@ -12927,274 +13087,194 @@ export default function PlujApp() {
                   make a choice that made no difference. The modal has its own
                   Log in / Sign up switch at the top. */}
               <button onClick={() => setAuthModal(true)} className="btn"
-                style={{ background: navOnHero ? "#fff" : C.orange,
+                style={{ background:"#000",
                          border:"none", borderRadius:99, padding:"8px 18px", fontSize:13,
-                         fontWeight:700, color: navOnHero ? C.black : "#fff", whiteSpace:"nowrap",
-                         boxShadow: navOnHero ? "none" : C.shadowButton }}>Log in / Sign up</button>
+                         fontWeight:800, color:"#fff", whiteSpace:"nowrap" }}>Log in / Sign up</button>
             </>
           )}
           <button onClick={() => { setCartOpen(true); setNotifOpen(false); }} className="btn"
-            style={{ position:"relative", background: cart.length ? (navOnHero ? C.orange : C.black) : navOnHero ? "rgba(255,255,255,0.15)" : "#F3F4F6",
-                     color: cart.length || navOnHero ? "#fff" : C.midGray,
-                     border:"none", borderRadius:99, padding:"8px 15px", fontSize:13,
+            aria-label={cart.length ? `Cart, ${cart.length} vendors` : "Cart"}
+            style={{ position:"relative", background: cart.length ? C.black : C.bgAlt,
+                     color: cart.length ? "#fff" : C.black,
+                     border:"none", borderRadius:99, padding:"8px 14px", fontSize:13,
                      fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
             <Emoji e="🛒" size={15} />
             {cart.length > 0 && (
               <span style={{ background:C.orange, color:"#fff", borderRadius:99,
-                             fontSize:10, fontWeight:800, padding:"0 5px" }}>{cart.length}</span>
+                             fontSize:11, fontWeight:800, padding:"0 6px" }}>{cart.length}</span>
             )}
           </button>
         </div>
       </nav>
 
+      {/* One list of places for every "Where" box. */}
+      <datalist id="pluj-where-options">
+        {whereSuggestions.map(c => <option key={c} value={c} />)}
+      </datalist>
 
-      {/* Always-visible criteria bar (Where / When / Service / How many) */}
-      {activeCat !== "build" && (
-        <div style={{ position:"sticky", top:64, zIndex:191,
-                      background:"rgba(255,255,255,0.98)", backdropFilter:"blur(20px)",
-                      borderBottom:`1px solid ${C.border}`, padding:"8px 16px",
-                      display:"flex", flexWrap:"wrap", gap:8, alignItems:"stretch",
-                      boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
-          <div style={{ flex:"1 1 140px", minWidth:120, border:`1px solid ${C.border}`,
-                        borderRadius:10, padding:"5px 10px" }}>
-            <p style={{ margin:0, fontSize:9, fontWeight:800, color:C.midGray }}>WHERE</p>
-            <input value={qWhere} onChange={e=>setQWhere(e.target.value)} placeholder="City or area"
-              list="pluj-where-options" autoComplete="off"
-              style={{ width:"100%", border:"none", outline:"none", fontSize:13, background:"transparent" }} />
-            <datalist id="pluj-where-options">
-              {whereSuggestions.map(c => <option key={c} value={c} />)}
-            </datalist>
-          </div>
-          <div style={{ flex:"1 1 130px", minWidth:120, border:`1px solid ${C.border}`,
-                        borderRadius:10, padding:"5px 10px" }}>
-            <p style={{ margin:0, fontSize:9, fontWeight:800, color:C.midGray }}>WHEN</p>
-            <input type="date" value={qWhen} onChange={e=>setQWhen(e.target.value)}
-              min={new Date().toISOString().split("T")[0]}
-              style={{ width:"100%", border:"none", outline:"none", fontSize:13,
-                       color:qWhen?C.black:C.lightGray, background:"transparent" }} />
-          </div>
-          <div style={{ flex:"1 1 150px", minWidth:130, border:`1px solid ${C.border}`,
-                        borderRadius:10, padding:"5px 10px" }}>
-            <p style={{ margin:0, fontSize:9, fontWeight:800, color:C.midGray }}>WHAT SERVICE</p>
-            <select value={activeCat} onChange={e=>pickCat(e.target.value)}
-              style={{ width:"100%", border:"none", outline:"none", fontSize:13, background:"transparent" }}>
-              {CATEGORIES.filter(c=>c.id!=="build").map(c=>(
-                <option key={c.id} value={c.id}>{c.id==="all" ? "Any service" : c.label}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ flex:"1 1 150px", minWidth:140, border:`1px solid ${C.border}`,
-                        borderRadius:10, padding:"5px 10px" }}>
-            <p style={{ margin:0, fontSize:9, fontWeight:800, color:C.midGray }}>EVENT TYPE</p>
-            <select value={qEventType} onChange={e=>setQEventType(e.target.value)}
-              style={{ width:"100%", border:"none", outline:"none", fontSize:13, background:"transparent",
-                       color: qEventType ? C.black : C.lightGray }}>
-              <option value="">Any occasion</option>
-              {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
-            </select>
-          </div>
-          <div style={{ flex:"1 1 110px", minWidth:100, border:`1px solid ${C.border}`,
-                        borderRadius:10, padding:"5px 10px" }}>
-            <p style={{ margin:0, fontSize:9, fontWeight:800, color:C.midGray }}>HOW MANY</p>
-            <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)}
-              placeholder="Guests"
-              style={{ width:"100%", border:"none", outline:"none", fontSize:13, background:"transparent" }} />
-          </div>
-          {/* The filters apply as you type, so this button changes no results —
-              and that is exactly why it has to exist. Filling in five fields and
-              being offered nothing but "Clear" reads as an unfinished form:
-              people sit there waiting for something to happen, or hunt for the
-              submit button that was never there. Every booking site has one.
-
-              Its real job is to take you to the answer. The matches are below
-              the fold behind the hero, so it scrolls them into view — which is
-              what the person was expecting the button to do anyway. */}
-          <button onClick={() => {
-              pickCat("all");
-              requestAnimationFrame(() => {
-                const el = document.getElementById("results-top");
-                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-              });
-            }} className="btn"
-            style={{ border:"none", background:C.orange, color:"#fff", borderRadius:10,
-                     padding:"0 20px", fontSize:12.5, fontWeight:800, whiteSpace:"nowrap",
-                     boxShadow:C.shadowButton, cursor:"pointer" }}>
-            🔍 Search
-          </button>
-          {(qWhere || qWhen || qGuests || qEventType) && (
-            <button onClick={()=>{setQWhere("");setQWhen("");setQGuests("");setQEventType("");}} className="btn"
-              style={{ border:`1px solid ${C.border}`, background:"#fff", borderRadius:10,
-                       padding:"0 14px", fontSize:12, fontWeight:700, color:C.midGray }}>
-              Clear
+      {/* ── STICKY SEARCH (results pages, and the home page once scrolled) ──
+          The text search and the four criteria in one row. It replaces two
+          stacked bars. On the home page it only appears after the hero, where
+          the hero's own search has scrolled away. */}
+      {activeCat !== "build" && !vendorPage && (!isHero || navScrolled) && (
+        <div style={{ position:"sticky", top:64, zIndex:190, background:"rgba(255,255,255,0.97)",
+                      backdropFilter:"blur(16px)", borderBottom:`1px solid ${C.border}`,
+                      padding:"10px 16px" }}>
+          <div style={{ maxWidth:1240, margin:"0 auto", display:"flex", flexWrap:"wrap", gap:8, alignItems:"stretch" }}>
+            <label style={{ flex:"2 1 220px", minWidth:180, display:"flex", alignItems:"center", gap:8,
+                            border:`1px solid ${C.border}`, borderRadius:12, padding:"0 12px", background:"#fff" }}>
+              <span aria-hidden="true">🔍</span>
+              <input ref={searchRef} placeholder="Search DJs, catering, flowers, lighting..."
+                value={search} onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") pickCat("all"); }}
+                aria-label="Search vendors"
+                style={{ flex:1, border:"none", outline:"none", fontSize:14, height:40, background:"transparent", minWidth:0 }} />
+              {search && (
+                <button onClick={() => setSearch("")} className="btn" aria-label="Clear search"
+                  style={{ background:"none", color:C.lightGray, fontSize:16, padding:"0 2px" }}>✕</button>
+              )}
+            </label>
+            {[
+              ["Where", <input value={qWhere} onChange={e=>setQWhere(e.target.value)} placeholder="City or area"
+                          list="pluj-where-options" autoComplete="off" aria-label="Where" />],
+              ["When", <input type="date" value={qWhen} onChange={e=>setQWhen(e.target.value)} aria-label="When"
+                          min={new Date().toISOString().split("T")[0]} style={{ color: qWhen ? C.black : C.lightGray }} />],
+              ["Service", <select value={activeCat} onChange={e=>pickCat(e.target.value)} aria-label="Service">
+                          {CATEGORIES.filter(c=>c.id!=="build").map(c=>(
+                            <option key={c.id} value={c.id}>{c.id==="all" ? "Any service" : c.label}</option>
+                          ))}
+                        </select>],
+              ["Event", <select value={qEventType} onChange={e=>setQEventType(e.target.value)} aria-label="Event type"
+                          style={{ color: qEventType ? C.black : C.lightGray }}>
+                          <option value="">Any occasion</option>
+                          {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+                        </select>],
+              ["Guests", <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)}
+                          placeholder="How many" aria-label="Guests" />],
+            ].map(([label, field]) => (
+              <label key={label} className="crit" style={{ flex:"1 1 120px", minWidth:110, border:`1px solid ${C.border}`,
+                                         borderRadius:12, padding:"5px 11px", background:"#fff" }}>
+                <span style={{ display:"block", fontSize:11, fontWeight:700, color:C.midGray }}>{label}</span>
+                {React.cloneElement(field, { style:{ width:"100%", border:"none", outline:"none", fontSize:13.5,
+                                             background:"transparent", padding:0, ...(field.props.style || {}) } })}
+              </label>
+            ))}
+            <button onClick={() => {
+                if (activeCat === "build") pickCat("all");
+                requestAnimationFrame(() => {
+                  const el = document.getElementById("results-top");
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+              }} className="btn"
+              style={{ background:C.orange, color:"#fff", borderRadius:12, padding:"0 20px",
+                       fontSize:14, fontWeight:800, whiteSpace:"nowrap", minHeight:44 }}>
+              Search
             </button>
-          )}
+            {(qWhere || qWhen || qGuests || qEventType || search) && (
+              <button onClick={()=>{setQWhere("");setQWhen("");setQGuests("");setQEventType("");setSearch("");}} className="btn"
+                style={{ border:`1px solid ${C.border}`, background:"#fff", borderRadius:12,
+                         padding:"0 14px", fontSize:13, fontWeight:700, color:C.midGray, minHeight:44 }}>
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Sticky text search — appears when scrolled past the hero, AND whenever
-          there is a search term.
-
-          The `search` clause is not cosmetic, it is the whole bug. `isHero` is
-          false the moment `search` is non-empty, so the first keystroke in the
-          big hero search box unmounted the hero — and with it, the input being
-          typed into. At the top of the page `navScrolled` is still false, so
-          this bar did not take over either: the page was left with no search
-          field at all. One character went in, the box vanished, and the rest of
-          the word went nowhere. */}
-      {(navScrolled || q) && activeCat !== "build" && !vendorPage && (
-        <div style={{ position:"sticky", top:64, zIndex:190,
-                      background:"rgba(255,255,255,0.97)", backdropFilter:"blur(20px)",
-                      borderBottom:`1px solid ${C.border}`,
-                      padding:"10px 28px", display:"flex", alignItems:"center", gap:10,
-                      boxShadow:"0 2px 12px rgba(0,0,0,0.08)" }}>
-          <span style={{ fontSize:16 }}>🔍</span>
-          <input
-            ref={searchRef}
-            placeholder="Search DJs, catering, flowers, lighting..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if(e.key==="Enter") pickCat("all"); }}
-            style={{ flex:1, border:"none", outline:"none", fontSize:14,
-                     color:C.black, background:"transparent",
-                     fontFamily:"'Inter',sans-serif", fontWeight:500 }} />
-          {search && (
-            <button onClick={() => setSearch("")} className="btn"
-              style={{ background:"none", border:"none", color:C.lightGray,
-                       fontSize:18, padding:"0 4px", cursor:"pointer" }}>✕</button>
-          )}
-          <button onClick={() => pickCat("build")} className="btn"
-            style={{ background:C.orange, color:"#fff", border:"none", borderRadius:10,
-                     padding:"8px 18px", fontSize:13, fontWeight:700,
-                     whiteSpace:"nowrap", boxShadow:C.shadowButton }}>
-            Build event ✦
-          </button>
-        </div>
-      )}
-
+      {/* ── HERO ─────────────────────────────────────────────────────────
+          A marigold field with papel picado strung across the top: the look
+          of a Houston celebration. The thesis is the product's difference,
+          one price for the whole event, and the ticket on the right shows
+          what that means (marked as an example). */}
       {isHero && (
-        <div style={{ position:"relative", height:480, overflow:"hidden" }}>
-          {/* 78 clears the stats bar below (12px padding, two lines of text,
-              12px padding) with a few pixels to spare. */}
-          <HeroVideo dotsBottom={78}
-            poster={market?.hero || "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=1600&q=80"} />
-          <div style={{ position:"absolute", inset:0, background:"linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.45) 40%, rgba(0,0,0,0.2) 100%)" }} />
-          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", padding:"0 7% 0 6%" }}>
-            <div style={{ maxWidth:560 }} className="fade-up">
-              <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(255,92,40,0.18)", border:"1px solid rgba(255,92,40,0.35)", borderRadius:99, padding:"5px 14px", marginBottom:16 }}>
-                <Emoji e="⚡" size={11} />
-                <span style={{ color:C.orange, fontSize:11, fontWeight:800 }}>HOUSTON'S EVENT MARKETPLACE</span>
-              </div>
-              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(34px,4.5vw,58px)", fontWeight:900, color:"#fff", lineHeight:1.08, letterSpacing:"-0.04em", margin:"0 0 16px" }}>
-                Book the perfect vendor.<br />
-                <span style={{ color:C.orange }}>Build your entire event.</span>
-              </h1>
-              <p style={{ fontSize:16, color:"rgba(255,255,255,0.75)", lineHeight:1.75, margin:"0 0 28px", fontWeight:400 }}>
-                Food, music, venues, decor and rentals — build your whole lineup in one cart, then send every request at once.
+        <section className="hero-field">
+          <PapelPicado />
+          <div className="home-hero">
+            <div>
+              <h1>Your whole event.<br />One price.</h1>
+              <CounterLine en="Your whole event. One price." es="Todo tu evento. Un solo precio." />
+              <p className="lede">
+                Food trucks, DJs, mariachi, venues, decor and rentals in one cart. Every vendor is
+                checked by PLUJ, and the price you see is the price you pay.
               </p>
-              {/* Search pill — glassmorphism */}
-              <div style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(20px)",
-                            border:"1.5px solid rgba(255,255,255,0.3)",
-                            borderRadius:14, padding:"6px 6px 6px 14px",
-                            display:"flex", alignItems:"center", gap:8, maxWidth:520,
-                            boxShadow:"0 8px 32px rgba(0,0,0,0.25)" }}>
-                <Emoji e="🔍" size={16} />
-                <input placeholder="Search DJs, catering, flowers, lighting..."
-                  ref={searchRef}
-                  style={{ flex:1, border:"none", background:"transparent", fontSize:14,
-                           color:"#fff", fontWeight:500, height:38, outline:"none",
-                           fontFamily:"'Inter',sans-serif" }}
-                  value={search} onChange={e=>setSearch(e.target.value)}
-                  onKeyDown={e=>{ if(e.key==="Enter") pickCat("all"); }} />
-                <button onClick={()=>pickCat("build")} className="btn"
-                  style={{ background:C.orange, color:"#fff", border:"none", borderRadius:10,
-                           padding:"10px 20px", fontSize:14, fontWeight:700, whiteSpace:"nowrap",
-                           boxShadow:C.shadowButton }}>
-                  Build event ✦
-                </button>
-              </div>
 
-              {/* ── Criteria bar: Where / When / Service / How many ── */}
-              <div style={{ background:"#fff", borderRadius:14, marginTop:12, maxWidth:640,
-                            display:"flex", flexWrap:"wrap", alignItems:"stretch",
-                            boxShadow:"0 8px 32px rgba(0,0,0,0.25)", overflow:"hidden" }}>
-                <div style={{ flex:"1 1 150px", padding:"8px 14px", borderRight:`1px solid ${C.border}` }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:800, color:C.black }}>Where</p>
-                  <input value={qWhere} onChange={e=>setQWhere(e.target.value)}
-                    placeholder="City or area" list="pluj-where-options" autoComplete="off"
-                    style={{ width:"100%", border:"none", outline:"none", fontSize:13,
-                             color:C.black, background:"transparent", padding:"2px 0" }} />
-                </div>
-                <div style={{ flex:"1 1 130px", padding:"8px 14px", borderRight:`1px solid ${C.border}` }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:800, color:C.black }}>When</p>
+              <div className="hero-search" role="search">
+                <label>
+                  <span>Where</span>
+                  <input value={qWhere} onChange={e=>setQWhere(e.target.value)} placeholder="City or area"
+                    list="pluj-where-options" autoComplete="off" />
+                </label>
+                <label>
+                  <span>When</span>
                   <input type="date" value={qWhen} onChange={e=>setQWhen(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                    style={{ width:"100%", border:"none", outline:"none", fontSize:13,
-                             color: qWhen?C.black:C.lightGray, background:"transparent", padding:"2px 0" }} />
-                </div>
-                <div style={{ flex:"1 1 150px", padding:"8px 14px", borderRight:`1px solid ${C.border}` }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:800, color:C.black }}>What service</p>
-                  <select value={activeCat} onChange={e=>pickCat(e.target.value)}
-                    style={{ width:"100%", border:"none", outline:"none", fontSize:13,
-                             color:C.black, background:"transparent", padding:"2px 0" }}>
+                    min={new Date().toISOString().split("T")[0]} style={{ color: qWhen ? "#000" : "#6B6B6B" }} />
+                </label>
+                <label>
+                  <span>What you need</span>
+                  <select value={activeCat} onChange={e=>pickCat(e.target.value)}>
                     {CATEGORIES.filter(c=>c.id!=="build").map(c=>(
                       <option key={c.id} value={c.id}>{c.id==="all" ? "Any service" : c.label}</option>
                     ))}
                   </select>
+                </label>
+                <label style={{ borderRight:"none" }}>
+                  <span>Guests</span>
+                  <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)} placeholder="How many" />
+                </label>
+                <button className="btn go" onClick={() => {
+                    requestAnimationFrame(() => {
+                      const el = document.getElementById("results-top");
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                  }}>
+                  Find vendors
+                </button>
+              </div>
+
+              <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:18, marginTop:18 }}>
+                <button onClick={() => pickCat("build")} className="hero-alt">Plan it step by step instead</button>
+                {(qWhere || qGuests || qWhen) && (
+                  <button onClick={()=>{setQWhere("");setQWhen("");setQGuests("");setQEventType("");}}
+                    className="hero-alt" style={{ fontWeight:600, textDecorationThickness:1 }}>
+                    Clear search
+                  </button>
+                )}
+              </div>
+
+              <div className="promise-row">
+                <span className="promise"><span><b>One price.</b> Nothing added at checkout</span></span>
+                <span className="promise"><span><b>Instant booking</b> on open dates</span></span>
+                <span className="promise"><span><b>Checked by hand.</b> Every vendor</span></span>
+              </div>
+            </div>
+
+            <div className="hero-art" aria-hidden="true">
+              <div className="hero-photo">
+                <img src={market?.hero || "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=1400&q=80"} alt="" />
+              </div>
+              <div className="stamp"><Stamp /></div>
+              <div className="ticket">
+                <div className="top">
+                  <span className="ex">Example</span>
+                  <span className="tag">Sat, Nov 14, 150 guests</span>
+                  <div className="ev">Sofía's quinceañera</div>
+                  <div className="row"><span>Taco truck, 3 hours</span><span className="lead" /><b>$1,500</b></div>
+                  <div className="row"><span>DJ and lighting, 5 hours</span><span className="lead" /><b>$1,200</b></div>
+                  <div className="row"><span>Dance floor</span><span className="lead" /><b>$450</b></div>
                 </div>
-                <div style={{ flex:"1 1 150px", padding:"8px 14px", borderRight:`1px solid ${C.border}` }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:800, color:C.black }}>Event type</p>
-                  <select value={qEventType} onChange={e=>setQEventType(e.target.value)}
-                    style={{ width:"100%", border:"none", outline:"none", fontSize:13,
-                             color: qEventType?C.black:C.lightGray, background:"transparent", padding:"2px 0" }}>
-                    <option value="">Any occasion</option>
-                    {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex:"1 1 110px", padding:"8px 14px" }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:800, color:C.black }}>How many</p>
-                  <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)}
-                    placeholder="Guests"
-                    style={{ width:"100%", border:"none", outline:"none", fontSize:13,
-                             color:C.black, background:"transparent", padding:"2px 0" }} />
+                <div className="tear" />
+                <div className="bottom">
+                  <div>
+                    <div className="ok">⚡ Booked instantly</div>
+                    <div className="total">$3,150</div>
+                    <div className="note">The total you pay. Nothing added.</div>
+                  </div>
+                  <div className="barcode" />
                 </div>
               </div>
-              {(qWhere || qGuests || qWhen || qEventType) && (
-                <p style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:8, fontWeight:600 }}>
-                  Showing vendors that fit your criteria ·{" "}
-                  <button onClick={()=>{setQWhere("");setQWhen("");setQGuests("");setQEventType("");}}
-                    style={{ background:"none", border:"none", color:"#fff", textDecoration:"underline",
-                             cursor:"pointer", fontSize:12, fontWeight:700, padding:0 }}>
-                    Clear
-                  </button>
-                </p>
-              )}
-              {!user && (
-                <p style={{ fontSize:13, color:"rgba(255,255,255,0.55)", marginTop:12, fontWeight:500 }}>
-                  Or{" "}
-                  <button onClick={()=>setAuthModal(true)} className="btn"
-                    style={{ background:"none", border:"none", color:"rgba(255,255,255,0.85)",
-                             textDecoration:"underline", fontSize:13, fontWeight:600, padding:0, cursor:"pointer" }}>
-                    sign in
-                  </button>
-                  {" "}to save bookings & leave reviews
-                </p>
-              )}
             </div>
           </div>
-          {/* Stats bar */}
-          <div className="pluj-stats"
-            style={{ position:"absolute", bottom:0, left:0, right:0,
-                        background:"rgba(0,0,0,0.65)", backdropFilter:"blur(8px)",
-                        padding:"12px 6%", display:"flex", gap:0 }}>
-            {[["8","Service categories"],["50+","Service types"],["Houston, TX","Live now"],["Free","To browse & request"]].map(([v,l],i)=>(
-              <div key={l} style={{ flex:1, padding:"4px 0",
-                                    borderRight: i<3?"1px solid rgba(255,255,255,0.12)":undefined,
-                                    paddingLeft: i>0?24:0 }}>
-                <p style={{ margin:0, fontSize:17, fontWeight:800, color:"#fff", fontFamily:"'Playfair Display', serif" }}>{v}</p>
-                <p style={{ margin:"1px 0 0", fontSize:11, color:"rgba(255,255,255,0.5)", fontWeight:500 }}>{l}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       )}
 
       {/* ── VENDOR PROFILE ─────────────────────────────────────────────── */}
@@ -13216,22 +13296,28 @@ export default function PlujApp() {
       {!vendorPage && (
         <div style={{ maxWidth:1280, margin:"0 auto", padding:`${isHero?"28px":"32px"} 24px 100px` }}>
 
-          {/* Category tabs */}
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:24 }}>
-            {CATEGORIES.map(cat => (
-              <button key={cat.id} onClick={()=>pickCat(cat.id)} className="pill btn"
-                style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 18px",
-                         borderRadius:99, fontSize:13, fontWeight:700, border:"none",
-                         background: activeCat===cat.id ? (cat.id==="build"?"#111":C.black) : cat.id==="build" ? C.orangeSoft : "#F3F4F6",
-                         color: activeCat===cat.id ? "#fff" : cat.id==="build" ? C.orange : C.midGray,
-                         boxShadow: activeCat===cat.id ? "0 2px 10px rgba(0,0,0,0.18)" : "none" }}>
-                {cat.icon === "✦"
-                  ? <span style={{ fontSize:14 }}>✦</span>
-                  : <Emoji e={cat.icon} size={15} />
-                } {cat.label}
-              </button>
-            ))}
-          </div>
+          {/* Categories, set like a festival bill: the names are the design. */}
+          <nav aria-label="Categories" style={{ margin: isHero ? "40px 0 56px" : "6px 0 28px" }}>
+            {isHero && (
+              <h2 style={{ fontSize:20, fontFamily:"'Figtree', system-ui, sans-serif", fontWeight:750, margin:"0 0 14px", color:"#4B5260" }}>
+                Build your lineup in {market?.label?.split(",")[0] || "Houston"}
+              </h2>
+            )}
+            <ul className={`bill${isHero ? "" : " sm"}`}>
+              {CATEGORIES.map(cat => {
+                const n = cat.id === "all" || cat.id === "build" ? 0 : dbVendors.filter(v => v.cat === cat.id).length;
+                return (
+                  <li key={cat.id}>
+                    <button onClick={()=>pickCat(cat.id)} aria-current={activeCat===cat.id ? "true" : undefined}
+                      className={`${activeCat===cat.id ? "on" : ""}${cat.id==="build" ? " build" : ""}`}>
+                      {cat.id === "all" ? "Everything" : cat.label}
+                    </button>
+                    {n > 0 && <sup>{n}</sup>}
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
 
           {/* ── SUBCATEGORY GRID ──────────────────────────────────────── */}
           {showSubGrid && (
@@ -13249,7 +13335,7 @@ export default function PlujApp() {
                     onMouseEnter={e=>e.currentTarget.style.borderColor=s.a}
                     onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
                     <div style={{ marginBottom:10 }}><Emoji e={s.e} size={28} /></div>
-                    <div style={{ fontSize:13, fontWeight:800, color:s.a, marginBottom:2, fontFamily:"'Playfair Display', serif" }}>{s.l}</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:s.a, marginBottom:2, fontFamily:"var(--display)" }}>{s.l}</div>
                     <div style={{ fontSize:11, color:"#6B7280", lineHeight:1.5, marginTop:4 }}>{s.d}</div>
                   </button>
                 ))}
@@ -13369,9 +13455,6 @@ export default function PlujApp() {
           )}
 
 
-          {isHero && !q && !activePackage && activeCat === "all" && !vendorPage && (
-            <HowItWorks />
-          )}
 
           {/* ── VENDOR GRID ───────────────────────────────────────────── */}
           {/* This used to be hidden whenever the sub-category tiles were on
@@ -13384,10 +13467,15 @@ export default function PlujApp() {
               ("3 vendors in Food & Drinks") tells you what is there before you
               commit to a sub-category. */}
           {activeCat !== "build" && (
-            <div className="fade-up" id="results-top" ref={vendorGridRef}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+            <div className="fade-up" id="results-top" ref={vendorGridRef} style={{ scrollMarginTop:140 }}>
+              {isHero && (
+                <h2 style={{ fontSize:"clamp(24px,2.6vw,32px)", fontWeight:600, margin:"6px 0 4px" }}>
+                  Vendors in {market?.label || "Houston, TX"}
+                </h2>
+              )}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", marginBottom:16 }}>
                 <p style={{ fontSize:13, color:C.midGray, margin:0, fontWeight:500 }}>
-                  <strong style={{ color:C.black, fontWeight:700 }}>{filtered.length}</strong> vendor{filtered.length!==1?"s":""}
+                  <strong style={{ color:C.black, fontWeight:700 }}>{filtered.length}</strong> {filtered.length!==1?"vendors":"vendor"}
                   {subObj?` in ${subObj.l}`:catObj&&activeCat!=="all"?` in ${catObj.label}`:""}
                   {search?` for "${search}"`:""}
                 </p>
@@ -13477,63 +13565,100 @@ export default function PlujApp() {
             </div>
           )}
 
-          {/* ── INFO CARDS (home) ─────────────────────────────────────── */}
+          {/* ── TRUST + VENDORS (home) ──────────────────────────────────── */}
           {isHero && activeCat==="all" && !q && (
-            <div style={{ marginTop:48, borderTop:`1px solid ${C.border}`, paddingTop:40 }}>
-              <h2 style={{ fontSize:22, fontWeight:800, margin:"0 0 24px", letterSpacing:"-0.03em" }}>Get more from PLUJ</h2>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))", gap:16 }}>
-                {[
-                  { img:"https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&q=80", title:"Plan your next event", desc:"Use Build My Event to get matched with the best vendors for your occasion.", cta:"Start planning →", action:()=>pickCat("build") },
-                  { img:"https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&q=80", title:"List your services", desc:"Are you a vendor or service provider? Sign up and get discovered by thousands.", cta:"Become a vendor →", action:()=>setAuthModal(true) },
-                  { img:"https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=600&q=80", title:"Book with confidence", desc:"Every vendor application is reviewed before their listing goes live. Compare prices, message directly, request in minutes.", cta:"Browse vendors →", action:goBrowseVendors },
-                ].map(card=>(
-                  <div key={card.title} className="card"
-                    style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:18,
-                             overflow:"hidden", cursor:"pointer", boxShadow:C.shadowCard }}
-                    onClick={card.action}>
-                    <img src={card.img} alt={card.title} style={{ width:"100%", height:180, objectFit:"cover", display:"block" }} />
-                    <div style={{ padding:"16px 18px 20px" }}>
-                      <h3 style={{ fontSize:17, fontWeight:800, margin:"0 0 7px", letterSpacing:"-0.02em" }}>{card.title}</h3>
-                      <p style={{ fontSize:13, color:C.midGray, lineHeight:1.65, margin:"0 0 12px", fontWeight:400 }}>{card.desc}</p>
-                      <span style={{ fontSize:13, fontWeight:700, color:C.black, textDecoration:"underline", textUnderlineOffset:3 }}>{card.cta}</span>
-                    </div>
+            <>
+              <div style={{ marginTop:56 }}><HowItWorks /></div>
+              <section style={{ marginTop:40 }}>
+                <h2 style={{ fontSize:"clamp(40px,5vw,68px)", margin:"0 0 22px" }}>The difference, line by line</h2>
+                <div className="compare" role="table" aria-label="PLUJ compared with typical event sites">
+                  <div className="crow head" role="row">
+                    <span role="columnheader" />
+                    <span role="columnheader">Typical event sites</span>
+                    <span role="columnheader" className="us">PLUJ</span>
                   </div>
-                ))}
-              </div>
-            </div>
+                  {[
+                    ["Price", "A quote, after you ask and wait", "Shown upfront, one total"],
+                    ["Booking", "Wait for each vendor to reply", "Instant on open dates"],
+                    ["Fees", "Added at checkout", "Already in the price"],
+                    ["Vendors", "Little or no checking", "Legal details checked, approved by hand"],
+                    ["Reviews", "Anyone can post", "Only after a confirmed booking"],
+                    ["Language", "English", "English and Spanish"],
+                  ].map(([k, a, b]) => (
+                    <div className="crow" role="row" key={k}>
+                      <span role="rowheader">{k}</span>
+                      <span role="cell" className="them">{a}</span>
+                      <span role="cell" className="us">{b}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="vendor-band" style={{ marginTop:80 }}>
+                <div>
+                  <p style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:"#FF5C28" }}>Vendors wanted in Houston</p>
+                  <h2>Get booked.<br />Pay only when you are.</h2>
+                  <p style={{ fontSize:17, color:"rgba(255,255,255,0.78)", lineHeight:1.6, margin:"0 0 26px", maxWidth:"32em" }}>
+                    No subscriptions and no paying for leads. The hosts who book you have a date, a guest count and a price.
+                  </p>
+                  <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+                    <button onClick={() => setAuthModal(true)} className="btn"
+                      style={{ background:"#FF5C28", color:"#000", borderRadius:99, padding:"14px 24px", fontSize:15.5, fontWeight:800 }}>
+                      List your business
+                    </button>
+                    <button onClick={() => setInfoPage("Vendor guide")} className="btn"
+                      style={{ background:"transparent", color:"#fff", border:"1.5px solid rgba(255,255,255,0.5)",
+                               borderRadius:99, padding:"14px 24px", fontSize:15.5, fontWeight:700 }}>
+                      Read the vendor guide
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div className="fact"><b>$0</b><span>to join, list your services and receive requests</span></div>
+                  <div className="fact"><b>0%</b><span>service fee for your first three months</span></div>
+                  <div className="fact"><b>3%</b><span>after that, and only on bookings you actually get</span></div>
+                </div>
+              </section>
+            </>
           )}
         </div>
       )}
 
       {/* ── FOOTER ─────────────────────────────────────────────────────── */}
-      <div style={{ background:C.black, padding:"28px 6%", display:"flex",
-                    justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:16 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-          <span onClick={goHome} title="Back to home" style={{ cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <PlujMark size={28} light={true} />
-          </span>
-          <span style={{ fontSize:11, color:"#555", marginLeft:6 }}>Houston, TX · © 2026</span>
-        </div>
-        {/* flexWrap is load-bearing. Eight links in a nowrap row measure ~521px,
-            which on a 375px phone made the whole DOCUMENT 543px wide — so every
-            page scrolled sideways and the header Sign up button sat off-screen.
-            One un-wrapped row in the footer was doing that to every screen on
-            the site. */}
-        <div style={{ display:"flex", gap:20, flexWrap:"wrap", justifyContent:"center" }}>
-          {["About","How it works","Host guide","Vendor guide","Become a vendor","Help center","Cancellations and refunds","Terms","Privacy","Marketplace rules"].map(l=>(
-            <span key={l} onClick={()=>{
-                if (l==="Become a vendor") { setAuthModal(true); return; }
-                setInfoPage(l);
-              }}
-              style={{ fontSize:12, color:"#555", fontWeight:500, cursor:"pointer",
-                                   transition:"color 200ms cubic-bezier(0,0,1,1)" }}
-              onMouseEnter={e=>e.currentTarget.style.color="#888"}
-              onMouseLeave={e=>e.currentTarget.style.color="#555"}>
-              {l}
+      <footer className="foot">
+        <div className="foot-in">
+          <div>
+            <span onClick={goHome} title="Back to home" style={{ cursor:"pointer", display:"inline-flex" }}>
+              <PlujMark size={28} />
             </span>
+            <p style={{ fontSize:14, color:C.midGray, margin:"12px 0 14px", maxWidth:"26em", lineHeight:1.6 }}>
+              Houston's event marketplace. One price for your whole event, in English and Spanish.
+            </p>
+            <LangToggle />
+          </div>
+          {[
+            ["For hosts", ["How it works","Host guide","Help center","Cancellations and refunds"]],
+            ["For vendors", ["Vendor guide","Become a vendor","Marketplace rules"]],
+            ["PLUJ", ["About","Terms","Privacy"]],
+          ].map(([h, links]) => (
+            <div key={h}>
+              <h4>{h}</h4>
+              {links.map(l => (
+                <button key={l} className="lnk" onClick={() => {
+                    if (l === "Become a vendor") { setAuthModal(true); return; }
+                    setInfoPage(l);
+                  }}>{l}</button>
+              ))}
+            </div>
           ))}
         </div>
-      </div>
+        <p className="wordmark" aria-hidden="true">pluj</p>
+        <div style={{ maxWidth:1240, margin:"0 auto", padding:"16px 28px 30px",
+                      display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, fontSize:13.5, color:"#4B5260" }}>
+          <span>© 2026 PLUJ, Houston, Texas</span>
+          <span>Every vendor checked by hand</span>
+        </div>
+      </footer>
     </div>
   );
 }

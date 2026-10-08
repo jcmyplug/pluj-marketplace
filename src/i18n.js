@@ -103,6 +103,12 @@ export function translate(s) {
       return lead + translateDates(out) + trail;
     }
   }
+  /* Labels joined in code ("Food & Drinks · Food Trucks"): piece by piece. */
+  if (key.includes(" · ")) {
+    const parts = key.split(" · ");
+    const done = parts.map(p => dict.exact[p.trim()] ?? translateDates(p));
+    if (done.some((v, i) => v !== parts[i])) return lead + done.join(" · ") + trail;
+  }
   const dated = translateDates(key);
   if (dated !== key) return lead + dated + trail;
   /* Multi-line messages (alerts, notices): translate line by line. */

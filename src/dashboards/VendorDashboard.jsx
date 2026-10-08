@@ -1690,7 +1690,7 @@ function VendorDashboard({ user, onLogout }) {
                 <>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14,
                                 paddingBottom:14, borderBottom:`1px solid ${C.border}` }}>
-                    <span style={{ fontSize:30, fontWeight:800, fontFamily:"'Playfair Display', serif" }}>
+                    <span style={{ fontSize:30, fontWeight:800, fontFamily:"'Fraunces', Georgia, serif" }}>
                       {(revs.reduce((a,r)=>a+(Number(r.rating)||0),0) / revs.length).toFixed(1)}
                     </span>
                     <div>

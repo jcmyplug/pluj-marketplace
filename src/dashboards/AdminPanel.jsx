@@ -370,7 +370,7 @@ function VendorReview({ vendorId, onDecided }) {
             placeholder="Or write your own reason…"
             style={{ width:"100%", minHeight:64, padding:"8px 10px", border:`1px solid ${C.border}`,
                      borderRadius:9, fontSize:12.5, resize:"vertical", boxSizing:"border-box",
-                     fontFamily:"'Inter',sans-serif" }} />
+                     fontFamily:"'Figtree', system-ui, sans-serif" }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <button onClick={()=>{ setDecl(false); setReason(""); setErr(""); }} disabled={busy} className="btn"
               style={{ flex:1, padding:"9px 0", borderRadius:9, border:`1px solid ${C.border}`,
@@ -869,7 +869,7 @@ function AdminAccounts({ adminId, onChanged }) {
                 : "Write your message…"}
               style={{ width:"100%", minHeight:100, padding:"9px 11px", border:`1px solid ${C.border}`,
                        borderRadius:9, fontSize:12.5, resize:"vertical", boxSizing:"border-box",
-                       fontFamily:"'Inter',sans-serif" }} />
+                       fontFamily:"'Figtree', system-ui, sans-serif" }} />
             <div style={{ display:"flex", gap:8, marginTop:12 }}>
               <button onClick={()=>setMsgFor(null)} className="btn"
                 style={{ flex:1, padding:"9px 0", borderRadius:9, border:`1px solid ${C.border}`,
@@ -956,7 +956,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <span style={{ fontSize:18 }}>🛡️</span>
-              <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:800,
+              <h2 style={{ fontFamily:"'Fraunces', Georgia, serif", fontSize:19, fontWeight:800,
                            color:"#fff", margin:0 }}>Admin Panel</h2>
             </div>
             <button onClick={onClose} className="btn"
