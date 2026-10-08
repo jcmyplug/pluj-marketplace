@@ -3273,6 +3273,7 @@ async function getVendorRequests(vendorId) {
     serviceId: r.service_id, serviceName: r.service_name,
     packageName: r.package_name, packagePrice: r.package_price,
     addons: Array.isArray(r.addons) ? r.addons : [], addonsTotal: Number(r.addons_total) || 0,
+    cancelledBy: r.cancelled_by || null,
     status: r.status, note: r.vendor_note,
     createdAt: new Date(r.created_at).getTime(),
     respondedAt: r.responded_at ? new Date(r.responded_at).getTime() : null,
@@ -3324,6 +3325,7 @@ async function getUserRequests(userId) {
     serviceId: r.service_id, serviceName: r.service_name,
     packageName: r.package_name, packagePrice: r.package_price,
     addons: Array.isArray(r.addons) ? r.addons : [], addonsTotal: Number(r.addons_total) || 0,
+    cancelledBy: r.cancelled_by || null,
     status: r.status, note: r.vendor_note,
     createdAt: new Date(r.created_at).getTime(),
     respondedAt: r.responded_at ? new Date(r.responded_at).getTime() : null,
@@ -5629,9 +5631,31 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
             </div>
           )}
           {req.status === "cancelled" && (
-            <div style={{ background:"#F3F4F6", borderRadius:10, padding:"10px 14px", marginBottom:14, border:`1px solid ${C.border}` }}>
-              <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.midGray }}>You cancelled this request.</p>
-            </div>
+            req.cancelledBy === "vendor" && user.type !== "vendor" ? (
+              /* The PLUJ promise: if a pro cancels, we find a replacement. */
+              <div style={{ border:"2px solid #000", borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+                <p style={{ margin:0, fontSize:13.5, fontWeight:800, color:"#000" }}>{req.vendorName || "The vendor"} cancelled. We'll find you a replacement.</p>
+                <p style={{ margin:"4px 0 10px", fontSize:12.5, color:"#333", lineHeight:1.5 }}>
+                  If you paid through PLUJ, every dollar comes back to your card. PLUJ will also send you other pros who are free on your date. You can look now:
+                </p>
+                <button className="btn" onClick={() => {
+                    window.dispatchEvent(new CustomEvent("pluj:find-replacement", { detail: {
+                      serviceId: req.serviceId || null, date: req.eventDate || "", guests: req.guests || "", city: req.city || "" } }));
+                    onClose && onClose();
+                  }}
+                  style={{ background:"#000", color:"#fff", borderRadius:999, padding:"10px 18px", fontSize:13, fontWeight:800 }}>
+                  Find a replacement
+                </button>
+              </div>
+            ) : (
+              <div style={{ background:"#F3F4F6", borderRadius:10, padding:"10px 14px", marginBottom:14, border:`1px solid ${C.border}` }}>
+                <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.midGray }}>
+                  {req.cancelledBy === "vendor"
+                    ? (user.type === "vendor" ? "You cancelled this booking." : "The vendor cancelled this booking.")
+                    : (user.type === "vendor" ? "The host cancelled this request." : "You cancelled this request.")}
+                </p>
+              </div>
+            )
           )}
 
           {/* Edit form or view */}
@@ -11183,7 +11207,7 @@ const INFO_CONTENT = {
     ["Payments through PLUJ", "When online payment is enabled for a booking, the host pays the full price upfront through PLUJ when the vendor confirms. The payment is processed by Stripe and made directly to the vendor's own Stripe account: the vendor is the seller and the merchant for every payment. PLUJ does not receive or hold booking money; it only receives its service fees. The vendor's automatic payouts are turned off while they use PLUJ, so the money stays locked in the vendor's Stripe balance until PLUJ instructs Stripe to release it to the vendor's bank on the payout schedule below. Vendors must have their own Stripe account, complete Stripe's identity and bank verification, accept Stripe's services agreement, and authorize PLUJ to manage these payouts and to issue refunds from their Stripe balance as these Terms describe."],
     ["Payout schedule", "This schedule is part of the agreement between PLUJ, the host and the vendor for every booking paid through PLUJ. The booking money is released to the vendor's bank in three parts: the first part 7 days before the event starts; the second part at noon the day after the event; and the last part when the host approves the booking in My Requests or, if the host has not reported a problem by then, automatically 3 days after the event ends. The parts are 30%, 50% and 20%. On a vendor's first booking on PLUJ they are 30%, 20% and 50%, and on their second 30%, 40% and 30%. Matched to cancellations: before the event, PLUJ never releases more than the vendor would keep under the Cancellations and refunds page if the host cancelled that day. Refund reserve: until a vendor has 3 fully released bookings on PLUJ, and for 12 months after a vendor cancels a confirmed booking, the first part is held until the day after the event, so a cancellation by the vendor can be refunded in full from the locked balance. When the host pays less than 7 days before the event, a part that is already due is released straight away, subject to the refund reserve. Nothing is released while a problem report or a card dispute on the booking is open. Each booking shows its exact schedule and dates before the host pays and before the vendor confirms."],
     ["How hosts are protected", "Hosts are protected because money is released to the vendor in parts: if the host reports a problem before a part is released, or the host's bank opens a dispute, PLUJ freezes everything not yet released while it looks into it. This is not escrow. PLUJ is not an escrow agent, trustee, bank or payment processor, the money is in the vendor's Stripe balance and not with PLUJ, and PLUJ is not responsible for delays or decisions by Stripe, banks or card issuers, or for a vendor's incomplete Stripe account."],
-    ["The PLUJ host guarantee", "PLUJ makes these commitments to every host who books and pays through PLUJ, and they are part of this agreement. One price: the total shown before you pay is the amount you are charged for that booking, including PLUJ's service fee, any extras you chose and any sales tax that applies; nothing is added at checkout. Your money waits for the event: it is released to the vendor only on the payout schedule above, and the last part only after the event. If the vendor cancels a confirmed booking, you get back everything you paid, including fees, from the vendor's Stripe balance, and PLUJ finds you a replacement: within one business day of the cancellation we send you approved vendors who offer the same service, are free on your date and cover your area, and if you book one of them through PLUJ you pay no PLUJ service fee on that booking. If a vendor does not show up or is not what was promised, press Report a problem before the last part is released, and everything not yet released is frozen while we look into it. You can reach real people at PLUJ, in English or Spanish. What the guarantee does not do: it is not insurance, PLUJ does not pay refunds or price differences from its own funds, and while PLUJ will look for a replacement it cannot promise that one is available on your date or at the same price."],
+    ["The PLUJ host guarantee", "PLUJ makes these commitments to every host who books and pays through PLUJ, and they are part of this agreement. One price: the total shown before you pay is the amount you are charged for that booking, including PLUJ's service fee, any extras you chose and any sales tax that applies; nothing is added at checkout. Your money waits for the event: it is released to the vendor only on the payout schedule above, and the last part only after the event. If the vendor cancels a confirmed booking, you get back everything you paid, including fees, from the vendor's Stripe balance, and PLUJ finds you a replacement: within one business day of the cancellation we send you approved vendors who offer the same service, are free on your date and cover your area. If a vendor does not show up or is not what was promised, press Report a problem before the last part is released, and everything not yet released is frozen while we look into it. You can reach real people at PLUJ, in English or Spanish. What the guarantee does not do: it is not insurance, PLUJ does not pay refunds or price differences from its own funds, and while PLUJ will look for a replacement it cannot promise that one is available on your date or at the same price."],
     ["Reporting a problem with a booking", "Until the money is fully released, the host can report a problem, such as a vendor who did not show up, a service that was not what was promised, or suspected fraud. Everything not yet released is then frozen. After considering what both parties tell us, PLUJ may, at its sole discretion, release it to the vendor, refund the host in whole or in part from the vendor's Stripe balance, or keep it frozen while we review. Hosts and vendors agree to cooperate and give us accurate information. PLUJ's decision is final as between PLUJ and the users, does not decide any other claim between them, and PLUJ is not liable for it. PLUJ never repays anything from its own funds. Reports that are knowingly false breach these Terms, and the person who makes one is liable for the loss it causes."],
     ["Instant booking", "A vendor may switch on instant booking for a listing. A host can then book that listing at its listed price for an open date at least 72 hours away, and the booking is confirmed at once on the vendor's behalf, without the vendor reviewing it. By switching it on, the vendor accepts every booking made this way as confirmed, at that price, under these Terms and the payment and cancellation rules, and agrees to keep their calendar and listing up to date. PLUJ only confirms instantly when the date is one the listing works, has not been blocked by the vendor, still has room, and meets the listing's notice and guest limits; otherwise the booking is sent to the vendor as an ordinary request."],
     ["Fees", "Service fees: none during an account's first three months on PLUJ. After that, PLUJ's service fee is 3% of each payment to a vendor, deducted from that payment, and the host pays a 1% service fee; each is counted from that person's own sign-up date. One price: every price a host sees on PLUJ already includes the host's service fee, so the amount shown on a listing is the amount charged and nothing is added at checkout. PLUJ's service fees are collected automatically through Stripe when each payment is made, and are not refunded if the payment is refunded or disputed. Stripe's own fees (card processing, payouts, disputes and any others) are charged by Stripe to the vendor's Stripe account under the vendor's agreement with Stripe; PLUJ does not pay them. Fees that apply are shown before payment. We may change our fees with notice; changes do not affect payments already made."],
@@ -11228,7 +11252,7 @@ const INFO_CONTENT = {
     ["What a refund applies to", "A refund applies to what you have paid so far. When a booking is cancelled, payments that weren't due yet are cancelled and never charged."],
     ["If you cancel a confirmed booking", "When online payment is enabled, PLUJ keeps its service fees and Stripe keeps its card processing fee; of what is left, you get back: all of it if you cancel 7 or more days before the event start time (the vendor receives nothing); 70 percent 5 to 7 days before; 50 percent 3 to 5 days before; 25 percent 2 to 3 days before. A paid booking cannot be cancelled by the host within 48 hours of the event. Refunds are paid from the vendor's Stripe balance. When online payment is not enabled, a booking is free to cancel until 48 hours before the event, after which a late-cancellation fee applies. The terms for your booking are shown before you pay and are recorded with the booking, so a vendor changing their policy later cannot change yours."],
     ["What less fees means", "The card processing fee charged by Stripe and PLUJ's service fees are not returned when you cancel. They are charged when the payment is taken and are not recoverable afterwards. A refund described as full means the amount you paid less those fees."],
-    ["If the vendor cancels", "You get back everything you paid, including all fees, whatever the timing, from the vendor's Stripe balance, and PLUJ finds you a replacement: within one business day we send you approved vendors who offer the same service, are free on your date and cover your area, and if you book one of them through PLUJ you pay no PLUJ service fee on that booking. See The PLUJ host guarantee in the Terms."],
+    ["If the vendor cancels", "You get back everything you paid, including all fees, whatever the timing, from the vendor's Stripe balance, and PLUJ finds you a replacement: within one business day we send you approved vendors who offer the same service, are free on your date and cover your area. See The PLUJ host guarantee in the Terms."],
     ["Changing a confirmed booking", "Changing the date, guest count or location needs the vendor to approve it, and re-opens the request until they do. If they decline, the original booking stands and the schedule above continues to apply. Changes are not accepted within 48 hours of the event."],
     ["If a vendor does not turn up, or something is wrong", "Press Report a problem on the booking in My Requests before the money is fully released (up to 3 days after the event). Everything not yet released is frozen while we look into it with both parties, and PLUJ may refund you in full or in part from the vendor's Stripe balance. After everything has been released, message the vendor and contact us within 7 days and we will help, but PLUJ does not refund money from its own funds. PLUJ does not perform the services and is not the vendor, but no-shows and misrepresentation are grounds for removal from the marketplace."],
     ["Before you contact your bank", "Contact the vendor and us first. A chargeback takes months to resolve, and we can usually help settle it faster. A chargeback is between you, your card issuer, the vendor and Stripe, and raising one does not remove your obligations under these terms."],
@@ -11359,7 +11383,7 @@ export function BookingPayments({ req, user, onChanged }) {
             </span>
           </label>
           <button className="btn" disabled={!!busy || !agree} style={{ ...btn(C.orange, "#fff"), marginTop:8, opacity: agree ? 1 : 0.55 }}
-            onClick={() => run("pay", () => paymentsCall("pay", { booking_id: plan.booking_id, accept_terms: true }))}>
+            onClick={() => run("pay", () => paymentsCall("pay", { booking_id: plan.booking_id, accept_terms: true, lang: getLang() }))}>
             {busy === "pay" ? "Opening…" : `Pay ${fmtUSD(toPay)} in full`}
           </button>
         </div>
@@ -12235,6 +12259,26 @@ export default function PlujApp() {
   /* Prices are shown all-in for whoever is looking (see allIn). Set during
      render, before any card renders, so every price on screen agrees. */
   setPriceViewer(user);
+  /* Emails follow the language the person reads PLUJ in: the EN/ES switch is
+     saved on their profile (profiles.lang), and queue_email() translates. */
+  useEffect(() => {
+    if (!user || !user.id || user.type === "guest" || IS_PREVIEW) return;
+    const save = (l) => {
+      try { sb.from("profiles").eq("id", user.id).update({ lang: l === "es" ? "es" : "en" }).then(() => {}, () => {}); }
+      catch { /* best effort */ }
+    };
+    save(getLang());
+    return onLangChange(save);
+  }, [user?.id]);
+  /* "Find a replacement" on a booking a vendor cancelled: open the same kind
+     of service, filtered to the event's date, guests and city. Registered
+     below, once the state it sets exists. */
+  const replacementRef = useRef(null);
+  useEffect(() => {
+    const on = (e) => { if (replacementRef.current) replacementRef.current(e.detail || {}); };
+    window.addEventListener("pluj:find-replacement", on);
+    return () => window.removeEventListener("pluj:find-replacement", on);
+  }, []);
   const [authModal, setAuthModal] = useState(false);
   /* Password-recovery: set when arriving via a Supabase recovery email link */
   const [recoveryToken, setRecoveryToken] = useState(null);
@@ -12856,6 +12900,18 @@ export default function PlujApp() {
     setActiveCat(id); setActiveSub(null); setSearch(""); setVendorPage(null); setActivePackage(null);
     if (id==="build") { setWizStep(0); setWizAns({}); setWizDone(false); }
   }
+  replacementRef.current = (d) => {
+    const card = dbVendors.find(v => d.serviceId && v.serviceId === d.serviceId);
+    setAccountOpen(false); setNotifOpen(false); setCartOpen(false);
+    pickCat(card && card.cat ? card.cat : "all");
+    if (d.date && d.date >= new Date().toISOString().slice(0, 10)) setQWhen(d.date);
+    if (d.guests) setQGuests(String(d.guests).replace(/[^0-9]/g, ""));
+    if (d.city) setQWhere(d.city);
+    requestAnimationFrame(() => {
+      const el = document.getElementById("results-top");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   function handleSelectPackage(pkg) {
     setActivePackage(pkg); setActiveCat("all"); setActiveSub(null); setSearch(""); setVendorPage(null);
   }

@@ -101,24 +101,31 @@ Deno.serve(async (req) => {
           host_accept_agent: (req.headers.get("user-agent") || "").slice(0, 300), updated_at: now }).eq("booking_id", bookingId);
 
         const base = returnBase(req);
+        /* One price: the booking and PLUJ's service fee are ONE line, the
+           amount the host was shown. Spanish when the host browses in Spanish. */
+        const es = String(body.lang || "") === "es";
+        const finalPct = Number((rows.find((r: any) => r.kind === "final") || {}).percent || 20);
         const lineItems: any[] = [{
           quantity: 1,
           price_data: {
-            currency: plan.currency || "usd", unit_amount: c.base,
-            product_data: { name: `${booking.service_name || "Booking"} with ${vendorName} — paid in full`,
-                            description: `Event on ${booking.event_date}. Held in the vendor's Stripe balance and released in parts; the last ${Number((rows.find((r: any) => r.kind === "final") || {}).percent || 20)}% only when you approve it after the event.` },
+            currency: plan.currency || "usd", unit_amount: c.base + c.service,
+            product_data: es
+              ? { name: `${booking.service_name || "Reserva"} con ${vendorName}, pago completo`,
+                  description: `Evento el ${booking.event_date}. Un solo precio${c.service > 0 ? ", incluye la tarifa de servicio de PLUJ" : ""}. `
+                    + `Queda en el saldo de Stripe del proveedor y se libera por partes; el último ${finalPct}% solo cuando lo apruebas después del evento.` }
+              : { name: `${booking.service_name || "Booking"} with ${vendorName}, paid in full`,
+                  description: `Event on ${booking.event_date}. One price${c.service > 0 ? ", includes PLUJ's service fee" : ""}. `
+                    + `Held in the vendor's Stripe balance and released in parts; the last ${finalPct}% only when you approve it after the event.` },
           },
         }];
+        // Only when an admin has set card fees to be paid by hosts (off by default).
         if (c.hostFees > 0) {
           lineItems.push({ quantity: 1, price_data: { currency: plan.currency || "usd", unit_amount: c.hostFees,
-            product_data: { name: "Card processing fee" } } });
-        }
-        if (c.service > 0) {
-          lineItems.push({ quantity: 1, price_data: { currency: plan.currency || "usd", unit_amount: c.service,
-            product_data: { name: "PLUJ service fee" } } });
+            product_data: { name: es ? "Cargo por procesamiento de tarjeta" : "Card processing fee" } } });
         }
         const session = await stripe("POST", "/checkout/sessions", {
           mode: "payment", client_reference_id: bookingId, customer_email: me.email || undefined,
+          locale: es ? "es" : "auto",
           payment_method_types: ["card"],
           line_items: lineItems,
           payment_intent_data: {
