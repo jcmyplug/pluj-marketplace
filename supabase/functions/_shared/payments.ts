@@ -440,13 +440,13 @@ export async function releaseDue(bookingId: string, opts: { force?: boolean } = 
   return sent;
 }
 
-/* Refund what the cancellation rules say. The refund comes out of the
-   vendor's Stripe balance, where the locked money is. When the HOST
-   cancelled, PLUJ keeps only the host's 1% service fee: the vendor's 3% fee
-   on the refunded share goes back to the vendor (an application fee refund,
-   from fees PLUJ received on this payment). When the vendor cancelled, PLUJ
-   keeps its fees. Called by the scheduler for plans with
-   refund_state = 'pending'. */
+/* Refund what the cancellation rules say, from the vendor's Stripe balance
+   (where the locked money is). PLUJ always keeps its service fees (Stripe
+   doesn't return application fees unless asked). When the HOST cancelled,
+   the refund is the policy's share of what is left after Stripe's card fee
+   and PLUJ's fees, so 7+ days out the vendor neither gains nor loses; when
+   the vendor cancelled, the host gets back everything they paid. Called by
+   the scheduler for plans with refund_state = 'pending'. */
 export async function runPendingRefund(plan: any) {
   const { data: pays } = await db().from("booking_payments").select("*")
     .eq("booking_id", plan.booking_id).eq("status", "paid").order("due_at", { ascending: false });
@@ -454,30 +454,17 @@ export async function runPendingRefund(plan: any) {
   try {
     for (const p of pays || []) {
       const charged = chargedCents(p);
+      const pct = Number(plan.refund_percent || 0) / 100;
       let want = plan.refund_less_fees
-        ? charged - (p.stripe_fee_cents || 0) - (p.host_service_fee_cents || 0)   // less the card fee and PLUJ's 1%
-        : Math.round(charged * Number(plan.refund_percent || 0) / 100);
+        ? Math.round((charged - (p.stripe_fee_cents || 0) - (p.platform_fee_cents || 0)) * pct)
+        : Math.round(charged * pct);
       want = Math.min(want, charged - (p.refunded_cents || 0));
       if (want <= 0 || !p.stripe_payment_intent_id || !p.stripe_account_id) continue;
       await stripe("POST", "/refunds", { payment_intent: p.stripe_payment_intent_id, amount: want,
         metadata: { booking_id: plan.booking_id, payment_id: p.id, reason: "cancellation" } },
         `pluj-refund-${p.id}-${want}`, p.stripe_account_id);
-      let feeBack = 0;
-      if (plan.cancelled_by === "customer" && p.stripe_charge_id) {
-        const vendorFee = Math.max(0, (p.platform_fee_cents || 0) - (p.host_service_fee_cents || 0));
-        feeBack = Math.round(vendorFee * Math.min(100, Number(plan.refund_percent || 0)) / 100);
-        if (feeBack > 0) {
-          const ch = await stripe("GET", `/charges/${p.stripe_charge_id}`, {}, undefined, p.stripe_account_id);
-          const feeId = typeof ch.application_fee === "string" ? ch.application_fee : ch.application_fee?.id;
-          if (feeId) {
-            await stripe("POST", `/application_fees/${feeId}/refunds`, { amount: feeBack,
-              metadata: { booking_id: plan.booking_id, payment_id: p.id, reason: "host cancelled" } },
-              `pluj-feeback-${p.id}-${feeBack}`);
-          } else feeBack = 0;
-        }
-      }
       await db().from("booking_payments").update({ refunded_cents: (p.refunded_cents || 0) + want,
-        platform_fee_cents: (p.platform_fee_cents || 0) - feeBack, updated_at: new Date().toISOString() }).eq("id", p.id);
+        updated_at: new Date().toISOString() }).eq("id", p.id);
       total += want;
     }
     await db().from("booking_payment_plans").update({ refund_state: "done", last_error: null,
