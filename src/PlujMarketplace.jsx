@@ -486,7 +486,8 @@ export const GLOBAL_CSS = `
   --z-sticky: 200; --z-dropdown: 300; --z-drawer: 900; --z-modal: 1000; --z-toast: 1200;
 }
 html { -webkit-text-size-adjust: 100%; }
-body { background: #fff; color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { background: #fff; color: var(--ink); font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+       -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 .pluj { font-family: 'Figtree', system-ui, sans-serif; color: var(--ink); background: #fff; min-height: 100vh;
         font-size: 15px; line-height: 1.5; }
 .pluj button, .pluj input, .pluj select, .pluj textarea { font-family: 'Figtree', system-ui, sans-serif; color: inherit; }
