@@ -12510,14 +12510,16 @@ const CS_CSS = `
 .cs-orb { position: absolute; border-radius: 50%; will-change: transform; }
 .cs-orb.o1 { width: 96vmax; height: 96vmax; left: -42vmax; top: 36%;
   background: radial-gradient(circle at 50% 50%, #FBFDFF 0%, #F1F5FF 30%, #DCE5FF 50%, #B8C3FF 62%, #8E9AFF 68%, #7480FF 70.7%, rgba(116,128,255,0) 71%);
-  filter: blur(5px); animation: cs-drift-a 26s ease-in-out infinite alternate; }
+  filter: blur(5px); animation: cs-drift-a 8s ease-in-out infinite alternate; }
 .cs-orb.o2 { width: 80vmax; height: 80vmax; right: -38vmax; top: 54%;
   background: radial-gradient(circle at 50% 50%, #001EE0 0%, #0A2BFF 42%, #2846FF 56%, #5B62FF 65%, #9C93FF 69.5%, #B9B0FF 70.7%, rgba(185,176,255,0) 71%);
-  filter: blur(4px); animation: cs-drift-b 30s ease-in-out infinite alternate; }
+  filter: blur(4px); animation: cs-drift-b 10s ease-in-out infinite alternate; }
 .cs-orb.o3 { width: 78vmin; height: 78vmin; left: 50%; top: 48%; transform: translate(-50%, -50%);
   background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0) 70%); }
-@keyframes cs-drift-a { to { transform: translate(2.5vmax, -1.5vmax); } }
-@keyframes cs-drift-b { to { transform: translate(-2vmax, -2.5vmax); } }
+@keyframes cs-drift-a { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(3vmax, -3vmax) scale(1.03); }
+                        100% { transform: translate(5vmax, -1vmax) scale(1.05); } }
+@keyframes cs-drift-b { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-3vmax, -4vmax) scale(1.04); }
+                        100% { transform: translate(-5vmax, -1.5vmax) scale(1.02); } }
 
 .cs-top, .cs-main, .cs-foot { position: relative; z-index: 2; }
 .cs-top { display: flex; justify-content: flex-end; padding: 18px 20px 0; }
