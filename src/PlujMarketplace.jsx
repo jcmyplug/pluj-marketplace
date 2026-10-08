@@ -86,53 +86,47 @@ function Emoji({ e, size = 20, style: s = {} }) {
    PLUJ_LOGO_PNG is now referenced by nothing. The production build's dead-code
    elimination should drop it; if you want it gone from source too, delete that
    one line by hand — it is too long to edit safely by search-and-replace. */
-export function PlujMark({ size = 32, light = false }) {
+/* The PLUJ logo (Oct 2026): a P built from a dot, a bowl and a half moon,
+   with the "Pluj" wordmark in the brand lettering (outlined in the official
+   files, Desktop/Pluj/PLUJ LOGOS/LOGO-02.svg, whose paths these are). Drawn
+   in currentColor so it takes any colour and stays crisp at any size.
+     variant "horizontal" (default): mark + wordmark side by side, for bars
+     variant "mark": the mark alone (icons, small spaces)
+     variant "stacked": the original lockup, wordmark tucked under the bowl
+     variant "word": the wordmark alone
+   size = height in px. */
+const LOGO_DOT = { cx: 243.52, cy: 311.38, rx: 32.3, ry: 31.47 };
+const LOGO_P = [
+  "M366.27,251.28h-75.96v90.11c25.96,0,48.48,14.59,59.39,35.79h16.57c35.68,0,64.44-28.18,64.44-62.95h0c0-34.76-28.76-62.95-64.44-62.95Z",
+  "M350.68,406.09c0-32.4-27.08-58.76-60.37-58.76v117.52c33.29,0,60.37-26.36,60.37-58.76Z",
+];
+const LOGO_WORD = [
+  "M418.43,419.14c0,10.68-6.51,16.39-18.58,16.39h-16.68v16.97h-11.41v-49.75h28.09c12.07,0,18.58,5.71,18.58,16.39ZM406.72,419.14c0-4.54-2.56-6.58-8.19-6.58h-15.36v13.17h15.36c5.63,0,8.19-2.05,8.19-6.58Z",
+  "M426.99,400.56h10.97v51.95h-10.97v-51.95Z",
+  "M486.47,415.48v37.02h-10.97v-6.58c-3.66,4.98-8.34,7.46-14.19,7.46-8.41,0-13.32-5.12-13.32-13.75v-24.14h10.97v21.88c0,4.68,2.27,6.95,6.8,6.95,3.88,0,7.17-1.68,9.73-4.98v-23.85h10.97Z",
+  "M489.98,466.48l.81-8.63c.95.29,1.76.37,2.49.37,2.78,0,3.88-1.17,3.88-4.17v-38.56h10.97v40.02c0,7.97-3.88,11.78-12.14,11.78-2.05,0-3.88-.22-6-.81ZM496.5,403.78c0-3.44,2.49-5.85,6.15-5.85s6.14,2.41,6.14,5.85-2.49,5.85-6.14,5.85-6.15-2.41-6.15-5.85Z",
+];
+export function PlujMark({ size = 32, light = false, variant = "horizontal", color }) {
+  const fill = color || (light ? "#FFFFFF" : "#000000");
+  const s = 1.6;                                   // wordmark scale in the horizontal lockup
+  const layouts = {
+    mark:       { vb: [211.2, 251.28, 219.5, 213.6], mark: true,  word: null },
+    stacked:    { vb: [211.2, 251.28, 297.6, 215.6], mark: true,  word: "" },
+    word:       { vb: [371.7, 397.9, 137.1, 69.0],   mark: false, word: "" },
+    horizontal: { vb: [211.2, 251.28, 468.0, 213.6], mark: true,
+                  word: `translate(${(460 - 371.76 * s).toFixed(2)},${(358 - 427.6 * s).toFixed(2)}) scale(${s})` },
+  };
+  const L = layouts[variant] || layouts.horizontal;
+  const [, , w, h] = L.vb;
   return (
-    <span
-      aria-label="PLUJ"
-      role="img"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: Math.round(size * 0.2),
-        color: light ? "#FFFFFF" : "#111111",
-        transition: "color 400ms ease",
-        flexShrink: 0,
-        lineHeight: 1,
-        userSelect: "none",
-      }}
-    >
-      {/* Two interlocking links — the chain the wordmark always sat beside. */}
-      <svg
-        height={Math.round(size * 0.74)}
-        viewBox="0 0 46 24"
-        aria-hidden="true"
-        focusable="false"
-        style={{ display: "block", flexShrink: 0, overflow: "visible" }}
-      >
-        <g
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="4.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M18 5h-6a7 7 0 0 0 0 14h6" />
-          <path d="M28 5h6a7 7 0 0 1 0 14h-6" />
-          <path d="M16.5 12h13" />
-        </g>
-      </svg>
-      <span
-        style={{
-          fontFamily: "var(--display)",
-          fontWeight: 900,
-          fontSize: Math.round(size * 0.86),
-          letterSpacing: "-0.015em",
-        }}
-      >
-        pluj
-      </span>
-    </span>
+    <svg role="img" aria-label="PLUJ" height={size} width={Math.round(size * w / h)} viewBox={L.vb.join(" ")}
+      style={{ display:"block", flexShrink:0, color: fill, transition:"color 300ms ease", overflow:"visible" }}>
+      <g fill="currentColor">
+        {L.mark && <ellipse {...LOGO_DOT} />}
+        {L.mark && LOGO_P.map((d, i) => <path key={i} d={d} />)}
+        {L.word !== null && <g transform={L.word || undefined}>{LOGO_WORD.map((d, i) => <path key={i} d={d} />)}</g>}
+      </g>
+    </svg>
   );
 }
 
@@ -705,14 +699,14 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .picado .flag { transform-origin: 50% 0; }
 @keyframes sway { 0% { transform: rotate(-3deg); } 60% { transform: rotate(1.5deg); } 100% { transform: rotate(0deg); } }
 .picado .flag { animation: sway 1.6s var(--ease-out) both; }
-.home-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 56px;
+.home-hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr); gap: 48px;
              align-items: center; max-width: 1240px; margin: 0 auto; padding: 18px 28px 64px; }
 .home-hero h1 { font-size: clamp(56px, 7.2vw, 96px); line-height: 0.92; font-weight: 800; letter-spacing: -0.01em;
                 color: var(--black); margin: 0; }
 .home-hero .es { display: block; font-family: 'Figtree', system-ui, sans-serif; font-size: clamp(18px, 1.7vw, 22px);
                  font-weight: 600; letter-spacing: 0; line-height: 1.3; margin: 14px 0 22px; color: rgba(0,0,0,0.72); }
 .home-hero .lede { font-size: 18px; line-height: 1.55; color: #000; max-width: 33em; margin: 0 0 28px; }
-.hero-search { display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.8fr auto; background: #fff;
+.hero-search { display: grid; grid-template-columns: 1.25fr 1.15fr 1.2fr 0.85fr auto; background: #fff;
                border-radius: 16px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,0.9); border: 2px solid #000; }
 .hero-search > label { display: block; padding: 11px 16px 10px; border-right: 1.5px solid #E2E2E2; min-width: 0; cursor: text; }
 .hero-search > label span { display: block; font-size: 12.5px; font-weight: 800; color: #000; }
@@ -760,8 +754,9 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 /* Categories, set like a festival bill: big condensed names that wrap. */
 .bill { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 0; margin: 0; padding: 0; list-style: none; }
 .bill li { display: inline-flex; align-items: baseline; }
-.bill li + li::before { content: "/"; font-family: var(--display); font-size: clamp(26px, 3.4vw, 46px); font-weight: 500;
-                        color: #C9C9C9; margin: 0 14px; }
+.bill li:not(:last-child)::after { content: ""; width: 0.32em; height: 0.32em; background: var(--marigold);
+                        transform: rotate(45deg) translateY(-0.12em); margin: 0 0.55em 0 0.5em; font-size: clamp(30px, 4vw, 56px);
+                        display: inline-block; flex: 0 0 auto; }
 .bill button { background: none; border: none; padding: 0; cursor: pointer; font-family: var(--display); font-weight: 800;
                font-size: clamp(30px, 4vw, 56px); line-height: 1.05; color: #000; letter-spacing: -0.005em;
                text-decoration: none; background-image: linear-gradient(var(--marigold), var(--marigold));
@@ -771,7 +766,7 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .bill button.on { color: #000; }
 .bill button.build { color: var(--rosa); }
 .bill.sm button { font-size: clamp(22px, 2.4vw, 32px); }
-.bill.sm li + li::before { font-size: clamp(20px, 2.2vw, 28px); margin: 0 10px; }
+.bill.sm li:not(:last-child)::after { font-size: clamp(22px, 2.4vw, 32px); }
 .bill sup { font-family: 'Figtree', system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #6B6B6B; margin-left: 4px; vertical-align: super; }
 /* How it works */
 .steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
@@ -807,9 +802,8 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .foot h4 { font-size: 14px; font-weight: 800; margin: 0 0 10px; color: #000; }
 .foot button.lnk { display: block; background: none; border: none; padding: 5px 0; font-size: 14.5px; color: #333; cursor: pointer; text-align: left; }
 .foot button.lnk:hover { color: #000; text-decoration: underline; text-underline-offset: 3px; }
-.wordmark { font-family: var(--display); font-weight: 900; font-size: clamp(120px, 26vw, 360px); line-height: 0.78;
-            letter-spacing: -0.02em; color: var(--marigold); margin: 0; padding: 0 20px; white-space: nowrap; overflow: hidden;
-            -webkit-text-stroke: 2px #000; user-select: none; }
+.wordmark { padding: 8px 28px 0; max-width: 1240px; margin: 0 auto; }
+.wordmark svg { width: 100% !important; height: auto !important; }
 @media (max-width: 980px) {
   .home-hero { grid-template-columns: 1fr; gap: 34px; padding: 8px 18px 44px; }
   .hero-art { min-height: 380px; }
@@ -826,7 +820,17 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .hero-photo { width: 92%; }
   .ticket { margin-right: 10%; }
   .stamp { width: 104px; height: 104px; right: -10px; }
-  .bill li + li::before { margin: 0 9px; }
+  .bill li:not(:last-child)::after { margin: 0 0.45em; }
+}
+
+/* Phones: the logo mark alone, and the sticky search collapses to one row. */
+.show-mobile { display: none; }
+.crit-toggle { display: none; }
+@media (max-width: 640px) {
+  .show-mobile { display: inline-flex; }
+  .crit-toggle { display: inline-block; }
+  .crit { display: none; }
+  .crit.open { display: block; }
 }
 
 /* ── Responsive grid ── */
@@ -5207,11 +5211,11 @@ function PapelPicado() {
           {[0, 60, 120, 180, 240, 300].map(a => (
             <circle key={a} cx={48 + 16 * Math.cos(a * Math.PI / 180)} cy={46 + 16 * Math.sin(a * Math.PI / 180)} r="5" fill="#000" />
           ))}
-          {[[14, 22], [82, 22], [14, 70], [82, 70]].map(([x, y]) => (
+          {[[14, 30], [82, 30]].map(([x, y]) => (
             <path key={x + "-" + y} d={`M${x},${y - 7} L${x + 6},${y} L${x},${y + 7} L${x - 6},${y} Z`} fill="#000" />
           ))}
           {[24, 36, 48, 60, 72].map(x => <circle key={x} cx={x} cy="16" r="2.4" fill="#000" />)}
-          <path d="M30,74 Q48,62 66,74" stroke="#000" strokeWidth="3" fill="none" />
+          {[20, 32, 44, 56, 68].map(x => <path key={"t" + x} d={`M${x},70 L${x + 8},70 L${x + 4},77 Z`} fill="#000" />)}
         </mask>
       </defs>
       <path d={`M0,7 L${W * N},7`} stroke="#000" strokeWidth="1.5" />
@@ -5234,8 +5238,8 @@ function Stamp() {
       <defs><path id="stamp-ring" d="M70,70 m-52,0 a52,52 0 1,1 104,0 a52,52 0 1,1 -104,0" /></defs>
       <circle cx="70" cy="70" r="68" fill="#E4007C" />
       <circle cx="70" cy="70" r="40" fill="none" stroke="#fff" strokeWidth="1.5" />
-      <text fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:800, fontSize:15.5, letterSpacing:"0.08em" }}>
-        <textPath href="#stamp-ring">ONE PRICE ✦ UN SOLO PRECIO ✦ NO FEES ADDED ✦</textPath>
+      <text fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:800, fontSize:17 }}>
+        <textPath href="#stamp-ring" textLength="318" lengthAdjust="spacing">ONE PRICE ✦ UN SOLO PRECIO ✦</textPath>
       </text>
       <text x="70" y="84" textAnchor="middle" fill="#fff" style={{ fontFamily:"var(--display)", fontWeight:900, fontSize:44 }}>$</text>
     </svg>
@@ -10318,16 +10322,31 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
               )}
             </div>
 
-            {/* Reviewed badge — only on real, approved listings. Demo catalog entries
-                are not real businesses, and the uploaded licence file is never
-                actually stored, so the previous copy overclaimed twice. */}
+            {/* What PLUJ actually checked, item by item, instead of a vague
+                "verified" badge. Each line is only shown when it is true. */}
             {isLiveVendor && (
-            <div style={{ marginTop:14, background:"#F0FDF4", borderRadius:10, padding:"8px 12px", display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:14 }}>✓</span>
-              <p style={{ margin:0, fontSize:11, color:"#065F46", lineHeight:1.4 }}>
-                <strong>Reviewed by PLUJ.</strong> This vendor's application was reviewed before their listing went live. Read their reviews and confirm the details with them before you book.
-              </p>
-            </div>
+              <div style={{ marginTop:16, borderTop:"2px solid #000", paddingTop:12 }}>
+                <p style={{ margin:"0 0 8px", fontSize:14, fontWeight:800, color:"#000" }}>What PLUJ checked</p>
+                {[
+                  [true, "Business reviewed and approved by hand"],
+                  [full?.legal_on_file === true, "Legal name, EIN, address and owners on file"],
+                  [full?.license_on_file === true, "License or permit number on file"],
+                  [true, "Reviews only from confirmed bookings"],
+                ].filter(([ok]) => ok).map(([, t]) => (
+                  <p key={t} style={{ margin:"0 0 6px", fontSize:13, color:"#000", display:"flex", gap:8, alignItems:"baseline" }}>
+                    <span aria-hidden="true" style={{ width:8, height:8, background:"#FF5C28", transform:"rotate(45deg)", flex:"0 0 auto" }} />
+                    {t}
+                  </p>
+                ))}
+                {full?.verified_at && (
+                  <p style={{ margin:"4px 0 0", fontSize:12, color:C.lightGray }}>
+                    Approved {new Date(full.verified_at).toLocaleDateString("en-US", { month:"short", year:"numeric" })}
+                  </p>
+                )}
+                <p style={{ margin:"8px 0 0", fontSize:12, color:C.midGray, lineHeight:1.5 }}>
+                  Still confirm the details with the vendor before your event.
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -12103,6 +12122,7 @@ export default function PlujApp() {
 
   /* ── Scroll-aware transparent navbar ── */
   const [navScrolled, setNavScrolled] = useState(false);
+  const [critOpen,    setCritOpen]    = useState(false);   // phone: show the search filters
   useEffect(() => {
     const onScroll = () => setNavScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -13007,7 +13027,8 @@ export default function PlujApp() {
           <span onClick={goHome} title="Back to home" role="button" tabIndex={0}
             onKeyDown={e => { if (e.key === "Enter") goHome(); }}
             style={{ cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <PlujMark size={28} />
+            <span className="hide-mobile"><PlujMark size={34} /></span>
+            <span className="show-mobile"><PlujMark size={32} variant="mark" /></span>
           </span>
           <span className="hide-mobile"><MarketSelector market={market} onSelect={setMarket} light={false} /></span>
         </div>
@@ -13152,13 +13173,18 @@ export default function PlujApp() {
               ["Guests", <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)}
                           placeholder="How many" aria-label="Guests" />],
             ].map(([label, field]) => (
-              <label key={label} className="crit" style={{ flex:"1 1 120px", minWidth:110, border:`1px solid ${C.border}`,
+              <label key={label} className={`crit${critOpen ? " open" : ""}`} style={{ flex:"1 1 120px", minWidth:110, border:`1px solid ${C.border}`,
                                          borderRadius:12, padding:"5px 11px", background:"#fff" }}>
                 <span style={{ display:"block", fontSize:11, fontWeight:700, color:C.midGray }}>{label}</span>
                 {React.cloneElement(field, { style:{ width:"100%", border:"none", outline:"none", fontSize:13.5,
                                              background:"transparent", padding:0, ...(field.props.style || {}) } })}
               </label>
             ))}
+            <button type="button" className="btn crit-toggle" onClick={() => setCritOpen(o => !o)} aria-expanded={critOpen}
+              style={{ border:`1px solid ${C.border}`, background:"#fff", borderRadius:12, padding:"0 14px",
+                       fontSize:13.5, fontWeight:700, minHeight:44 }}>
+              {critOpen ? "Hide filters" : "Filters"}
+            </button>
             <button onClick={() => {
                 if (activeCat === "build") pickCat("all");
                 requestAnimationFrame(() => {
@@ -13532,18 +13558,6 @@ export default function PlujApp() {
                   </div>
                 )}
                 {visible.map(v=><VCard key={v.id} v={v} inCart={!!cart.find(c=>c.id===v.id)} isFav={favorites.includes(v.id)} onAdd={addToCart} onRemove={rmFromCart} onView={(vv)=>viewVendor(vv||v)} onToggleFav={handleToggleFav} />)}
-                {filtered.length===0 && (
-                  <div style={{ gridColumn:"1/-1", textAlign:"center", padding:"64px 0" }}>
-                    <div style={{ marginBottom:12, display:"flex", justifyContent:"center" }}><Emoji e="🔍" size={40} /></div>
-                    <p style={{ color:C.midGray, fontSize:15, fontWeight:600, letterSpacing:"-0.01em" }}>No vendors match your filters.</p>
-                    <button onClick={() => setFilters({instant:false,featured:false,topRated:false,nearMe:false,maxPrice:99999})} className="btn"
-                      style={{ marginTop:12, background:C.orange, color:"#fff", border:"none",
-                               borderRadius:99, padding:"9px 22px", fontSize:13, fontWeight:700,
-                               boxShadow:C.shadowButton }}>
-                      Clear all filters
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Says how many are left, not just "Load more". A count is the
@@ -13652,7 +13666,8 @@ export default function PlujApp() {
             </div>
           ))}
         </div>
-        <p className="wordmark" aria-hidden="true">pluj</p>
+        {/* The wordmark, the full width of the page. */}
+        <div className="wordmark" aria-hidden="true"><PlujMark variant="word" size={400} color="#FF5C28" /></div>
         <div style={{ maxWidth:1240, margin:"0 auto", padding:"16px 28px 30px",
                       display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, fontSize:13.5, color:"#4B5260" }}>
           <span>© 2026 PLUJ, Houston, Texas</span>
