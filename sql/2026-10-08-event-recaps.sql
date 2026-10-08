@@ -97,3 +97,7 @@ alter policy event_recaps_own_insert on public.event_recaps to authenticated;
 alter policy event_recaps_own_update on public.event_recaps to authenticated;
 alter policy event_recaps_own_delete on public.event_recaps to authenticated;
 alter policy event_recaps_admin_all  on public.event_recaps to authenticated;
+
+/* Trigger functions are not API endpoints (migration "revoke_new_trigger_fns"). */
+revoke execute on function public.enforce_booking_addons(), public.guard_event_recap(), public.guard_vendor_checks(),
+  public.notify_event_recap_credits(), public.replacement_followup() from public, anon, authenticated;
