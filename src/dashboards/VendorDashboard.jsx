@@ -1000,6 +1000,14 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
               <span style={{ fontSize:10.5, fontWeight:700, color:"#065F46", background:C.greenSoft,
                              borderRadius:99, padding:"2px 8px" }}>Gets more bookings</span>
             </label>
+            {/* DJs, food trucks, rentals and A/V sell on a fixed price for a date:
+                exactly what hosts expect to book on the spot. */}
+            {!editing.instant_book && ["music","food","rentals","av"].includes(editing.category) && (
+              <p style={{ margin:"6px 0 0", fontSize:11.5, fontWeight:700, color:"#000", lineHeight:1.5 }}>
+                {`Hosts usually book ${editing.category === "music" ? "DJs and entertainers" : editing.category === "food" ? "food trucks and caterers"
+                  : editing.category === "rentals" ? "rentals" : "audio and visual"} on the spot. With a fixed price and your calendar up to date, switching this on is the easiest way to get booked.`}
+              </p>
+            )}
             <p style={{ margin:"5px 0 0", fontSize:11, color:C.midGray, lineHeight:1.55 }}>
               Hosts can book this listing on the spot, at your listed price, for open dates at least
               3 days away — no back-and-forth. PLUJ only confirms days this listing works, dates you
