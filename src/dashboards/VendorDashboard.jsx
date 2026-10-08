@@ -201,7 +201,8 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
   }
 
   const blank = { category:"food", subcategory:"", subcategories:[], name:"", service_type:"", description:"",
-                  price_value:"", duration_hours:"", extra_hour_price:"", capacity_min:"", capacity_max:"", photos:[], packages:[], active:true, offsite:false, travel_miles:"", service_areas:"", addons:[], avail_days:[], avail_blocks:[], max_per_day:1, gap_hours:2, simultaneous:false, min_notice_hours:0 };
+                  price_value:"", duration_hours:"", extra_hour_price:"", capacity_min:"", capacity_max:"", photos:[], packages:[], active:true, offsite:false, travel_miles:"", service_areas:"", addons:[], avail_days:[], avail_blocks:[], max_per_day:1, gap_hours:2, simultaneous:false, min_notice_hours:0,
+                  instant_book:false, instant_terms_accepted_at:null, instant_tick:false };
 
   async function load() {
     setLoading(true);
@@ -238,6 +239,9 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
       gap_hours: s.gap_hours == null ? 2 : s.gap_hours,
       min_notice_hours: s.min_notice_hours == null ? 0 : s.min_notice_hours,
       simultaneous: s.simultaneous === true,
+      instant_book: s.instant_book === true,
+      instant_terms_accepted_at: s.instant_terms_accepted_at || null,
+      instant_tick: !!s.instant_terms_accepted_at,
       name: s.name || "",
       service_type: s.service_type || "",
       description: s.description || "",
@@ -301,6 +305,12 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
     }
     if (capMin !== null && capMax !== null && capMin > capMax) {
       fail(`Your minimum (${capMin}) is larger than your maximum (${capMax}). Swap them, or clear one.`, "capacity_min"); return;
+    }
+    if (editing.instant_book) {
+      const hasPrice = Number(editing.price_value) > 0
+        || (editing.packages || []).some(p => Number(p.price) > 0);
+      if (!hasPrice) { fail("Instant booking needs a price: add a starting price or a priced option.", "price_value"); return; }
+      if (!editing.instant_tick) { fail("Tick the box to accept the instant booking terms, or switch instant booking off.", "instant_book"); return; }
     }
     if (String(editing.extra_hour_price ?? "").trim() !== "" && !(Number(editing.extra_hour_price) >= 0)) {
       fail("The extra-hour price must be a number, or leave it blank.", "extra_hour_price"); return;
@@ -413,6 +423,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     {[s.service_type, catLabel(s.category)].filter(Boolean).join(" · ")}
                     {s.price_value != null ? ` · $${Number(s.price_value).toLocaleString()}` : " · Contact for pricing"}
                     {Number(s.duration_hours) > 0 ? ` · ⏱ ${fmtHours(s.duration_hours)}` : ""}
+                    {s.instant_book ? " · ⚡ Instant booking" : ""}
                     {s.category !== "places" ? (s.offsite ? " · 🚗 off-site OK" : " · 📍 on-site only") : ""}
                     {s.active === false ? " · hidden" : ""}
                   </p>
@@ -788,6 +799,38 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
               <option value={336}>2 weeks</option>
               <option value={720}>1 month</option>
             </select>
+          </div>
+
+          {/* Instant booking: hosts book open dates without waiting for a reply. */}
+          <div ref={el => { fieldRefs.current.instant_book = el; }}
+            style={{ marginTop:12, background: editing.instant_book ? "#F0FDF4" : "#F9FAFB",
+                     border:`1.5px solid ${errField === "instant_book" ? "#DC2626" : editing.instant_book ? "#86EFAC" : C.border}`,
+                     borderRadius:11, padding:"12px 14px" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+              <input type="checkbox" checked={editing.instant_book === true}
+                onChange={e => setField("instant_book", e.target.checked)}
+                style={{ width:18, height:18, accentColor:C.green }} />
+              <span style={{ fontSize:12.5, fontWeight:800 }}>⚡ Instant booking</span>
+              <span style={{ fontSize:10.5, fontWeight:700, color:"#065F46", background:C.greenSoft,
+                             borderRadius:99, padding:"2px 8px" }}>Gets more bookings</span>
+            </label>
+            <p style={{ margin:"5px 0 0", fontSize:11, color:C.midGray, lineHeight:1.55 }}>
+              Hosts can book this listing on the spot, at your listed price, for open dates at least
+              3 days away — no back-and-forth. PLUJ only confirms days this listing works, dates you
+              haven't blocked, and days you still have room. Anything else still comes to you as a request.
+            </p>
+            {editing.instant_book && (
+              <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:9, cursor:"pointer" }}>
+                <input type="checkbox" checked={editing.instant_tick === true}
+                  onChange={e => setField("instant_tick", e.target.checked)}
+                  style={{ marginTop:2, accentColor:C.orange }} />
+                <span style={{ fontSize:11.5, color:C.black, lineHeight:1.5 }}>
+                  I accept bookings made this way as confirmed, at the price shown on this listing, under
+                  PLUJ's payment and cancellation terms. I'll keep my calendar up to date and block dates I can't do.
+                </span>
+              </label>
+            )}
+            <FieldError on={errField === "instant_book"} msg={err} />
           </div>
 
           {/* Photos for this specific service */}

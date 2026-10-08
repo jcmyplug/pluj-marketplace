@@ -2245,6 +2245,8 @@ export async function saveService(vendorId, svc) {
     min_notice_hours: svc.min_notice_hours == null || svc.min_notice_hours === ""
                         ? 0 : (parseInt(svc.min_notice_hours) || 0),
     simultaneous: svc.simultaneous === true,
+    instant_book: svc.instant_book === true,
+    instant_terms_accepted_at: svc.instant_book === true ? (svc.instant_terms_accepted_at || new Date().toISOString()) : (svc.instant_terms_accepted_at || null),
     schedule:     composeSchedule(svc.avail_days || [], svc.avail_blocks || []) || null,
     updated_at:   new Date().toISOString(),
   };
@@ -2449,7 +2451,8 @@ function dbServiceToCard(s, v) {
     photos:      pics.length ? pics : [LISTING_PLACEHOLDER],
     blurb:       s.description || v.description || "This vendor hasn't added a description yet.",
     tags:        (v.service_areas ? [v.service_areas] : []).concat(s.capacity || v.capacity ? [s.capacity || v.capacity] : []),
-    instant:     false,
+    /* Instant booking: confirmed on the spot for open dates 3+ days away. */
+    instant:     s.instant_book === true,
     feat:        false,
     yearsInBiz:  v.years_in_biz || 0,
     travelMiles: (s.travel_miles != null ? s.travel_miles : v.travel_miles) || 0,
@@ -2670,6 +2673,46 @@ export async function getVendorApplication(vendorId) {
    platform_settings.payments_enabled is not 'true'. */
 export function paymentsOn() {
   return String(_platformSettings.payments_enabled) === "true";
+}
+
+/* ── One price ────────────────────────────────────────────────────────────
+   Every price a host sees already includes PLUJ's host service fee, so the
+   amount on a card is the amount charged; nothing is added at checkout.
+   The fee is 1% after the host's first 3 months (platform_settings), and
+   only while online payment is on. Signed-out visitors see the price with
+   the fee, so a new host's price can only be lower, never higher.
+   The payments edge function charges the same: round(base × pct) on the
+   booking's whole base (_shared/payments.ts prepareCharge). */
+let _priceViewer = null;
+export function setPriceViewer(user) { _priceViewer = user || null; }
+export function hostFeePct(user = _priceViewer) {
+  if (!paymentsOn()) return 0;
+  const pct    = Number(_platformSettings.host_service_fee_after_intro_percent ?? 1) || 0;
+  const months = Number(_platformSettings.host_service_fee_intro_months ?? 3) || 0;
+  if (user && user.type === "vendor") return pct;
+  if (user && user.createdAt) {
+    const until = new Date(user.createdAt);
+    until.setMonth(until.getMonth() + months);
+    if (Date.now() < until.getTime()) return 0;
+  }
+  return pct;
+}
+/* Base price (dollars) → what the host pays (dollars, to the cent). */
+export function allIn(amount, user) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  const cents = Math.round(n * 100);
+  return (cents + Math.round(cents * hostFeePct(user) / 100)) / 100;
+}
+export function fmtAllIn(amount, user) {
+  const v = allIn(amount, user);
+  return "$" + Number(v).toLocaleString("en-US", Number.isInteger(v) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+/* A marketplace card's price label, all-in. Keeps "From" and "Contact for
+   pricing" wording from the card itself. */
+export function cardPrice(v) {
+  if (!v || !(Number(v.pv) > 0)) return v?.price || "Contact for pricing";
+  return (/^From/i.test(String(v.price || "")) ? "From " : "") + fmtAllIn(v.pv);
 }
 
 export async function paymentsCall(action, payload = {}) {
@@ -3528,6 +3571,21 @@ export const RLS = {
        the booking was not persisted (see saveRequest), so sending notifications
        would violate the FK. Only notify when the booking actually hit the DB. */
     const persisted = isRealId(req.vendorId) && isRealId(req.userId);
+    /* Instant booking: ask the database to confirm it now. Anything that
+       doesn't fit (date taken, too soon, a day off…) stays a normal request. */
+    if (persisted && req.instant) {
+      const { data: ib } = await sb.rpc("instant_book", { p_booking: req.id });
+      if (ib === "confirmed") {
+        req.status = "confirmed";
+        await pushNotif(req.userId, {
+          type:"request_sent", title:"⚡ Booked! ✓",
+          body:`${req.vendorName || "Your vendor"} is confirmed for ${req.eventType || "your event"} on ${req.eventDate || "your date"}. Instant booking — no waiting.`,
+          reqId: req.id,
+        });
+        return true;
+      }
+      req.instantFallback = ib || "error";
+    }
     if (persisted) {
       /* The vendor's "new request" notification is created server-side by the
          notify_on_booking_change trigger (SECURITY DEFINER) — a client can't
@@ -3593,7 +3651,7 @@ export const RLS = {
   },
 };
 function fmtTotal(cart) {
-  const t = cart.reduce((a,v)=>a+(v.pv||0),0);
+  const t = allIn(cart.reduce((a,v)=>a+(v.pv||0),0));
   if (!t) return "Contact for pricing";
   return t >= 1000 ? `$${(t/1000).toFixed(1)}k` : `$${t}`;
 }
@@ -4973,6 +5031,8 @@ function AuthModal({ onClose, onAuth }) {
 function RequestSentModal({ requests, onClose, onViewAccount }) {
   /* requests = array of {id, vendorName, status, eventDate, eventType} */
   const multi = requests.length > 1;
+  const booked  = requests.filter(r => r.status === "confirmed");
+  const allBooked = booked.length === requests.length;
   return (
     <div className="modal-overlay" onClick={onClose}
       style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000,
@@ -4982,14 +5042,21 @@ function RequestSentModal({ requests, onClose, onViewAccount }) {
         style={{ background:"#fff", borderRadius:22, maxWidth:420, width:"100%",
                  boxShadow:C.shadowModal, overflow:"hidden" }}>
         <div style={{ padding:"36px 28px 32px", textAlign:"center" }}>
-          <div style={{ fontSize:52, lineHeight:1, marginBottom:14 }}>📩</div>
+          <div style={{ fontSize:52, lineHeight:1, marginBottom:14 }}>{allBooked ? "⚡" : "📩"}</div>
           <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:22, fontWeight:800, margin:"0 0 8px" }}>
-            {multi ? "Requests sent!" : "Request sent!"}
+            {allBooked ? (multi ? "You're booked!" : "You're booked!")
+              : booked.length ? `${booked.length} booked, ${requests.length - booked.length} sent`
+              : (multi ? "Requests sent!" : "Request sent!")}
           </h2>
           <p style={{ fontSize:13, color:C.midGray, margin:"0 0 22px", lineHeight:1.65 }}>
-            {multi
-              ? `Your booking requests have been sent to ${requests.length} vendors. They'll review and respond — usually within 24 hours.`
-              : `Your request has been sent to ${requests[0]?.vendorName}. They'll confirm availability shortly.`}
+            {allBooked
+              ? (multi ? "Every vendor confirmed instantly. You'll find the details in My Requests."
+                       : `${requests[0]?.vendorName} is confirmed instantly. You'll find the details in My Requests.`)
+              : booked.length
+                ? "Vendors with instant booking are confirmed now. The others will review your request and respond, usually within 24 hours."
+                : multi
+                  ? `Your booking requests have been sent to ${requests.length} vendors. They'll review and respond — usually within 24 hours.`
+                  : `Your request has been sent to ${requests[0]?.vendorName}. They'll confirm availability shortly.`}
           </p>
 
           {/* Request cards */}
@@ -5003,10 +5070,17 @@ function RequestSentModal({ requests, onClose, onViewAccount }) {
                   <p style={{ margin:0, fontSize:13, fontWeight:700 }}>{req.vendorName}</p>
                   <p style={{ margin:"2px 0 0", fontSize:10, color:C.lightGray, fontFamily:"monospace" }}>{req.id}</p>
                 </div>
-                <span style={{ fontSize:10, fontWeight:800, padding:"3px 9px", borderRadius:99,
-                               background:"#FFFBEB", color:"#D97706" }}>
-                  ⏳ Pending
-                </span>
+                {req.status === "confirmed" ? (
+                  <span style={{ fontSize:10, fontWeight:800, padding:"3px 9px", borderRadius:99,
+                                 background:C.greenSoft, color:"#065F46" }}>
+                    ⚡ Booked
+                  </span>
+                ) : (
+                  <span style={{ fontSize:10, fontWeight:800, padding:"3px 9px", borderRadius:99,
+                                 background:"#FFFBEB", color:"#D97706" }}>
+                    ⏳ Pending
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -7835,7 +7909,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
                   <p style={{ margin:0, fontSize:14, fontWeight:800 }}>{v.name}</p>
                   <p style={{ margin:"2px 0 0", fontSize:12, color:C.midGray }}>
                     {(CATEGORIES.find(c=>c.id===v.cat)||{}).label || v.type}
-                    {v.selectedPackage?.name ? ` · ${v.selectedPackage.name}` : ""} · {v.price}
+                    {v.selectedPackage?.name ? ` · ${v.selectedPackage.name}` : ""} · {cardPrice(v)}
                   </p>
                 </div>
                 <button onClick={() => rmFromCart(v.id)} className="btn"
@@ -7849,7 +7923,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
                         padding:"14px 16px", background:"#F9FAFB", borderRadius:13, marginBottom:18 }}>
             <span style={{ fontSize:13, fontWeight:700 }}>{picked.length} vendor{picked.length!==1?"s":""} selected</span>
-            <span style={{ fontSize:15, fontWeight:800 }}>{total>0?`Est. $${total.toLocaleString()}`:"Contact for pricing"}</span>
+            <span style={{ fontSize:15, fontWeight:800 }}>{total>0?`Est. ${fmtAllIn(total)}`:"Contact for pricing"}</span>
           </div>
           <button onClick={() => onReviewSend(detailsPayload())} className="btn"
             style={{ width:"100%", padding:"15px 0", borderRadius:14, border:"none", background:C.orange,
@@ -8290,6 +8364,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
       serviceName: vendor.serviceName || vendor.type || null,
       packageName:  vendor.selectedPackage?.name || null,
       packagePrice: vendor.selectedPackage?.price ?? null,
+      instant:      vendor.instant === true,
       eventType:  (eventType === "Other" && otherEventNote.trim())
                     ? `Other — ${otherEventNote.trim()}`
                     : (eventType || "Event"),
@@ -8400,7 +8475,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                         </p>
                       )}
                       <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
-                        {[catLabelOf(v.cat), v.selectedPackage?.name, v.price].filter(Boolean).join(" · ")}
+                        {[catLabelOf(v.cat), v.selectedPackage?.name, cardPrice(v)].filter(Boolean).join(" · ")}
                       </p>
                       {(() => {
                         const id = v.vendorId || v.dbId || String(v.id).replace(/^db_/, "");
@@ -8757,7 +8832,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                              borderRadius:8, fontSize:12, color:C.black, background:"#fff" }} />
                 </div>
                 {budget > 0 && (()=>{
-                  const spent = cart.reduce((a,v)=>a+(v.pv||0),0);
+                  const spent = allIn(cart.reduce((a,v)=>a+(v.pv||0),0));
                   const pct = budgetPct(spent, budget);
                   const col = budgetColor(pct);
                   return (
@@ -8969,7 +9044,7 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
                 style={{ width:36, height:36, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
               <div>
                 <p style={{ margin:0, fontSize:11, fontWeight:800, lineHeight:1.2 }}>{v.name}</p>
-                <p style={{ margin:0, fontSize:10, color:C.midGray }}>{v.price}</p>
+                <p style={{ margin:0, fontSize:10, color:C.midGray }}>{cardPrice(v)}</p>
               </div>
             </div>
             <div style={{ display:"flex", gap:6 }}>
@@ -9097,7 +9172,7 @@ function SavedVendorsPanel({ userId, allCards }) {
               {v.name}
             </p>
             <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
-              {v.type} · {v.price}
+              {v.type} · {cardPrice(v)}
             </p>
           </div>
           <div style={{ textAlign:"right", flexShrink:0 }}>
@@ -9174,7 +9249,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
     cat:         selService?.category || vendor.cat,
     revCount:    vendor.revCount || 0,
     rating:      vendor.rating || 0,
-    feat:        vendor.feat, instant: vendor.instant,
+    feat:        vendor.feat, instant: selService ? selService.instant_book === true : vendor.instant,
   };
 
   /* Gallery: ONLY the photos the vendor uploaded for THIS listing. Mixing in
@@ -9204,8 +9279,8 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
 
   const basePrice = selService && selService.price_value != null ? Number(selService.price_value)
                   : (vendor.pv || null);
-  const priceLabel = pickedPkg ? "$" + pickedPkg.price.toLocaleString()
-                   : (basePrice ? "$" + basePrice.toLocaleString() : (vendor.price || "Contact for pricing"));
+  const priceLabel = pickedPkg ? fmtAllIn(pickedPkg.price)
+                   : (basePrice ? fmtAllIn(basePrice) : (vendor.price || "Contact for pricing"));
 
   /* The parent knows only whether the listing that opened this page is in
      the cart; another listing picked on the page isn't, yet. */
@@ -9384,7 +9459,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
       <div style={{ marginBottom:14 }}>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:7 }}>
           {vendor.feat    && <span style={{ background:C.orangeSoft, color:C.orange, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>✦ Featured</span>}
-          {vendor.instant && <span style={{ background:C.greenSoft, color:C.green, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>⚡ Instant</span>}
+          {disp.instant && <span style={{ background:C.greenSoft, color:C.green, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>⚡ Instant booking</span>}
           {disp.cat && <span style={{ background:"#F3F4F6", color:C.midGray, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>{catLabelOf(disp.cat)}</span>}
         </div>
         {/* Save sits on the title row, not over the photo. People decide to
@@ -9436,8 +9511,8 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
               const on = s.id === selId;
               const pic = parsePhotos(s.photos)[0];
               const cheapest = cheapestPackage(s.packages);
-              const price = cheapest ? `From $${cheapest.price.toLocaleString()}`
-                          : (s.price_value != null ? `$${Number(s.price_value).toLocaleString()}` : "Contact for pricing");
+              const price = cheapest ? `From ${fmtAllIn(cheapest.price)}`
+                          : (s.price_value != null ? fmtAllIn(s.price_value) : "Contact for pricing");
               return (
                 <button key={s.id} type="button" className="btn"
                   onClick={() => { setSelId(s.id); track("vendor_listing_switched", {}); }}
@@ -9847,17 +9922,22 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
               <p style={{ fontSize:12, color:C.black, fontWeight:700, margin:"0 0 4px" }}>
                 ⏱ Includes {fmtHours(selService.duration_hours)}
                 {selService.extra_hour_price != null && Number(selService.extra_hour_price) > 0
-                  ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour ${Number(selService.extra_hour_price).toLocaleString()}</span> : null}
+                  ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour {fmtAllIn(selService.extra_hour_price)}</span> : null}
               </p>
             )}
             {pickedPkg?.hours > 0 && (
               <p style={{ fontSize:12, color:C.black, fontWeight:700, margin:"0 0 4px" }}>
                 ⏱ {fmtHours(pickedPkg.hours)}
                 {selService && Number(selService.extra_hour_price) > 0
-                  ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour ${Number(selService.extra_hour_price).toLocaleString()}</span> : null}
+                  ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour {fmtAllIn(selService.extra_hour_price)}</span> : null}
               </p>
             )}
-            <p style={{ fontSize:11, color:C.lightGray, margin:"0 0 16px" }}>Prices vary by event size and date</p>
+            <p style={{ fontSize:11, color: paymentsOn() ? "#065F46" : C.lightGray, margin:"0 0 16px", fontWeight: paymentsOn() ? 700 : 400 }}>
+              {paymentsOn()
+                ? (hostFeePct() > 0 ? "✓ One price: includes PLUJ's service fee. Nothing is added at checkout."
+                                    : "✓ One price: no service fee for your first 3 months. Nothing is added at checkout.")
+                : "The vendor confirms the final price for your date and guest count."}
+            </p>
 
             {/* Pricing options — only ones the vendor has priced are listed */}
             {vendorPkgs.length > 0 && (
@@ -9878,7 +9958,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                             {on ? "● " : "○ "}{p.name || `Option ${i+1}`}
                           </span>
                           <span style={{ fontSize:13, fontWeight:800, color:C.black, whiteSpace:"nowrap" }}>
-                            ${p.price.toLocaleString()}
+                            {fmtAllIn(p.price)}
                           </span>
                         </div>
                         {p.hours > 0 && (
@@ -9925,7 +10005,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 {parseAddons(selService.addons).map((a, i) => (
                   <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"2px 0" }}>
                     <span style={{ color:C.black }}>{a.name}</span>
-                    <span style={{ fontWeight:700, color:C.black }}>+${a.price.toLocaleString()}</span>
+                    <span style={{ fontWeight:700, color:C.black }}>+{fmtAllIn(a.price)}</span>
                   </div>
                 ))}
                 <p style={{ margin:"6px 0 0", fontSize:10, color:C.midGray }}>Mention any add-ons in your request.</p>
@@ -9954,7 +10034,9 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             <p style={{ fontSize:11, color:C.midGray, textAlign:"center", margin:"0 0 4px", lineHeight:1.5 }}>
               {(!user || user.type === "guest")
                 ? "You need an account to send booking requests."
-                : "You'll pick the date, time, and location next — no details needed here."}
+                : disp.instant
+                  ? "⚡ Instant booking: open dates 3+ days away are confirmed right away, at this price. Otherwise it goes to the vendor as a request."
+                  : "You'll pick the date, time, and location next — no details needed here."}
             </p>
 
             {/* Inquiry */}
@@ -10070,7 +10152,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
         <div style={{ position:"absolute", bottom:10, right:10,
                       background:"rgba(255,255,255,0.95)", backdropFilter:"blur(4px)",
                       borderRadius:10, padding:"4px 10px" }}>
-          <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }}>{v.price}</p>
+          <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }}>{cardPrice(v)}</p>
         </div>
 
         {/* In-cart checkmark */}
@@ -10604,7 +10686,7 @@ const INFO_CONTENT = {
     ["5. Send your requests", "In the cart press Send booking requests. A request is not a booking yet: each vendor reviews it and accepts or declines. You'll get a notification and an email either way."],
     ["6. Track and change requests", "Open your account (your initials at the top right) and go to My Requests. You can see each request's status, use Edit request to change the date, guests or venue while it's still pending, or cancel it. Cancelling a request that hasn't been accepted is always free."],
     ["7. Talk to your vendors", "Use Messages in your account to ask questions or share details. Conversations stay open until 3 days after the event."],
-    ["8. Paying", "When online payment is on for your booking, you'll see Pay in full in My Requests once the vendor confirms. You pay the whole price then, after ticking that you accept the payment terms. The vendor can't touch it yet: it's locked in their Stripe balance and released in parts, usually 30% a week before the event, 50% the day after, and 20% when you press Release the rest to the vendor (or automatically 3 days after). For vendors new to PLUJ, up to 50% stays locked until after the event. If something goes wrong, press Report a problem before then and everything not yet released is frozen while PLUJ looks into it. If online payment isn't on for a booking, agree the price, deposit and payment method directly with the vendor. See Cancellations and refunds for what applies."],
+    ["8. Paying", "Prices on PLUJ are one price: they already include PLUJ's small service fee (none in your first 3 months), so nothing is added at checkout. When online payment is on for your booking, you'll see Pay in full in My Requests once the vendor confirms. You pay the whole price then, after ticking that you accept the payment terms. The vendor can't touch it yet: it's locked in their Stripe balance and released in parts, usually 30% a week before the event, 50% the day after, and 20% when you press Release the rest to the vendor (or automatically 3 days after). For vendors new to PLUJ, up to 50% stays locked until after the event. If something goes wrong, press Report a problem before then and everything not yet released is frozen while PLUJ looks into it. If online payment isn't on for a booking, agree the price, deposit and payment method directly with the vendor. See Cancellations and refunds for what applies."],
     ["9. After the event", "Leave a review for each vendor. It helps other hosts and helps good vendors get booked. You can choose to show your name or stay a Verified customer."],
     ["Forgot your password?", "Press Log in / Sign up, enter your email and press Forgot password?. Open the newest email, tap the link, type your new password twice and press Save new password. You'll be signed in straight away."],
   ],
@@ -10613,7 +10695,7 @@ const INFO_CONTENT = {
     ["1. Create your account", "Press Log in / Sign up, choose Sign up, and pick Vendor. Enter your name, your business name, a short description of your business (at least 40 characters: what you offer, the events you work and how long you've been doing it), your website or social media if you have one, email, password, phone and date of birth. On the next screen answer the human check, accept PLUJ's terms, tick the box confirming your business information is true and that you're responsible for what you post, and press Create vendor account."],
     ["2. Confirm your email", "Open the newest Confirm your email address email, tap the link, and press Confirm my email on the page that opens. The link works once and expires after 10 minutes. You'll land in your vendor dashboard."],
     ["3. Add your business details", "Your dashboard shows a short checklist. The first step is Add business details: business name, a short description of your business, business phone, city and ZIP, and the areas you work in. Then your legal information, which is required before you can post any listing: legal business name, business type, EIN, business street address, owners or managing members, and your license or permit number (or tick that your service doesn't need one). Your phone, address, EIN and owners are private — only PLUJ sees them. You can change all of this later under Business profile."],
-    ["4. Create your listings", "A listing is one service hosts can book. A DJ who also rents a photo booth has two listings; a caterer with a taco truck and a dessert truck has two. Go to My listings and press Add listing. For each one set its own name, the category (Rentals can pick as many types as apply, other categories up to 3), a description, a starting price and how long it covers (a 4-hour set, a 24-hour rental, 3 hours of truck service), guest capacity, photos (up to 10, the first is the cover), where you'll travel, and the days and times it's offered. Pricing options can each have their own time, what's included, and anything the host must provide (power, space, parking). Listings with good photos and a clear description get far more requests."],
+    ["4. Create your listings", "A listing is one service hosts can book. A DJ who also rents a photo booth has two listings; a caterer with a taco truck and a dessert truck has two. Go to My listings and press Add listing. For each one set its own name, the category (Rentals can pick as many types as apply, other categories up to 3), a description, a starting price and how long it covers (a 4-hour set, a 24-hour rental, 3 hours of truck service), guest capacity, photos (up to 10, the first is the cover), where you'll travel, and the days and times it's offered. Pricing options can each have their own time, what's included, and anything the host must provide (power, space, parking). Switch on Instant booking for a listing with a fixed price and hosts can book your open dates (3+ days away) on the spot — you're notified straight away. Listings with good photos and a clear description get far more requests."],
     ["5. Approval", "PLUJ reviews your description, business details and listings, usually within 1–2 business days. We may message you to ask for proof that your business is real, such as a website, social media page or license. Your listings stay hidden until you're approved, then go live automatically. You'll get a notification in your dashboard and the checklist turns green."],
     ["6. Answer booking requests", "When a host sends a request it appears under Requests and in Notifications, and we email you. Open it to see the date, time, guest count, venue and message. Press Accept booking to confirm or Decline if you can't do it. Please answer quickly — hosts often send requests to several vendors and book whoever confirms first."],
     ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. Days none of your listings work are shown there as Off automatically, and you can tap a listing to see just its days. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
@@ -10655,7 +10737,8 @@ const INFO_CONTENT = {
     ["Payments through PLUJ", "When online payment is enabled for a booking, the host pays the full price upfront through PLUJ when the vendor confirms. The payment is processed by Stripe and made directly to the vendor's own Stripe account: the vendor is the seller and the merchant for every payment. PLUJ does not receive or hold booking money; it only receives its service fees. The vendor's automatic payouts are turned off while they use PLUJ, so the money stays locked in the vendor's Stripe balance, and PLUJ instructs Stripe to release it to the vendor's bank in three parts: 30% seven days before the event, 50% the day after the event, and 20% when the host approves it or three days after the event. For a vendor's first booking on PLUJ the parts are 30%, 20% and 50%, and for their second 30%, 40% and 30%, so more stays locked until the vendor has completed events on PLUJ. Vendors must have their own Stripe account, complete Stripe's identity and bank verification, accept Stripe's services agreement, and authorize PLUJ to manage these payouts and to issue refunds from their Stripe balance as these Terms describe."],
     ["How hosts are protected", "Hosts are protected because money is released to the vendor in parts: if the host reports a problem before a part is released, or the host's bank opens a dispute, PLUJ freezes everything not yet released while it looks into it. This is not escrow. PLUJ is not an escrow agent, trustee, bank or payment processor, the money is in the vendor's Stripe balance and not with PLUJ, and PLUJ is not responsible for delays or decisions by Stripe, banks or card issuers, or for a vendor's incomplete Stripe account."],
     ["Reporting a problem with a booking", "Until the money is fully released, the host can report a problem, such as a vendor who did not show up, a service that was not what was promised, or suspected fraud. Everything not yet released is then frozen. After considering what both parties tell us, PLUJ may, at its sole discretion, release it to the vendor, refund the host in whole or in part from the vendor's Stripe balance, or keep it frozen while we review. Hosts and vendors agree to cooperate and give us accurate information. PLUJ's decision is final as between PLUJ and the users, does not decide any other claim between them, and PLUJ is not liable for it. PLUJ never repays anything from its own funds. Reports that are knowingly false breach these Terms, and the person who makes one is liable for the loss it causes."],
-    ["Fees", "Service fees: none during an account's first three months on PLUJ. After that, PLUJ's service fee is 3% of each payment to a vendor, deducted from that payment, and a 1% service fee is added to each payment a host makes; each is counted from that person's own sign-up date. PLUJ's service fees are collected automatically through Stripe when each payment is made, and are not refunded if the payment is refunded or disputed. Stripe's own fees (card processing, payouts, disputes and any others) are charged by Stripe to the vendor's Stripe account under the vendor's agreement with Stripe; PLUJ does not pay them. Fees that apply are shown before payment. We may change our fees with notice; changes do not affect payments already made."],
+    ["Instant booking", "A vendor may switch on instant booking for a listing. A host can then book that listing at its listed price for an open date at least 72 hours away, and the booking is confirmed at once on the vendor's behalf, without the vendor reviewing it. By switching it on, the vendor accepts every booking made this way as confirmed, at that price, under these Terms and the payment and cancellation rules, and agrees to keep their calendar and listing up to date. PLUJ only confirms instantly when the date is one the listing works, has not been blocked by the vendor, still has room, and meets the listing's notice and guest limits; otherwise the booking is sent to the vendor as an ordinary request."],
+    ["Fees", "Service fees: none during an account's first three months on PLUJ. After that, PLUJ's service fee is 3% of each payment to a vendor, deducted from that payment, and the host pays a 1% service fee; each is counted from that person's own sign-up date. One price: every price a host sees on PLUJ already includes the host's service fee, so the amount shown on a listing is the amount charged and nothing is added at checkout. PLUJ's service fees are collected automatically through Stripe when each payment is made, and are not refunded if the payment is refunded or disputed. Stripe's own fees (card processing, payouts, disputes and any others) are charged by Stripe to the vendor's Stripe account under the vendor's agreement with Stripe; PLUJ does not pay them. Fees that apply are shown before payment. We may change our fees with notice; changes do not affect payments already made."],
     ["Refunds, reversals and chargebacks", "Refunds follow the Cancellations and refunds page, or PLUJ's decision on a reported problem, and are paid from the vendor's Stripe balance. Vendors authorize PLUJ to issue those refunds on their behalf. Refunds, chargebacks, card disputes and any negative balance on a vendor's Stripe account are between the host, the vendor, Stripe and the card issuer; PLUJ is not a party to them, is not responsible for any amount owed under them, and never pays a refund, chargeback or Stripe fee from its own funds. The vendor is responsible for refunds and chargebacks on their bookings, including after money has been released, and answers disputes in their own Stripe dashboard. The host authorizes the full charge when paying, agrees to report any problem on PLUJ before contacting their bank, and is responsible for any loss caused by a chargeback or claim they make that is false or made for a service they received. PLUJ keeps a record of each party's acceptance of these terms and may provide it as evidence in a dispute."],
     ["Insurance is between you and the other party", "PLUJ does not provide, arrange, broker, recommend or procure insurance of any kind, and nothing on the platform is an offer of insurance or a guarantee of payment. Vendors are solely responsible for deciding what insurance their business needs and for obtaining it, including any coverage a customer asks them to carry. Customers are solely responsible for deciding whether to obtain their own event or cancellation insurance. Any insurance requirement agreed between a customer and a vendor is a term of their own contract, not of these Terms, and PLUJ is not responsible for verifying that any policy exists, is in force, or covers any particular loss."],
     ["Customer indemnity", "You agree to defend, indemnify and hold harmless PLUJ from any claim arising out of your use of the platform, the content you post, your conduct at or in connection with an event, your breach of these Terms, or your violation of any law or third-party right."],
@@ -11678,6 +11761,9 @@ export function SiteSwitch() {
 export default function PlujApp() {
   /* Auth */
   const [user,      setUser]      = useState(null);
+  /* Prices are shown all-in for whoever is looking (see allIn). Set during
+     render, before any card renders, so every price on screen agrees. */
+  setPriceViewer(user);
   const [authModal, setAuthModal] = useState(false);
   /* Password-recovery: set when arriving via a Supabase recovery email link */
   const [recoveryToken, setRecoveryToken] = useState(null);

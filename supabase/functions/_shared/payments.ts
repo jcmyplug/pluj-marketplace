@@ -319,8 +319,16 @@ export async function prepareCharge(rows: any[], plan: any): Promise<{ total: nu
   const hostPct = hostFeePercent(s, host?.created_at || null, nowIso);
   const vendorPct = vendorFeePercent(s, vendor?.created_at || null, nowIso);
   let total = 0, appFee = 0, base = 0, hostFees = 0, service = 0;
-  for (const r of rows) {
-    const svc = Math.round(r.amount_cents * hostPct / 100);
+  /* One price: the host's fee is worked out on the booking's whole base, the
+     same way the site shows it (allIn in PlujMarketplace.jsx), then shared
+     across the parts, so the charge matches the displayed price to the cent. */
+  const baseSum = rows.reduce((n: number, r: any) => n + r.amount_cents, 0);
+  const svcTotal = Math.round(baseSum * hostPct / 100);
+  let svcLeft = svcTotal;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const svc = i === rows.length - 1 ? svcLeft : Math.round(svcTotal * r.amount_cents / (baseSum || 1));
+    svcLeft -= svc;
     if (svc !== (r.host_service_fee_cents || 0)) {
       await db().from("booking_payments").update({ host_service_fee_cents: svc }).eq("id", r.id);
       r.host_service_fee_cents = svc;
