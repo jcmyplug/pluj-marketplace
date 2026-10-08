@@ -9523,7 +9523,6 @@ function RecommendationStrip({ recs, onAdd, onView, cart }) {
    (sql/2026-10-08-event-recaps.sql). Each one links to every credited pro, so
    a good event sends hosts to all of them. Shown on the home page, on each
    credited pro's profile, and at /event/<id>. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function fetchRecaps({ vendorId = null, id = null, limit = 12 } = {}) {
   if (IS_PREVIEW) return [];
   let q = sb.from("event_recaps").select("*").order("created_at", { ascending: false }).limit(limit);
