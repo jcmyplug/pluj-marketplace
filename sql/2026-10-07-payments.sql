@@ -1377,3 +1377,16 @@ end $function$;
 create trigger trg_guard_vendor_terms_flag
   before update on public.booking_requests
   for each row execute function public.guard_vendor_terms_flag();
+
+/* Scheduler (migration "payments_scheduler_cron_releases"): run while any
+   booking has money locked, a payment to confirm, or a refund to make. */
+select cron.schedule('payments-scheduler', '*/10 * * * *', $cron$
+  select net.http_post(
+    url     := 'https://btmqghudfakpbbplrqhf.supabase.co/functions/v1/payments-scheduler',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+                 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'PAYMENTS_CRON_SECRET')),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 60000)
+  where exists (select 1 from public.booking_payment_plans where status = 'active' or refund_state = 'pending')
+     or exists (select 1 from public.booking_payments where status = 'paid' and transferred_at is null);
+$cron$);

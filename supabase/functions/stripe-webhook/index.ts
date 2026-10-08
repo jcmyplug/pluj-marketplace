@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
         }
         await tellAdmins("payment_problem", `Chargeback closed: ${obj.status}`,
           `The card dispute for ${money(obj.amount || 0)} closed with status "${obj.status}". `
-          + "If the booking should carry on, resume it in Admin → Payments.", pay?.booking_id);
+          + "Release or refund what is still locked in Admin → Payments.", pay?.booking_id);
         break;
       }
       case "account.updated": {

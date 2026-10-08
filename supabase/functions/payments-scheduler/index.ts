@@ -50,6 +50,17 @@ Deno.serve(async (req) => {
     catch (e) { report.errors.push(`release ${b}: ${(e as Error).message}`); }
   }
 
+  // Cancelled bookings with no refund due (or a settled one): release what the vendor keeps.
+  const { data: settled } = await db().from("booking_payment_plans").select("booking_id")
+    .eq("status", "cancelled").in("refund_state", ["none", "done"]).limit(100);
+  for (const pl of settled || []) {
+    const { data: left } = await db().from("booking_payments").select("id").eq("booking_id", pl.booking_id)
+      .eq("status", "paid").is("transferred_at", null).limit(1);
+    if (!left || !left.length) continue;
+    try { report.released_cents += await releaseDue(pl.booking_id); }
+    catch (e) { report.errors.push(`release ${pl.booking_id}: ${(e as Error).message}`); }
+  }
+
   // 3. Cancellation refunds
   const { data: refunds } = await db().from("booking_payment_plans").select("*").eq("refund_state", "pending").limit(25);
   for (const plan of refunds || []) {

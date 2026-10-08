@@ -378,15 +378,19 @@ export async function vendorAccount(vendorId: string): Promise<{ id: string | nu
 export async function releaseDue(bookingId: string, opts: { force?: boolean } = {}) {
   const { data: plan } = await db().from("booking_payment_plans").select("*").eq("booking_id", bookingId).single();
   if (!plan) return 0;
-  if (!opts.force && plan.status !== "active") return 0;
   if (plan.refund_state === "pending" || plan.refund_state === "failed") return 0;
+  /* A cancelled booking whose refund is settled: what the vendor keeps under
+     the cancellation policy is released straight away. */
+  const settled = plan.status === "cancelled";
+  const all = !!opts.force || settled;
+  if (!all && plan.status !== "active") return 0;
   if (!opts.force) {
     const { data: open } = await db().from("booking_problems").select("id").eq("booking_id", bookingId).eq("status", "open");
     if ((open || []).length) return 0;
   }
   const nowIso = new Date().toISOString();
   let q = db().from("booking_payments").select("*").eq("booking_id", bookingId).eq("status", "paid").is("transferred_at", null);
-  if (!opts.force) q = q.lte("due_at", nowIso);
+  if (!all) q = q.lte("due_at", nowIso);
   const { data: due } = await q.order("due_at");
   if (!due || !due.length) return 0;
 
@@ -458,6 +462,7 @@ export async function runPendingRefund(plan: any) {
     await db().from("booking_payment_plans").update({ refund_state: "done", last_error: null,
       updated_at: new Date().toISOString() }).eq("booking_id", plan.booking_id);
     await db().from("booking_requests").update({ payment_status: "refunded" }).eq("id", plan.booking_id);
+    try { await releaseDue(plan.booking_id); } catch (e) { console.warn("[payments] release after refund failed", (e as Error).message); }
     if (total > 0) {
       await notify(plan.host_id, "payment_refunded", "↩️ Refund on its way",
         `${money(total)} was refunded to your card for your cancelled booking. Banks usually show it within 5–10 business days.`,
