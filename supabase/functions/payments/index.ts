@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           price_data: {
             currency: plan.currency || "usd", unit_amount: c.base,
             product_data: { name: `${booking.service_name || "Booking"} with ${vendorName} — paid in full`,
-                            description: `Event on ${booking.event_date}. Held in the vendor's Stripe balance and released in parts; the last 20% only when you approve it after the event.` },
+                            description: `Event on ${booking.event_date}. Held in the vendor's Stripe balance and released in parts; the last ${Number((rows.find((r: any) => r.kind === "final") || {}).percent || 20)}% only when you approve it after the event.` },
           },
         }];
         if (c.hostFees > 0) {
