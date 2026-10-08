@@ -405,7 +405,7 @@ function VendorReview({ vendorId, onDecided }) {
 }
 
 /* ── Payments: Stripe status, the on/off switch, reported problems, and every
-   booking's payments (PLUJ holds none). Server side: supabase/functions/payments. */
+   booking's payment, locked in the vendor's Stripe balance. Server side: supabase/functions/payments. */
 const PROBLEM_LABEL = {
   no_show: "Vendor didn't show up", not_as_described: "Not what was promised",
   scam: "Possible scam", other: "Something else",
@@ -419,7 +419,9 @@ function planMoney(plan) {
   const collected = paid.reduce((n, p) => n + charged(p), 0);
   const refunded  = paid.reduce((n, p) => n + (p.refunded_cents || 0), 0);
   const plujFees  = paid.reduce((n, p) => n + (p.platform_fee_cents || 0), 0);
-  return { collected, refunded, plujFees, pays };
+  const released  = paid.reduce((n, p) => n + (p.transferred_cents || 0), 0);
+  const locked    = paid.filter(p => !p.transferred_at).reduce((n, p) => n + charged(p) - (p.refunded_cents || 0), 0);
+  return { collected, refunded, plujFees, released, locked, pays };
 }
 
 function AdminPayments({ onChanged }) {
@@ -499,7 +501,7 @@ function AdminPayments({ onChanged }) {
           <div>
             <p style={{ margin:0, fontSize:12.5, fontWeight:800 }}>Payments are {on ? "ON" : "OFF"}</p>
             <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray }}>
-              {on ? "New confirmed bookings get the 30 / 50 / 20 schedule." : "Bookings work as before: no payment is taken through PLUJ."}
+              {on ? "New confirmed bookings are paid in full and released 30 / 50 / 20." : "Bookings work as before: no payment is taken through PLUJ."}
             </p>
           </div>
           <button className="btn" disabled={!!busy} style={sbtn(on ? "#FEF2F2" : C.green, on ? "#B91C1C" : "#fff", on ? "#FCA5A5" : null)}
@@ -507,7 +509,7 @@ function AdminPayments({ onChanged }) {
               if (!on && st && !st.configured) { setErr("Connect Stripe first (add the secret key), then turn payments on."); return; }
               const q = on
                 ? "Turn payments OFF?\n\nNew bookings won't be charged. Payments already scheduled on existing bookings still run."
-                : `Turn payments ON${st && st.mode === "live" ? " with REAL money" : " (Stripe TEST mode)"}?\n\nFrom now on, vendors need their own Stripe account to confirm bookings. The host pays 30% to secure it, 50% on the event morning and 20% after the event, each straight to the vendor. PLUJ only collects its service fees.`;
+                : `Turn payments ON${st && st.mode === "live" ? " with REAL money" : " (Stripe TEST mode)"}?\n\nFrom now on, vendors need their own Stripe account to confirm bookings. The host pays in full upfront into the vendor's locked Stripe balance, released 30% a week before, 50% the day after and 20% when the host approves. PLUJ only collects its service fees.\n\nOnly turn on LIVE payments after Stripe confirms vendors can't pay themselves out.`;
               if (!window.confirm(q)) return;
               act("sw", () => setPaymentsEnabled(!on), on ? "Payments turned off." : "Payments turned on.");
             }}>
@@ -518,7 +520,7 @@ function AdminPayments({ onChanged }) {
 
       {loading && <p style={{ fontSize:12, color:C.midGray }}>Loading payments…</p>}
 
-      {/* Problems first: payments still to come are paused until one of these is decided */}
+      {/* Problems first: unreleased money is frozen until one of these is decided */}
       <h3 style={{ margin:"16px 0 8px", fontSize:14, fontWeight:800 }}>
         Problems reported {openProblems.length > 0 && <span style={{ color:"#B91C1C" }}>({openProblems.length})</span>}
       </h3>
@@ -526,7 +528,7 @@ function AdminPayments({ onChanged }) {
         <p style={{ fontSize:12, color:C.midGray, margin:"0 0 6px" }}>None open.</p>
       ) : openProblems.map(pr => {
         const plan = plansById[pr.booking_id] || {};
-        const m = plan.booking_id ? planMoney(plan) : { collected: 0, refunded: 0 };
+        const m = plan.booking_id ? planMoney(plan) : { locked: 0 };
         const b = plan.booking_requests || {};
         return (
           <div key={pr.id} style={{ ...card, background:"#FEF2F2", borderColor:"#FCA5A5" }}>
@@ -534,7 +536,7 @@ function AdminPayments({ onChanged }) {
               🚩 {PROBLEM_LABEL[pr.kind] || pr.kind} · {b.service_name || "Booking"} · {b.event_date || ""}
             </p>
             <p style={{ margin:"3px 0 0", fontSize:11.5, color:C.midGray }}>
-              Host {names[plan.host_id] || "—"} → vendor {names[plan.vendor_id] || "—"} · paid to vendor {fmtUSD(m.collected - m.refunded)} ·
+              Host {names[plan.host_id] || "—"} → vendor {names[plan.vendor_id] || "—"} · locked {fmtUSD(m.locked)} ·
               reported {new Date(pr.created_at).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })}
             </p>
             <p style={{ margin:"6px 0 0", fontSize:12.5, color:C.black, whiteSpace:"pre-wrap", lineHeight:1.55 }}>{pr.details}</p>
@@ -544,19 +546,19 @@ function AdminPayments({ onChanged }) {
                        fontSize:12, boxSizing:"border-box" }} />
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
               <button className="btn" disabled={!!busy} style={sbtn(C.green, "#fff")}
-                onClick={() => window.confirm("Close this report and let the remaining payments go ahead? Anything due (including the final payment) is charged now.")
+                onClick={() => window.confirm("Close this report and release everything still locked to the vendor now?")
                   && act("pr" + pr.id, () => paymentsCall("admin_release", { booking_id: pr.booking_id, note: note[pr.booking_id] }),
-                         r => `Resumed. ${r.charged || 0} payment(s) charged.`)}>
-                Resume payments
+                         r => `Released ${fmtUSD(r.sent_cents || 0)} to the vendor.`)}>
+                Release to vendor
               </button>
               <button className="btn" disabled={!!busy} style={sbtn("#B91C1C", "#fff")}
-                onClick={() => window.confirm("Refund everything the host paid, from the vendor's Stripe account, and cancel the rest of the schedule?\n\nPLUJ's service fees are not returned.")
+                onClick={() => window.confirm("Refund everything the host paid, from the vendor's Stripe balance, and cancel the booking's releases?\n\nPLUJ's service fees are not returned.")
                   && act("pr" + pr.id, () => paymentsCall("admin_refund", { booking_id: pr.booking_id, note: note[pr.booking_id] }),
                          r => `Refunded ${fmtUSD(r.refunded_cents || 0)} to the host.`)}>
                 Refund host in full
               </button>
               <button className="btn" disabled={!!busy} style={sbtn("#fff", C.midGray, C.border)}
-                onClick={() => window.confirm("Dismiss this report? The remaining payments go ahead on their normal dates.")
+                onClick={() => window.confirm("Dismiss this report? The locked money is released on its normal dates.")
                   && act("pr" + pr.id, () => paymentsCall("admin_dismiss", { problem_id: pr.id, note: note[pr.booking_id] }), "Report dismissed.")}>
                 Dismiss
               </button>
@@ -573,10 +575,11 @@ function AdminPayments({ onChanged }) {
       {(data.plans || []).map(plan => {
         const m = planMoney(plan);
         const b = plan.booking_requests || {};
-        const label = plan.status === "on_hold" ? ["Paused", "#FEF2F2", "#B91C1C"]
-          : plan.status === "released" ? ["Paid in full", C.greenSoft, C.green]
+        const label = plan.status === "on_hold" ? ["Frozen", "#FEF2F2", "#B91C1C"]
+          : plan.status === "released" ? ["Fully released", C.greenSoft, C.green]
           : plan.status === "cancelled" ? [plan.refund_state === "failed" ? "Cancelled · refund FAILED" : "Cancelled", "#F3F4F6", C.midGray]
-          : plan.host_approved_at ? ["Final approved", C.greenSoft, C.green] : ["In progress", "#EFF6FF", "#1D4ED8"];
+          : m.collected === 0 ? ["Awaiting payment", "#FFF7ED", "#C2410C"]
+          : plan.host_approved_at ? ["Host released", C.greenSoft, C.green] : ["Locked", "#EFF6FF", "#1D4ED8"];
         return (
           <div key={plan.booking_id} style={card}>
             <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"flex-start" }}>
@@ -592,27 +595,35 @@ function AdminPayments({ onChanged }) {
               </span>
             </div>
             <p style={{ margin:"6px 0 0", fontSize:11.5, color:C.black }}>
-              Total {fmtUSD(plan.total_cents)} · paid to vendor {fmtUSD(m.collected)} ·
-              PLUJ service fees {fmtUSD(m.plujFees)}{m.refunded ? ` · refunded ${fmtUSD(m.refunded)}` : ""}
+              Total {fmtUSD(plan.total_cents)} · paid {fmtUSD(m.collected)} · locked {fmtUSD(m.locked)} ·
+              released {fmtUSD(m.released)} · PLUJ service fees {fmtUSD(m.plujFees)}{m.refunded ? ` · refunded ${fmtUSD(m.refunded)}` : ""}
             </p>
             <p style={{ margin:"2px 0 0", fontSize:11, color:C.midGray }}>
               {m.pays.map(p => `${KIND_SHORT[p.kind]} ${p.status}`).join(" · ")}
-              {" · final charged automatically "}{new Date(plan.release_at).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
+              {" · last part auto-released "}{new Date(plan.release_at).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
             </p>
-            {plan.hold_reason && plan.status === "on_hold" && <p style={{ margin:"2px 0 0", fontSize:11, color:"#B91C1C" }}>Paused: {plan.hold_reason}</p>}
+            {plan.hold_reason && plan.status === "on_hold" && <p style={{ margin:"2px 0 0", fontSize:11, color:"#B91C1C" }}>Frozen: {plan.hold_reason}</p>}
             {plan.last_error && <p style={{ margin:"2px 0 0", fontSize:11, color:"#B45309" }}>Last issue: {plan.last_error}</p>}
             {(plan.status !== "released" || m.collected - m.refunded > 0) && (
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8, alignItems:"center" }}>
                 {plan.status === "active" && (
                   <button className="btn" disabled={!!busy} style={sbtn("#fff", "#B91C1C", "#FCA5A5")}
-                    onClick={() => act("h" + plan.booking_id, () => paymentsCall("admin_hold", { booking_id: plan.booking_id, hold: true, reason: "Paused by PLUJ" }), "Paused.")}>
-                    Pause
+                    onClick={() => act("h" + plan.booking_id, () => paymentsCall("admin_hold", { booking_id: plan.booking_id, hold: true, reason: "Frozen by PLUJ" }), "Frozen.")}>
+                    Freeze
                   </button>
                 )}
                 {plan.status === "on_hold" && !openProblems.some(p => p.booking_id === plan.booking_id) && (
                   <button className="btn" disabled={!!busy} style={sbtn("#fff", C.black, C.border)}
-                    onClick={() => act("h" + plan.booking_id, () => paymentsCall("admin_hold", { booking_id: plan.booking_id, hold: false }), "Resumed.")}>
-                    Resume
+                    onClick={() => act("h" + plan.booking_id, () => paymentsCall("admin_hold", { booking_id: plan.booking_id, hold: false }), "Unfrozen.")}>
+                    Unfreeze
+                  </button>
+                )}
+                {m.locked > 0 && plan.status !== "cancelled" && (
+                  <button className="btn" disabled={!!busy} style={sbtn(C.green, "#fff")}
+                    onClick={() => window.confirm("Release everything still locked to the vendor now?")
+                      && act("r" + plan.booking_id, () => paymentsCall("admin_release", { booking_id: plan.booking_id }),
+                             r => `Released ${fmtUSD(r.sent_cents || 0)} to the vendor.`)}>
+                    Release now
                   </button>
                 )}
                 {m.collected - m.refunded > 0 && (
@@ -626,7 +637,7 @@ function AdminPayments({ onChanged }) {
                         const cents = amt[plan.booking_id] ? Math.round(dollars * 100) : null;
                         if (cents !== null && !(cents > 0)) { setErr("Enter a refund amount, or leave it empty to refund everything."); return; }
                         if (!window.confirm((cents ? `Refund ${fmtUSD(cents)} to the host` : "Refund everything the host paid")
-                          + " from the vendor's Stripe account?\n\nPLUJ's service fees are not returned.")) return;
+                          + " from the vendor's Stripe balance?\n\nPLUJ's service fees are not returned.")) return;
                         act("f" + plan.booking_id, () => paymentsCall("admin_refund", { booking_id: plan.booking_id, amount_cents: cents }),
                             r => `Refunded ${fmtUSD(r.refunded_cents || 0)}.`);
                       }}>

@@ -1,8 +1,10 @@
 /* PLUJ payments: Stripe.
-   >>> SECTION 12 (bottom of this file) REPLACES HOW MONEY MOVES. <<<
-   Since the evening of 7 Oct 2026 every payment goes straight to the vendor's
-   own Stripe account and PLUJ only collects its service fees; PLUJ no longer
-   holds money, and sections 7 and 11 describe the earlier design.
+   >>> SECTION 13 (bottom of this file) IS HOW MONEY MOVES NOW. <<<
+   The host pays in full upfront as a direct charge on the vendor's own
+   Stripe account; the vendor's payouts are manual, so it stays locked in
+   their Stripe balance until PLUJ releases it (30/50/20). PLUJ only collects
+   its service fees and never holds money. Sections 7, 11 and 12 describe
+   earlier designs from the same day.
    Applied to the live database on 7 Oct 2026 (migration "payments_core").
    Nothing here charges anyone until platform_settings.payments_enabled is
    'true' AND a Stripe key is configured for the edge functions.
@@ -1048,3 +1050,330 @@ select cron.schedule('payments-scheduler', '*/10 * * * *', $cron$
   where exists (select 1 from public.booking_payment_plans
                  where status = 'active' or refund_state = 'pending');
 $cron$);
+
+-- ── 13. Full payment upfront, released in parts (migrations "payments_full_upfront", "payments_terms_vendor_only") ──
+/* Full payment upfront, locked in the vendor's Stripe balance and released
+   in parts (7 Oct 2026, night; migration "payments_full_upfront"). This
+   replaces the staged charging of section 12; vendors' accounts are still
+   Stripe-liable and pay Stripe's fees, and payments are still direct
+   charges on the vendor's account, so nothing is ever taken from PLUJ.
+
+   The host pays 100% when the vendor confirms. The vendor's automatic
+   payouts are switched off (Stripe "manual payouts"), so the money stays in
+   the vendor's Stripe balance, and PLUJ releases it to their bank:
+     retainer   30%  a week before the event (straight away if sooner)
+     event_day  50%  noon the day after the event
+     final      20%  when the host approves, or noon 3 days after the event
+   A problem report or a chargeback freezes everything not yet released, so
+   refunds come out of money that is still there.
+
+   Both sides accept the terms before money moves, and it is recorded:
+   the vendor when confirming (booking_requests.payment_terms_accepted, copied
+   to booking_payment_plans.vendor_accepted_at), the host when paying
+   (host_accepted_at, host_accept_agent; also in the Stripe payment's
+   metadata as evidence against a chargeback). */
+
+alter table public.booking_requests
+  add column if not exists payment_terms_accepted boolean not null default false;
+alter table public.booking_payment_plans
+  add column if not exists vendor_accepted_at timestamptz,
+  add column if not exists host_accepted_at   timestamptz,
+  add column if not exists host_accept_agent  text;
+alter table public.vendor_profiles
+  add column if not exists stripe_payouts_locked boolean not null default false;
+
+create or replace function public.guard_vendor_profile_update()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+begin
+  if public.is_privileged_context() then return new; end if;
+  if (new.verification_status, new.verified_at, new.rejection_reason)
+     is distinct from (old.verification_status, old.verified_at, old.rejection_reason) then
+    raise exception 'verification status is set by PLUJ, not the vendor';
+  end if;
+  if (new.stripe_account_id, new.stripe_details_submitted, new.stripe_transfers_enabled, new.stripe_payouts_enabled,
+      new.stripe_charges_enabled, new.stripe_payouts_locked, new.pluj_balance_due_cents, new.stripe_fee_month, new.stripe_fee_year)
+     is distinct from (old.stripe_account_id, old.stripe_details_submitted, old.stripe_transfers_enabled, old.stripe_payouts_enabled,
+      old.stripe_charges_enabled, old.stripe_payouts_locked, old.pluj_balance_due_cents, old.stripe_fee_month, old.stripe_fee_year) then
+    raise exception 'payment settings are managed by PLUJ and Stripe';
+  end if;
+  return new;
+end $function$;
+
+/* BEFORE UPDATE: with payments on, a vendor can only confirm a booking that
+   has a date and a total price, once their Stripe account can take payments
+   and has its payouts locked, and after accepting the payment terms; nobody
+   but PLUJ can change the price once a schedule exists. */
+create or replace function public.payments_guard_booking()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare
+  confirming boolean := new.status = any (array['confirmed','accepted','approved'])
+                        and not (old.status = any (array['confirmed','accepted','approved']));
+begin
+  if confirming and public.payments_enabled()
+     and not exists (select 1 from public.booking_payment_plans where booking_id = new.id) then
+    if new.event_date is null then
+      raise exception 'This request has no event date, so it cannot be confirmed with payment. Ask the host to add the date.';
+    end if;
+    if coalesce(new.total_price, 0) < 10 then
+      raise exception 'Enter the total price for this booking (at least $10) before confirming it.';
+    end if;
+    if not public.is_privileged_context() then
+      if not coalesce((select stripe_charges_enabled and stripe_payouts_locked from public.vendor_profiles where id = new.vendor_id), false) then
+        raise exception 'Set up payments with Stripe (in your dashboard) before confirming bookings. The host pays in full upfront into your Stripe balance.';
+      end if;
+      if not coalesce(new.payment_terms_accepted, false) then
+        raise exception 'Tick the box to accept the payment terms before confirming.';
+      end if;
+    end if;
+    /* Set here rather than by an UPDATE in the AFTER trigger, which would
+       re-fire the booking email and notification triggers. */
+    new.payment_status := 'awaiting';   -- allowed values: not_required, awaiting, deposit_paid, paid_in_full, refunded
+  end if;
+
+  if new.total_price is distinct from old.total_price
+     and exists (select 1 from public.booking_payment_plans where booking_id = new.id)
+     and not public.is_privileged_context() then
+    raise exception 'The price of a booking with a payment schedule can''t be changed. Contact PLUJ.';
+  end if;
+  return new;
+end $function$;
+
+/* AFTER UPDATE: create the release schedule on confirmation; work out the
+   refund on cancellation (the scheduler carries it out, from the vendor's
+   Stripe balance, where the locked money is). */
+create or replace function public.payments_on_booking_change()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare
+  plan        public.booking_payment_plans%rowtype;
+  split       numeric[];
+  total_c     integer;
+  r_c integer; e_c integer; f_c integer;
+  fees_by     text;
+  fin_at      timestamptz;
+  ev_at       timestamptz;
+  ret_at      timestamptz;
+  hrs         numeric;
+  pct         numeric;
+  less_fees   boolean := false;
+  any_paid    boolean;
+  vname       text;
+  is_conf_new boolean := new.status = any (array['confirmed','accepted','approved']);
+  is_conf_old boolean := old.status = any (array['confirmed','accepted','approved']);
+begin
+  select * into plan from public.booking_payment_plans where booking_id = new.id;
+
+  -- Confirmed (first time, or again after the host changed details)
+  if is_conf_new and not is_conf_old then
+    -- When each part of the full payment is released to the vendor's bank:
+    ret_at := greatest(public.booking_starts_at(new.event_date, new.start_time) - interval '7 days', now());  -- 30%: a week before
+    ev_at  := public.booking_final_charge_at(new.event_date, new.end_date);                                   -- 50%: noon the day after
+    fin_at := public.booking_release_at(new.event_date, new.end_date);                                        -- 20%: 3 days after, or the host approves
+
+    if plan.booking_id is null then
+      if not public.payments_enabled() then return new; end if;
+
+      select array_agg(x::numeric) into split
+        from unnest(string_to_array(coalesce((select value from public.platform_settings where key = 'payment_split'), '30,50,20'), ',')) x;
+      fees_by := coalesce((select value from public.platform_settings where key = 'card_fees_paid_by'), 'vendor');
+      total_c := round(new.total_price * 100)::integer;
+      r_c := round(total_c * split[1] / 100.0)::integer;
+      e_c := round(total_c * split[2] / 100.0)::integer;
+      f_c := total_c - r_c - e_c;
+
+      insert into public.booking_payment_plans (booking_id, host_id, vendor_id, total_cents, card_fees_paid_by, release_at, vendor_accepted_at)
+      values (new.id, new.user_id, new.vendor_id, total_c, fees_by, fin_at,
+              case when new.payment_terms_accepted then now() end);
+
+      insert into public.booking_payments (booking_id, kind, percent, amount_cents, host_fee_cents, due_at) values
+        (new.id, 'retainer',  split[1], r_c, case when fees_by = 'host' then public.host_card_fee_cents(r_c) else 0 end, ret_at),
+        (new.id, 'event_day', split[2], e_c, case when fees_by = 'host' then public.host_card_fee_cents(e_c) else 0 end, ev_at),
+        (new.id, 'final',     split[3], f_c, case when fees_by = 'host' then public.host_card_fee_cents(f_c) else 0 end, fin_at);
+
+      select coalesce(nullif(business_name,''), nullif(biz_legal,''), 'Your vendor')
+        into vname from public.vendor_profiles where id = new.vendor_id;
+      insert into public.notifications (user_id, type, title, body, request_id)
+      values (new.user_id, 'payment_due', '💳 Pay to secure ' || coalesce(vname, 'your vendor'),
+              coalesce(vname, 'Your vendor') || ' confirmed. Pay the full $'
+                || to_char(total_c / 100.0, 'FM999,999,990.00') || ' to secure your date. It is locked in the vendor''s Stripe balance and released in parts: '
+                || split[1] || '% a week before the event, ' || split[2] || '% the day after, and the last ' || split[3]
+                || '% only when you approve it (or 3 days after). Report a problem and everything not yet released is frozen.',
+              new.id);
+    else
+      -- Re-confirmed after a change: move the parts not yet released to the new dates.
+      update public.booking_payment_plans
+         set release_at = fin_at, status = case when status in ('cancelled','on_hold','released') then status else 'active' end, updated_at = now()
+       where booking_id = new.id;
+      update public.booking_payments set due_at = ret_at, updated_at = now()
+       where booking_id = new.id and kind = 'retainer' and transferred_at is null and status <> 'cancelled';
+      update public.booking_payments set due_at = ev_at, updated_at = now()
+       where booking_id = new.id and kind = 'event_day' and transferred_at is null and status <> 'cancelled';
+      update public.booking_payments set due_at = case when plan.host_approved_at is not null then now() else fin_at end, updated_at = now()
+       where booking_id = new.id and kind = 'final' and transferred_at is null and status <> 'cancelled';
+    end if;
+    return new;
+  end if;
+
+  -- Cancelled or declined after a schedule existed
+  if plan.booking_id is not null and plan.status <> 'cancelled'
+     and new.status = any (array['cancelled','canceled','declined','rejected'])
+     and not (old.status = any (array['cancelled','canceled','declined','rejected'])) then
+
+    update public.booking_payments set status = 'cancelled', updated_at = now()
+     where booking_id = new.id and status in ('scheduled','failed');
+
+    if new.status = 'cancelled' and coalesce(new.cancelled_by, '') = 'customer' then
+      -- Cancellations and refunds page: more than 4 days before, refunded in
+      -- full less processing and service fees; 3-4 days 50%; 2 days 25%; under 48 hours none.
+      hrs := extract(epoch from (public.booking_starts_at(new.event_date, new.start_time) - now())) / 3600.0;
+      if hrs is null or hrs >= 96 then pct := 100; less_fees := true;
+      elsif hrs >= 72 then pct := 50;
+      elsif hrs >= 48 then pct := 25;
+      else pct := 0;
+      end if;
+    else
+      -- The vendor cancelled or declined, or PLUJ cancelled: everything back
+      -- to the host, from the vendor's Stripe balance.
+      pct := 100;
+    end if;
+
+    select exists (select 1 from public.booking_payments where booking_id = new.id and status = 'paid') into any_paid;
+
+    update public.booking_payment_plans
+       set status = 'cancelled', cancelled_by = coalesce(new.cancelled_by, new.status),
+           refund_percent = pct, refund_less_fees = less_fees,
+           refund_state = case when any_paid and pct > 0 then 'pending' else 'none' end,
+           updated_at = now()
+     where booking_id = new.id;
+  end if;
+
+  return new;
+end $function$;
+
+/* Host: "Report a problem" freezes everything not yet released. */
+create or replace function public.report_booking_problem(p_booking_id text, p_kind text, p_details text)
+returns uuid language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare
+  plan  public.booking_payment_plans%rowtype;
+  b     public.booking_requests%rowtype;
+  pid   uuid;
+  vname text;
+  hname text;
+  a     record;
+begin
+  select * into b from public.booking_requests where id = p_booking_id;
+  if b.id is null or b.user_id is distinct from auth.uid() then
+    raise exception 'Only the host of this booking can report a problem with it.';
+  end if;
+  select * into plan from public.booking_payment_plans where booking_id = p_booking_id;
+  if plan.booking_id is null then
+    raise exception 'There are no payments on this booking. Message the vendor, or contact PLUJ.';
+  end if;
+  if plan.status = 'released' then
+    raise exception 'All the money for this booking has already been released to the vendor. Message the vendor first; if that doesn''t settle it, contact PLUJ.';
+  end if;
+  if p_kind not in ('no_show','not_as_described','scam','other') then
+    raise exception 'Choose what went wrong.';
+  end if;
+  if length(btrim(coalesce(p_details, ''))) < 10 then
+    raise exception 'Tell us what happened (at least 10 characters).';
+  end if;
+
+  insert into public.booking_problems (booking_id, reporter_id, kind, details)
+  values (p_booking_id, auth.uid(), p_kind, left(btrim(p_details), 2000))
+  returning id into pid;
+
+  update public.booking_payment_plans
+     set status = case when status = 'cancelled' then status else 'on_hold' end,
+         hold_reason = 'The host reported a problem', updated_at = now()
+   where booking_id = p_booking_id;
+
+  select coalesce(nullif(business_name,''), nullif(biz_legal,''), 'the vendor') into vname
+    from public.vendor_profiles where id = b.vendor_id;
+  select coalesce(nullif(display_name,''), nullif(full_name,''), 'The host') into hname
+    from public.profiles where id = b.user_id;
+
+  insert into public.notifications (user_id, type, title, body, request_id)
+  values (b.vendor_id, 'payment_hold', '⚠️ A problem was reported on a booking',
+          hname || ' reported a problem with ' || coalesce(nullif(b.service_name,''), 'your booking')
+            || '. Everything not yet released to you is frozen while PLUJ looks into it. We may message you for details.',
+          b.id);
+
+  for a in
+    select au.user_id, coalesce(nullif(btrim(p.email), ''), u.email) as email
+      from public.admin_users au
+      left join public.profiles p on p.id = au.user_id
+      left join auth.users u on u.id = au.user_id
+  loop
+    insert into public.notifications (user_id, type, title, body, request_id)
+    values (a.user_id, 'payment_problem', '🚩 Problem reported — releases frozen',
+            hname || ' reported a problem with ' || vname || ' (booking ' || b.id || '). Review it in Admin → Payments.',
+            b.id);
+    if a.email like '%@%' then
+      perform public.queue_email(a.email,
+        'Problem reported — releases frozen: ' || vname,
+        '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:540px;margin:0 auto;padding:24px">'
+        || '<div style="display:inline-block;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:700;background:#FEF2F2;color:#B91C1C">Releases frozen</div>'
+        || '<h2 style="margin:12px 0 6px;font-size:20px;color:#111">' || public.email_html_escape(hname) || ' reported a problem</h2>'
+        || '<p style="margin:0 0 12px;color:#555;font-size:14px;line-height:1.6">Booking ' || public.email_html_escape(b.id)
+        || ' with ' || public.email_html_escape(vname) || '. Nothing more is released to the vendor until you release or refund it.</p>'
+        || '<p style="margin:0 0 18px;padding:12px 14px;background:#F9FAFB;border-radius:10px;color:#111;font-size:14px;line-height:1.6;white-space:pre-wrap">'
+        || public.email_html_escape(left(btrim(p_details), 2000)) || '</p>'
+        || '<p style="margin:0"><a href="https://www.pluj.us/" style="display:inline-block;padding:12px 22px;border-radius:999px;background:#FF5C28;color:#fff;font-weight:700;font-size:14px;text-decoration:none">Open Admin → Payments</a></p>'
+        || '<p style="margin:22px 0 0;color:#999;font-size:12px">Sent by PLUJ · pluj.us</p></div>',
+        'payment_problem', pid::text);
+    end if;
+  end loop;
+
+  return pid;
+end $function$;
+
+/* Host: release everything still locked to the vendor now (once they are
+   happy with the service). */
+create or replace function public.approve_payment_release(p_booking_id text)
+returns void language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare
+  plan  public.booking_payment_plans%rowtype;
+  hname text;
+begin
+  select * into plan from public.booking_payment_plans where booking_id = p_booking_id;
+  if plan.booking_id is null or plan.host_id is distinct from auth.uid() then
+    raise exception 'Only the host of this booking can release its payment.';
+  end if;
+  if exists (select 1 from public.booking_problems where booking_id = p_booking_id and status = 'open') then
+    raise exception 'You reported a problem with this booking, so PLUJ is reviewing it. Nothing is released until then.';
+  end if;
+  if plan.status = 'cancelled' then
+    raise exception 'This booking was cancelled.';
+  end if;
+  if not exists (select 1 from public.booking_payments where booking_id = p_booking_id and status = 'paid') then
+    raise exception 'Pay for the booking first.';
+  end if;
+  if plan.host_approved_at is not null then return; end if;
+
+  update public.booking_payment_plans set host_approved_at = now(), updated_at = now() where booking_id = p_booking_id;
+  update public.booking_payments set due_at = now(), updated_at = now()
+   where booking_id = p_booking_id and status = 'paid' and transferred_at is null and due_at > now();
+
+  select coalesce(nullif(display_name,''), nullif(full_name,''), 'The host') into hname
+    from public.profiles where id = plan.host_id;
+  insert into public.notifications (user_id, type, title, body, request_id)
+  values (plan.vendor_id, 'payment_released', '👍 The host released your payment',
+          hname || ' released the rest of the payment for this booking. It goes from your Stripe balance to your bank within a few minutes; banks usually show it in 1–2 business days.',
+          p_booking_id);
+end $function$;
+
+/* Only the vendor can record that the vendor accepted the payment terms. */
+create or replace function public.guard_vendor_terms_flag()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+begin
+  if new.payment_terms_accepted is distinct from old.payment_terms_accepted
+     and not public.is_privileged_context()
+     and auth.uid() is distinct from new.vendor_id then
+    raise exception 'Only the vendor can accept the vendor payment terms.';
+  end if;
+  return new;
+end $function$;
+
+create trigger trg_guard_vendor_terms_flag
+  before update on public.booking_requests
+  for each row execute function public.guard_vendor_terms_flag();

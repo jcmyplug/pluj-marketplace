@@ -2620,13 +2620,14 @@ export async function getVendorApplication(vendorId) {
   };
 }
 
-/* ── Payments (Stripe; straight to the vendor's own Stripe account) ──────────
+/* ── Payments (Stripe; paid in full, locked in the vendor's Stripe balance) ──
    Server side: supabase/functions/payments* and sql/2026-10-07-payments.sql
-   (section 12). Schedule: 30% retainer when the vendor confirms, 50% on the
-   event morning, 20% after the event when the host approves it (or 3 days
-   after). A problem report pauses what is still to come. PLUJ never holds
-   booking money; it only collects its service fees. Everything here is hidden
-   while platform_settings.payments_enabled is not 'true'. */
+   (section 13). The host pays everything when the vendor confirms; PLUJ
+   releases it to the vendor's bank 30% a week before the event, 50% the day
+   after, 20% when the host approves (or 3 days after). A problem report
+   freezes what isn't released. PLUJ never holds booking money; it only
+   collects its service fees. Everything here is hidden while
+   platform_settings.payments_enabled is not 'true'. */
 export function paymentsOn() {
   return String(_platformSettings.payments_enabled) === "true";
 }
@@ -8702,7 +8703,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                           marginTop:8, lineHeight:1.6 }}>
                 Requests go to each vendor individually. No payment is collected until
                 a vendor confirms your booking.
-                {paymentsOn() && " When a vendor confirms, you pay 30% to secure the date, 50% on the event morning and the last 20% after the event, when you approve it (or 3 days after). Each payment goes straight to the vendor."}
+                {paymentsOn() && " When a vendor confirms, you pay in full to secure the date. It stays locked and is released to the vendor in parts: 30% a week before, 50% the day after, and the last 20% when you approve it (or 3 days after)."}
               </p>
               {/* Host due diligence, as in the Terms ("Hosts: check vendors before
                   you book") and the box ticked at sign-up. */}
@@ -10334,7 +10335,7 @@ const INFO_CONTENT = {
     ["5. Send your requests", "In the cart press Send booking requests. A request is not a booking yet: each vendor reviews it and accepts or declines. You'll get a notification and an email either way."],
     ["6. Track and change requests", "Open your account (your initials at the top right) and go to My Requests. You can see each request's status, use Edit request to change the date, guests or venue while it's still pending, or cancel it. Cancelling a request that hasn't been accepted is always free."],
     ["7. Talk to your vendors", "Use Messages in your account to ask questions or share details. Conversations stay open until 3 days after the event."],
-    ["8. Paying", "When online payment is on for your booking, you'll see Pay retainer in My Requests once the vendor confirms. You pay 30% then to secure the date, 50% is charged to the same card on the morning of the event, and the last 20% after the event: press Approve final payment when you're happy, or it's charged automatically 3 days after the event. Every payment goes straight to the vendor's own Stripe account. If something goes wrong, press Report a problem before the final payment and everything still to come is paused while PLUJ looks into it. If online payment isn't on for a booking, agree the price, deposit and payment method directly with the vendor. See Cancellations and refunds for what applies."],
+    ["8. Paying", "When online payment is on for your booking, you'll see Pay in full in My Requests once the vendor confirms. You pay the whole price then, after ticking that you accept the payment terms. The vendor can't touch it yet: it's locked in their Stripe balance and released in parts, 30% a week before the event, 50% the day after, and 20% when you press Release the rest to the vendor (or automatically 3 days after). If something goes wrong, press Report a problem before then and everything not yet released is frozen while PLUJ looks into it. If online payment isn't on for a booking, agree the price, deposit and payment method directly with the vendor. See Cancellations and refunds for what applies."],
     ["9. After the event", "Leave a review for each vendor. It helps other hosts and helps good vendors get booked. You can choose to show your name or stay a Verified customer."],
     ["Forgot your password?", "Press Log in / Sign up, enter your email and press Forgot password?. Open the newest email, tap the link, type your new password twice and press Save new password. You'll be signed in straight away."],
   ],
@@ -10348,7 +10349,7 @@ const INFO_CONTENT = {
     ["6. Answer booking requests", "When a host sends a request it appears under Requests and in Notifications, and we email you. Open it to see the date, time, guest count, venue and message. Press Accept booking to confirm or Decline if you can't do it. Please answer quickly — hosts often send requests to several vendors and book whoever confirms first."],
     ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
     ["8. Messages", "Use Messages to answer host questions before and after you accept. Conversations stay open until 3 days after the event."],
-    ["9. Getting paid", "When online payment is on, press Set up payments with Stripe in your dashboard first: you need your own Stripe account (free) before you can confirm paid bookings, and Stripe checks your identity and bank account. When you confirm a booking you enter the total price. The host pays 30% then, 50% on the event morning and 20% after the event (when they approve it, or 3 days after), each straight into your Stripe account. Stripe's fees come out of each payment under your agreement with Stripe, and after your first 3 months PLUJ's 3% service fee does too. Refunds and card disputes are between you, the host and Stripe; you answer disputes in your Stripe dashboard. If online payment isn't on, agree the price, deposit and payment method directly with the host, and put your cancellation terms in writing."],
+    ["9. Getting paid", "When online payment is on, press Set up payments with Stripe in your dashboard first: you need your own Stripe account (free) before you can confirm paid bookings, and Stripe checks your identity and bank account. When you confirm a booking you enter the total price and tick that you accept the payment terms. The host pays it all upfront into your Stripe balance, where it stays locked (your automatic payouts are off) until PLUJ releases it to your bank: 30% a week before the event, 50% the day after, and 20% when the host approves (or 3 days after). Stripe's fees come out under your agreement with Stripe, and after your first 3 months PLUJ's 3% service fee does too. Refunds and card disputes are your responsibility; you answer disputes in your Stripe dashboard. If online payment isn't on, agree the price, deposit and payment method directly with the host, and put your cancellation terms in writing."],
     ["10. After the event", "Hosts can review you, and you can rate the host from the request. Reviews appear under Reviews."],
     ["Pausing or leaving", "Under Account settings you can pause your business (your listings come off the marketplace and come back when you log in again) or close your account for good."],
   ],
@@ -10382,11 +10383,11 @@ const INFO_CONTENT = {
     ["Reformation and savings", "If any limitation, disclaimer, release or waiver in these Terms is held unenforceable or overbroad, it will be modified and reformed to the minimum extent necessary to make it enforceable, and will otherwise remain in full force. It will not be struck out entirely, and its partial unenforceability will not affect any other provision. Nothing in these Terms excludes liability that cannot lawfully be excluded, including liability for fraud, gross negligence, willful misconduct, or death or personal injury caused by our negligence, and any such liability is limited to the maximum extent the law allows."],
     ["Vendor obligations and indemnity", "If you list services on PLUJ, you represent and warrant that you hold all licences, permits, certifications and registrations required for your services, including food handling, alcohol service and any venue or occupancy permits, and that you will perform the services safely, lawfully and as described in your listing. You agree to defend, indemnify and hold harmless PLUJ and its owners, officers, employees and suppliers from any claim, demand, investigation, loss, liability, damage, fine or expense, including reasonable legal fees, arising out of or relating to your services, your listings, your conduct, any injury to persons or damage to property connected with your services, your breach of these Terms, or your violation of any law or third-party right. This obligation survives termination of your account."],
     ["Vendors: you are responsible for what you post", "If you are a vendor, you are solely responsible and liable for every listing, photograph, description, price, availability, review response, message and any other content you post, and for the services you provide or fail to provide. Each time you post or update anything, you represent and warrant that all information you give PLUJ or hosts about yourself and your business is true, accurate, current, complete and not misleading; that you are the business or are authorized to act for it; that you actually offer, and are able to deliver, the services you list on the terms you list; and that every photograph shows your own work or work you have the right to use. You must keep this information up to date and correct anything that becomes untrue. You must not use PLUJ to defraud, deceive or scam anyone, including by taking a deposit or payment for services you do not intend to or cannot provide, impersonating another person or business, or posting fake listings. You are liable for any loss, damage or claim caused by information you provide that is false, misleading or inaccurate, and your indemnity in the section above covers it. PLUJ may remove any vendor it believes has provided false information, without notice, and may report suspected fraud to law enforcement and cooperate with any investigation. You confirm this statement separately when you create a vendor account."],
-    ["Payments through PLUJ", "When online payment is enabled for a booking, the host pays the vendor through PLUJ in three parts: 30% when the vendor confirms the booking, to secure the date; 50% on the morning of the event; and 20% after the event, when the host approves it or automatically three days after the event. By paying the first part, the host authorizes the remaining parts to be charged to the same card on those dates, and a charge that fails to be retried. Payments are processed by Stripe and go directly to the vendor's own Stripe account. The vendor is the seller and the merchant for every payment. PLUJ does not receive, hold or control booking money; it only receives its service fees. Vendors must have their own Stripe account, complete Stripe's identity and bank verification, and accept Stripe's services agreement."],
-    ["How hosts are protected", "PLUJ does not hold payments. Hosts are protected by paying in stages: the last 20% is only charged after the event, when the host approves it, or automatically three days after the event if the host has not reported a problem. When a host reports a problem, or a host's bank opens a dispute, PLUJ pauses every payment still to come on that booking. This is not escrow. PLUJ is not an escrow agent, trustee, bank or payment processor, and is not responsible for delays or decisions by Stripe, banks or card issuers, or for a vendor's incomplete Stripe account."],
-    ["Reporting a problem with a booking", "Until the final payment is charged, the host can report a problem, such as a vendor who did not show up, a service that was not what was promised, or suspected fraud. Payments still to come are then paused. After considering what both parties tell us, PLUJ may, at its sole discretion, let the remaining payments go ahead, cancel them, or issue a refund to the host, in whole or in part, from the vendor's Stripe account. Money already paid is in the vendor's Stripe account, not with PLUJ, and PLUJ does not repay it from its own funds. Hosts and vendors agree to cooperate and give us accurate information. PLUJ's decision is final as between PLUJ and the users, does not decide any other claim between them, and PLUJ is not liable for it. Reports that are knowingly false breach these Terms."],
+    ["Payments through PLUJ", "When online payment is enabled for a booking, the host pays the full price upfront through PLUJ when the vendor confirms. The payment is processed by Stripe and made directly to the vendor's own Stripe account: the vendor is the seller and the merchant for every payment. PLUJ does not receive or hold booking money; it only receives its service fees. The vendor's automatic payouts are turned off while they use PLUJ, so the money stays locked in the vendor's Stripe balance, and PLUJ instructs Stripe to release it to the vendor's bank in three parts: 30% seven days before the event, 50% the day after the event, and 20% when the host approves it or three days after the event. Vendors must have their own Stripe account, complete Stripe's identity and bank verification, accept Stripe's services agreement, and authorize PLUJ to manage these payouts and to issue refunds from their Stripe balance as these Terms describe."],
+    ["How hosts are protected", "Hosts are protected because money is released to the vendor in parts: if the host reports a problem before a part is released, or the host's bank opens a dispute, PLUJ freezes everything not yet released while it looks into it. This is not escrow. PLUJ is not an escrow agent, trustee, bank or payment processor, the money is in the vendor's Stripe balance and not with PLUJ, and PLUJ is not responsible for delays or decisions by Stripe, banks or card issuers, or for a vendor's incomplete Stripe account."],
+    ["Reporting a problem with a booking", "Until the money is fully released, the host can report a problem, such as a vendor who did not show up, a service that was not what was promised, or suspected fraud. Everything not yet released is then frozen. After considering what both parties tell us, PLUJ may, at its sole discretion, release it to the vendor, refund the host in whole or in part from the vendor's Stripe balance, or keep it frozen while we review. Hosts and vendors agree to cooperate and give us accurate information. PLUJ's decision is final as between PLUJ and the users, does not decide any other claim between them, and PLUJ is not liable for it. PLUJ never repays anything from its own funds. Reports that are knowingly false breach these Terms, and the person who makes one is liable for the loss it causes."],
     ["Fees", "Service fees: none during an account's first three months on PLUJ. After that, PLUJ's service fee is 3% of each payment to a vendor, deducted from that payment, and a 1% service fee is added to each payment a host makes; each is counted from that person's own sign-up date. PLUJ's service fees are collected automatically through Stripe when each payment is made, and are not refunded if the payment is later refunded or disputed. Stripe's own fees (card processing, payouts, disputes and any others) are charged by Stripe to the vendor's Stripe account under the vendor's agreement with Stripe; PLUJ does not pay them. Fees that apply are shown before payment. We may change our fees with notice; changes do not affect payments already made."],
-    ["Refunds, reversals and chargebacks", "Refunds follow the Cancellations and refunds page, or PLUJ's decision on a reported problem, and are paid from the vendor's Stripe account, where the money went. Vendors authorize PLUJ to issue those refunds from their Stripe account on their behalf. Refunds, chargebacks, card disputes and any negative balance on a vendor's Stripe account are between the host, the vendor, Stripe and the card issuer. PLUJ is not a party to them, is not responsible for any amount owed under them, and never pays a refund, chargeback or Stripe fee from its own funds. Vendors answer disputes in their own Stripe dashboard. Hosts agree to contact the vendor and PLUJ before disputing a charge."],
+    ["Refunds, reversals and chargebacks", "Refunds follow the Cancellations and refunds page, or PLUJ's decision on a reported problem, and are paid from the vendor's Stripe balance. Vendors authorize PLUJ to issue those refunds on their behalf. Refunds, chargebacks, card disputes and any negative balance on a vendor's Stripe account are between the host, the vendor, Stripe and the card issuer; PLUJ is not a party to them, is not responsible for any amount owed under them, and never pays a refund, chargeback or Stripe fee from its own funds. The vendor is responsible for refunds and chargebacks on their bookings, including after money has been released, and answers disputes in their own Stripe dashboard. The host authorizes the full charge when paying, agrees to report any problem on PLUJ before contacting their bank, and is responsible for any loss caused by a chargeback or claim they make that is false or made for a service they received. PLUJ keeps a record of each party's acceptance of these terms and may provide it as evidence in a dispute."],
     ["Insurance is between you and the other party", "PLUJ does not provide, arrange, broker, recommend or procure insurance of any kind, and nothing on the platform is an offer of insurance or a guarantee of payment. Vendors are solely responsible for deciding what insurance their business needs and for obtaining it, including any coverage a customer asks them to carry. Customers are solely responsible for deciding whether to obtain their own event or cancellation insurance. Any insurance requirement agreed between a customer and a vendor is a term of their own contract, not of these Terms, and PLUJ is not responsible for verifying that any policy exists, is in force, or covers any particular loss."],
     ["Customer indemnity", "You agree to defend, indemnify and hold harmless PLUJ from any claim arising out of your use of the platform, the content you post, your conduct at or in connection with an event, your breach of these Terms, or your violation of any law or third-party right."],
     ["Content posted by users", "Listings, photographs, descriptions, reviews and messages are created by users, not by PLUJ. We do not adopt, endorse or verify them, and we are not responsible for them. We may remove content at our discretion but are under no obligation to monitor it."],
@@ -10419,14 +10420,14 @@ const INFO_CONTENT = {
   ],
   "Cancellations and refunds": [
     ["What applies today", "Booking requests are free to send and free to cancel. When online payment is enabled for a booking, your booking screen shows the payment schedule; otherwise money changes hands directly between you and the vendor. The terms below govern payments made through PLUJ."],
-    ["How payment works", "You pay 30% when the vendor confirms, to secure your date; 50% is charged to the same card on the morning of the event; and the last 20% after the event, when you approve it in My Requests, or automatically 3 days after the event if you haven't reported a problem. Each payment goes straight to the vendor's own Stripe account. PLUJ does not hold it."],
+    ["How payment works", "You pay the full price when the vendor confirms, to secure your date. It goes into the vendor's own Stripe account but stays locked there: it is released to the vendor in parts, 30% seven days before the event, 50% the day after, and the last 20% when you approve it in My Requests, or automatically 3 days after the event if you haven't reported a problem."],
     ["Before a vendor accepts", "A request that has not been accepted is not a booking. You can withdraw it at any time at no cost, and nothing is charged."],
     ["What a refund applies to", "A refund applies to what you have paid so far. When a booking is cancelled, payments that weren't due yet are cancelled and never charged."],
     ["If you cancel a confirmed booking", "Refunds depend on how long before the event start time you cancel. More than 4 days before: refunded in full, less card processing and service fees. Three to four days before: 50 percent. Two days before: 25 percent. Within 48 hours of the event: no refund. Vendors may set their own schedule within limits we publish, and venues commonly set stricter terms because they hold a date exclusively. The exact terms for your booking are shown before you pay and are recorded with the booking, so a vendor changing their policy later cannot change yours."],
     ["What less fees means", "Card processing fees, and any PLUJ service fee, are not returned on a refund. They are charged when the payment is taken and are not recoverable afterwards. A refund described as full means the booking amount less those fees, not the total you were charged."],
     ["If the vendor cancels", "You are refunded in full, including all fees, whatever the timing. Where we can, we will help you find a replacement vendor for your date."],
     ["Changing a confirmed booking", "Changing the date, guest count or location needs the vendor to approve it, and re-opens the request until they do. If they decline, the original booking stands and the schedule above continues to apply. Changes are not accepted within 48 hours of the event."],
-    ["If a vendor does not turn up, or something is wrong", "Press Report a problem on the booking in My Requests before the final payment is charged (up to 3 days after the event). Payments still to come are paused while we look into it with both parties, and PLUJ may cancel them or refund you in full or in part from the vendor's Stripe account. After the final payment, message the vendor and contact us within 7 days and we will help, but money already paid is with the vendor, and PLUJ does not refund it from its own funds. PLUJ does not perform the services and is not the vendor, but no-shows and misrepresentation are grounds for removal from the marketplace."],
+    ["If a vendor does not turn up, or something is wrong", "Press Report a problem on the booking in My Requests before the money is fully released (up to 3 days after the event). Everything not yet released is frozen while we look into it with both parties, and PLUJ may refund you in full or in part from the vendor's Stripe balance. After everything has been released, message the vendor and contact us within 7 days and we will help, but PLUJ does not refund money from its own funds. PLUJ does not perform the services and is not the vendor, but no-shows and misrepresentation are grounds for removal from the marketplace."],
     ["Before you contact your bank", "Contact the vendor and us first. A chargeback takes months to resolve, and we can usually help settle it faster. A chargeback is between you, your card issuer, the vendor and Stripe, and raising one does not remove your obligations under these terms."],
   ],
 
@@ -10445,7 +10446,7 @@ const INFO_CONTENT = {
 /* ══════════════════════════════════════════════════════════════════════════
    PAYMENTS: what hosts and vendors see on a booking
    ══════════════════════════════════════════════════════════════════════════ */
-const PAY_KIND = { retainer: "Retainer", event_day: "Event-day payment", final: "Final payment" };
+const PAY_KIND = { retainer: "First release", event_day: "Second release", final: "Final release" };
 const PROBLEM_KINDS = [
   ["no_show",          "The vendor didn't show up"],
   ["not_as_described", "The service wasn't what was promised"],
@@ -10466,8 +10467,8 @@ function chargedCentsOf(p) {
   return (p.amount_cents || 0) + (p.host_fee_cents || 0) + (p.host_service_fee_cents || 0);
 }
 
-/* The payment schedule on one booking, with the actions the signed-in host or
-   vendor can take. Renders nothing for bookings without payments. */
+/* The payment on one booking: pay in full, then see each part released.
+   Renders nothing for bookings without payments. */
 export function BookingPayments({ req, user, onChanged }) {
   const [info, setInfo]       = useState(null);
   const [busy, setBusy]       = useState("");
@@ -10476,6 +10477,7 @@ export function BookingPayments({ req, user, onChanged }) {
   const [reporting, setRep]   = useState(false);
   const [kind, setKind]       = useState("");
   const [details, setDetails] = useState("");
+  const [agree, setAgree]     = useState(false);
 
   const reqId = req && req.id;
   const load = React.useCallback(() => {
@@ -10496,11 +10498,11 @@ export function BookingPayments({ req, user, onChanged }) {
   if (!isHost && !isVendor) return null;
 
   const openProblem = problems.find(p => p.status === "open");
-  const anyPaid     = payments.some(p => p.status === "paid");
-  const finalPay    = payments.find(p => p.kind === "final");
-  const eventPaid   = payments.some(p => p.kind === "event_day" && p.status === "paid");
-  const finalOpen   = finalPay && (finalPay.status === "scheduled" || finalPay.status === "failed");
-  const finalDay    = fmtHouston(plan.release_at, false);
+  const unpaid      = payments.filter(p => p.status === "scheduled" || p.status === "failed");
+  const paid        = payments.some(p => p.status === "paid");
+  const locked      = payments.filter(p => p.status === "paid" && !p.transferred_at);
+  const toPay       = unpaid.reduce((n, p) => n + chargedCentsOf(p), 0);
+  const lockedCents = locked.reduce((n, p) => n + Math.max(0, chargedCentsOf(p) - (p.refunded_cents || 0)), 0);
 
   async function run(label, fn) {
     setBusy(label); setErr(""); setMsg("");
@@ -10514,15 +10516,15 @@ export function BookingPayments({ req, user, onChanged }) {
   }
 
   const chip = (() => {
-    if (plan.status === "on_hold") return ["Paused", "#FEF2F2", "#B91C1C"];
+    if (plan.status === "on_hold") return ["Frozen", "#FEF2F2", "#B91C1C"];
     if (plan.status === "cancelled") {
       if (plan.refund_state === "pending") return ["Cancelled · refund in progress", "#FFFBEB", "#B45309"];
       if (plan.refund_state === "done")    return ["Cancelled · refunded", "#F3F4F6", C.midGray];
       return ["Cancelled", "#F3F4F6", C.midGray];
     }
-    if (plan.status === "released") return ["Paid in full", C.greenSoft, C.green];
-    if (plan.host_approved_at)      return [isHost ? "Final payment approved" : "Final payment approved by the host", C.greenSoft, C.green];
-    return ["Paid in stages", "#EFF6FF", "#1D4ED8"];
+    if (plan.status === "released") return ["Fully released", C.greenSoft, C.green];
+    if (!paid) return ["Awaiting payment", "#FFF7ED", "#C2410C"];
+    return ["Paid · locked in Stripe", "#EFF6FF", "#1D4ED8"];
   })();
 
   const btn = (bg, fg, bd) => ({ padding:"8px 12px", borderRadius:9, fontSize:12, fontWeight:800, cursor:"pointer",
@@ -10532,48 +10534,54 @@ export function BookingPayments({ req, user, onChanged }) {
     <div onClick={e => e.stopPropagation()}
       style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:"10px 12px" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6 }}>
-        <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.black }}>💳 Payments · {fmtUSD(plan.total_cents)}</p>
+        <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.black }}>💳 Payment · {fmtUSD(plan.total_cents)}</p>
         <span style={{ fontSize:10.5, fontWeight:800, padding:"2px 9px", borderRadius:99, background:chip[1], color:chip[2] }}>
           {chip[0]}
         </span>
       </div>
 
+      {/* Host: pay the full price, after accepting the terms */}
+      {isHost && unpaid.length > 0 && plan.status === "active" && (
+        <div style={{ background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:10, padding:"9px 11px", marginBottom:8 }}>
+          <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black, lineHeight:1.5 }}>
+            Pay {fmtUSD(toPay)} in full to secure your date. The vendor can't touch it yet: it's locked in their Stripe
+            balance and released in parts, and the last part only when you approve it after the event.
+          </p>
+          <label style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:7, fontSize:11.5, color:C.black, lineHeight:1.5, cursor:"pointer" }}>
+            <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} style={{ marginTop:2 }} />
+            <span>
+              I authorize this charge of the full amount now. I agree to PLUJ's Terms and the Cancellations and refunds
+              policy, including how the money is released. I will report any problem on PLUJ before contacting my bank, and
+              I understand I am responsible for any chargeback or claim I make that is false.
+            </span>
+          </label>
+          <button className="btn" disabled={!!busy || !agree} style={{ ...btn(C.orange, "#fff"), marginTop:8, opacity: agree ? 1 : 0.55 }}
+            onClick={() => run("pay", () => paymentsCall("pay", { booking_id: plan.booking_id, accept_terms: true }))}>
+            {busy === "pay" ? "Opening…" : `Pay ${fmtUSD(toPay)} in full`}
+          </button>
+        </div>
+      )}
+
+      {/* The three parts and when each is released */}
       {payments.map(p => {
         const amount = isHost ? chargedCentsOf(p) : p.amount_cents;
         let state;
-        if (p.status === "paid") {
-          state = "Paid " + fmtHouston(p.paid_at, false) + (isVendor ? " · in your Stripe account" : " · to the vendor");
-        } else if (p.status === "processing") state = "Processing…";
-        else if (p.status === "failed")       state = "Didn't go through";
-        else if (p.status === "cancelled")    state = "Cancelled";
-        else if (p.kind === "retainer") state = "Due now";
-        else if (plan.status === "on_hold") state = "Paused";
+        if (p.status === "cancelled") state = "Cancelled";
+        else if (p.status !== "paid") state = "Not paid yet · released " + fmtHouston(p.due_at, false);
+        else if (p.transferred_at) state = "Released to the vendor " + fmtHouston(p.transferred_at, false);
+        else if (plan.status === "on_hold") state = "Locked · frozen";
         else if (p.kind === "final" && !plan.host_approved_at)
-          state = `After the event: when ${isHost ? "you approve it" : "the host approves it"}, or ${finalDay}`;
-        else state = "Charged " + fmtHouston(p.due_at);
-        const canPay = isHost && plan.status === "active"
-          && ((p.status === "scheduled" && p.kind === "retainer") || p.status === "failed");
+          state = `Locked · released when ${isHost ? "you approve it" : "the host approves it"}, or ${fmtHouston(p.due_at, false)}`;
+        else state = "Locked · released " + fmtHouston(p.due_at);
         return (
-          <div key={p.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0",
-                                   borderTop:`1px solid ${C.border}` }}>
+          <div key={p.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderTop:`1px solid ${C.border}` }}>
             <div style={{ flex:1, minWidth:0 }}>
-              <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>
-                {PAY_KIND[p.kind]} · {Number(p.percent)}%
-              </p>
-              <p style={{ margin:"1px 0 0", fontSize:11, color: p.status === "failed" ? "#B91C1C" : C.midGray }}>
-                {state}
-                {p.refunded_cents > 0 ? ` · ${fmtUSD(p.refunded_cents)} refunded` : ""}
-                {p.status === "failed" && p.last_error ? ` (${p.last_error})` : ""}
+              <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>{PAY_KIND[p.kind]} · {Number(p.percent)}%</p>
+              <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
+                {state}{p.refunded_cents > 0 ? ` · ${fmtUSD(p.refunded_cents)} refunded` : ""}
               </p>
             </div>
             <span style={{ fontSize:12.5, fontWeight:800, color:C.black }}>{fmtUSD(amount)}</span>
-            {canPay && (
-              <button className="btn" disabled={!!busy}
-                onClick={() => run("pay" + p.id, () => paymentsCall("pay", { payment_id: p.id }))}
-                style={btn(C.orange, "#fff")}>
-                {busy === "pay" + p.id ? "Opening…" : p.kind === "retainer" && p.status === "scheduled" ? "Pay retainer" : "Pay now"}
-              </button>
-            )}
           </div>
         );
       })}
@@ -10585,33 +10593,37 @@ export function BookingPayments({ req, user, onChanged }) {
             ? `This booking was cancelled. ${Number(plan.refund_percent) > 0 ? "Refunds follow PLUJ's cancellation policy." : "Under PLUJ's cancellation policy no refund is due."}`
             : "This booking was cancelled."
         ) : plan.status === "released" ? (
-          isHost ? "Every payment has been made to the vendor. If something went wrong, message the vendor first." : "Every payment is in your Stripe account."
+          isHost ? "All the money has been released to the vendor. If something went wrong, message the vendor first, then contact PLUJ."
+                 : "All the money has been released to your bank."
         ) : openProblem ? (
-          isHost ? `You reported a problem on ${fmtHouston(openProblem.created_at, false)}. Payments still to come are paused while PLUJ looks into it.`
-                 : "The host reported a problem. Payments still to come are paused while PLUJ looks into it, and we may message you for details."
+          isHost ? `You reported a problem on ${fmtHouston(openProblem.created_at, false)}. Everything not yet released (${fmtUSD(lockedCents)}) is frozen while PLUJ looks into it.`
+                 : "The host reported a problem. Everything not yet released to you is frozen while PLUJ looks into it, and we may message you for details."
         ) : plan.status === "on_hold" ? (
-          "Payments still to come are paused" + (plan.hold_reason ? ` (${plan.hold_reason.toLowerCase()}).` : ".")
+          "Releases are frozen" + (plan.hold_reason ? ` (${plan.hold_reason.toLowerCase()}).` : ".")
+        ) : !paid ? (
+          isHost ? "Nothing is released to the vendor until you've paid, and then only in parts."
+                 : "Waiting for the host to pay in full. You'll be notified when they do."
         ) : isHost ? (
-          `Each payment goes straight to the vendor's Stripe account when it's made. The last ${finalPay ? Number(finalPay.percent) : 20}% is only charged after the event, when you approve it, or on ${finalDay}. If something goes wrong, report a problem and the rest is paused.`
+          `${fmtUSD(lockedCents)} is still locked. If something goes wrong, press Report a problem before it's released and it stays frozen.`
         ) : (
-          `Each payment goes straight to your Stripe account, less Stripe's fees and any PLUJ service fee. The last ${finalPay ? Number(finalPay.percent) : 20}% is charged after the event, when the host approves it, or on ${finalDay}.`
+          "The host paid in full. It's locked in your Stripe balance and released to your bank on the dates above, less Stripe's fees and any PLUJ service fee."
         )}
       </p>
 
-      {/* Host: approve the final payment, or report a problem */}
-      {isHost && !reporting && plan.status !== "cancelled" && plan.status !== "released" && (
+      {/* Host: release the rest, or report a problem */}
+      {isHost && !reporting && paid && locked.length > 0 && plan.status !== "cancelled" && (
         <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
-          {plan.status === "active" && !plan.host_approved_at && !openProblem && eventPaid && finalOpen && (
+          {plan.status === "active" && !plan.host_approved_at && !openProblem && (
             <button className="btn" disabled={!!busy} style={btn(C.green, "#fff")}
               onClick={() => {
-                if (!window.confirm(`Approve the final payment (${fmtUSD(chargedCentsOf(finalPay))}) now?\n\nIt is charged to your saved card within a few minutes and goes straight to the vendor. Only do this once you're happy with the service.`)) return;
+                if (!window.confirm(`Release the remaining ${fmtUSD(lockedCents)} to the vendor now?\n\nOnly do this once you're happy with the service. It can't be undone.`)) return;
                 run("rel", () => paymentsRpc("approve_payment_release", { p_booking_id: plan.booking_id }))
-                  .then(ok => ok && setMsg("Approved. The final payment is charged within a few minutes."));
+                  .then(ok => ok && setMsg("Released. The vendor gets it within a few minutes."));
               }}>
-              {busy === "rel" ? "Approving…" : "Approve final payment"}
+              {busy === "rel" ? "Releasing…" : "Release the rest to the vendor"}
             </button>
           )}
-          {anyPaid && !openProblem && plan.status === "active" && (
+          {!openProblem && plan.status === "active" && (
             <button className="btn" disabled={!!busy} style={btn("#FEF2F2", "#B91C1C", "#FCA5A5")}
               onClick={() => { setRep(true); setErr(""); }}>
               Report a problem
@@ -10622,7 +10634,7 @@ export function BookingPayments({ req, user, onChanged }) {
       {isHost && reporting && (
         <div style={{ marginTop:8, background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"9px 11px" }}>
           <p style={{ margin:"0 0 6px", fontSize:12, fontWeight:800, color:"#991B1B" }}>
-            What went wrong? Payments still to come are paused while PLUJ looks into it.
+            What went wrong? Everything not yet released is frozen while PLUJ looks into it.
           </p>
           <select value={kind} onChange={e => setKind(e.target.value)}
             style={{ width:"100%", height:36, borderRadius:8, border:`1px solid ${C.border}`, fontSize:12.5, padding:"0 8px", marginBottom:6 }}>
@@ -10630,7 +10642,7 @@ export function BookingPayments({ req, user, onChanged }) {
             {PROBLEM_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
           <textarea value={details} onChange={e => setDetails(e.target.value)} maxLength={2000}
-            placeholder="Tell us what happened: dates, what was promised, what you've tried."
+            placeholder="Tell us what happened: dates, what was promised, what you've tried. False reports breach PLUJ's Terms."
             style={{ width:"100%", minHeight:70, borderRadius:8, border:`1px solid ${C.border}`, fontSize:12.5,
                      padding:"7px 9px", resize:"vertical", boxSizing:"border-box", fontFamily:"'Inter',sans-serif" }} />
           <div style={{ display:"flex", gap:6, marginTop:6 }}>
@@ -10638,7 +10650,7 @@ export function BookingPayments({ req, user, onChanged }) {
               onClick={() => run("rep", () => paymentsRpc("report_booking_problem",
                 { p_booking_id: plan.booking_id, p_kind: kind, p_details: details.trim() }))
                 .then(ok => { if (ok) { setRep(false); setKind(""); setDetails("");
-                  setMsg("Reported. Payments still to come are paused, and PLUJ will contact you."); } })}>
+                  setMsg("Reported. Everything not yet released is frozen, and PLUJ will contact you."); } })}>
               {busy === "rep" ? "Sending…" : "Send report"}
             </button>
             <button className="btn" disabled={!!busy} style={btn("#fff", C.midGray, C.border)}
@@ -10653,9 +10665,14 @@ export function BookingPayments({ req, user, onChanged }) {
   );
 }
 
+/* Vendors tick this once per booking they confirm; remembered here so
+   confirmPricePayload can send it with the confirmation. */
+const _vendorTermsOk = {};
+
 /* Vendor confirming a request while payments are on: they confirm the total
-   price, which the 30/50/20 schedule is built from. */
+   price, and accept the payment terms. */
 export function ConfirmPriceField({ req, value, onChange }) {
+  const [ok, setOk] = useState(!!_vendorTermsOk[req.id]);
   if (!paymentsOn()) return null;
   return (
     <div onClick={e => e.stopPropagation()} style={{ marginTop:8 }}>
@@ -10668,36 +10685,46 @@ export function ConfirmPriceField({ req, value, onChange }) {
         style={{ width:"100%", height:38, borderRadius:9, border:`1px solid ${C.border}`, padding:"0 10px",
                  fontSize:14, fontWeight:700, boxSizing:"border-box" }} />
       <p style={{ margin:"3px 0 0", fontSize:10.5, color:C.lightGray, lineHeight:1.5 }}>
-        The host pays 30% when you confirm, 50% on the event morning and 20% after the event (when they approve it, or 3
-        days after). Each payment goes straight to your Stripe account.
+        The host pays it all upfront into your Stripe balance. It's locked there and released to your bank: 30% a week
+        before the event, 50% the day after, and 20% when the host approves (or 3 days after).
       </p>
+      <label style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:6, fontSize:11, color:C.black, lineHeight:1.5, cursor:"pointer" }}>
+        <input type="checkbox" checked={ok} style={{ marginTop:2 }}
+          onChange={e => { _vendorTermsOk[req.id] = e.target.checked; setOk(e.target.checked); }} />
+        <span>
+          I will deliver this booking as described. I agree the host's payment stays locked in my Stripe balance until
+          PLUJ releases it, that PLUJ may refund the host from it under the cancellation policy or a reported problem,
+          and that I alone am responsible for refunds, chargebacks and Stripe's fees on this booking.
+        </span>
+      </label>
     </div>
   );
 }
 
-/* Checks the price before a vendor confirms; returns the update to send, or
-   an error message. */
+/* Checks the price and the terms before a vendor confirms; returns the
+   update to send, or an error message. */
 export function confirmPricePayload(req, draft) {
   if (!paymentsOn()) return { extra: {} };
   const raw = draft !== undefined && draft !== "" ? draft : (req.packagePrice != null ? String(req.packagePrice) : "");
   const n = Math.round(Number(raw) * 100) / 100;
   if (!isFinite(n) || n < 10) return { error: "Enter the total price for this booking (at least $10) before confirming." };
-  return { extra: { total_price: n } };
+  if (!_vendorTermsOk[req.id]) return { error: "Tick the box to accept the payment terms before confirming." };
+  return { extra: { total_price: n, payment_terms_accepted: true } };
 }
 
-/* Vendor dashboard: connect Stripe so PLUJ can pay you. */
+/* Vendor dashboard: connect Stripe so hosts can pay you. */
 export function VendorPayoutsCard({ user }) {
   const [vp, setVp]     = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");
   useEffect(() => {
     sb.from("vendor_profiles")
-      .select("stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_payouts_enabled")
+      .select("stripe_account_id, stripe_details_submitted, stripe_charges_enabled, stripe_payouts_locked, stripe_payouts_enabled")
       .eq("id", user.id).single().get().then(({ data }) => setVp(data || {}));
   }, [user.id]);
   if (!paymentsOn() || !vp) return null;
 
-  const ready = !!vp.stripe_charges_enabled;
+  const ready = !!vp.stripe_charges_enabled && !!vp.stripe_payouts_locked;
   const started = !!vp.stripe_account_id;
   async function go(action) {
     setBusy(true); setErr("");
@@ -10714,10 +10741,10 @@ export function VendorPayoutsCard({ user }) {
       </p>
       <p style={{ margin:"4px 0 10px", fontSize:12, color:C.midGray, lineHeight:1.55 }}>
         {ready
-          ? "Hosts pay straight into your own Stripe account, and Stripe pays it into your bank. Stripe's fees and any PLUJ service fee come out of each payment. Refunds and card disputes are handled in your Stripe dashboard."
+          ? "Hosts pay in full upfront into your own Stripe balance. PLUJ releases it to your bank in parts (30% a week before the event, 50% the day after, 20% when the host approves), so your automatic payouts stay off. Refunds and card disputes are handled in your Stripe dashboard."
           : started
             ? "Stripe still needs a few details (identity and bank account) before hosts can pay you."
-            : "You need your own Stripe account (free) before you can confirm paid bookings: hosts pay you straight into it. Stripe checks your identity and bank account, which also shows hosts you're a real business. It takes about 5 minutes."}
+            : "You need your own Stripe account (free) before you can confirm paid bookings: hosts pay in full upfront into it, and PLUJ releases the money to your bank in parts. Stripe checks your identity and bank account, which also shows hosts you're a real business. It takes about 5 minutes."}
       </p>
       <button className="btn" disabled={busy} onClick={() => go(ready ? "vendor_dashboard" : "vendor_connect")}
         style={{ padding:"9px 16px", borderRadius:10, border:"none", fontSize:13, fontWeight:800,
@@ -11500,7 +11527,7 @@ export default function PlujApp() {
         const r = pr.booking ? await paymentsCall("checkout_return", { booking_id: pr.booking }) : {};
         setPayBanner(r && r.error
           ? { tone: "warn", text: "We're still confirming your payment with Stripe. It will show in My Requests within a few minutes." }
-          : { tone: "ok", text: "✅ Payment received. It went straight to the vendor; the last part is only charged after your event." });
+          : { tone: "ok", text: "✅ Paid in full. It's locked and released to the vendor in parts; the last part only when you approve it." });
         setAccountTab("requests");
         setAccountOpen(true);
       } else if (pr.kind === "stripe") {
@@ -11513,7 +11540,7 @@ export default function PlujApp() {
         }
         const r = await paymentsCall("vendor_refresh");
         setPayBanner(r && r.transfers_enabled
-          ? { tone: "ok", text: "✅ Stripe is set up. Hosts can now pay you straight into your Stripe account." }
+          ? { tone: "ok", text: "✅ Stripe is set up. Hosts can now pay you in full into your Stripe balance." }
           : { tone: "warn", text: "Stripe still needs a few details before hosts can pay you. Open your dashboard and press Finish Stripe setup." });
       }
     })();

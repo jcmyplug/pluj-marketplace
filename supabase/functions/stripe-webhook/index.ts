@@ -5,14 +5,14 @@
    Connect Stripe webhook), or STRIPE_WEBHOOK_SECRET in the function's secrets.
 
    Refunds and chargebacks are between the host, the vendor and Stripe: a
-   chargeback is taken from the vendor's Stripe account and the vendor answers
-   it in their Stripe dashboard. PLUJ only records it, tells everyone, and
-   stops any payments still to be charged on that booking.
+   chargeback is taken from the vendor's Stripe balance (where the unreleased
+   money is locked) and the vendor answers it in their Stripe dashboard.
+   PLUJ records it, tells everyone, and stops every release still to come.
 
    Each event is recorded in stripe_events and handled once. */
 
 import {
-  json, db, markPaid, notify, tellAdmins, money, verifyStripeSignature, saveVendorAccountFlags,
+  json, db, markPlanPaid, notify, tellAdmins, money, verifyStripeSignature, saveVendorAccountFlags,
 } from "../_shared/payments.ts";
 
 async function signingSecret(): Promise<string> {
@@ -22,14 +22,16 @@ async function signingSecret(): Promise<string> {
   return (data as string) || "";
 }
 
+/* One full payment covers all three parts of a booking, so a payment intent
+   matches up to three rows: this returns the booking's first one. */
 async function paymentFor(metadata: any, paymentIntentId?: string) {
-  if (metadata?.payment_id) {
-    const { data } = await db().from("booking_payments").select("*").eq("id", metadata.payment_id).maybeSingle();
-    if (data) return data;
+  if (metadata?.booking_id) {
+    const { data } = await db().from("booking_payments").select("*").eq("booking_id", metadata.booking_id).order("due_at").limit(1);
+    if (data && data[0]) return data[0];
   }
   if (paymentIntentId) {
-    const { data } = await db().from("booking_payments").select("*").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle();
-    if (data) return data;
+    const { data } = await db().from("booking_payments").select("*").eq("stripe_payment_intent_id", paymentIntentId).order("due_at").limit(1);
+    if (data && data[0]) return data[0];
   }
   return null;
 }
@@ -56,39 +58,36 @@ Deno.serve(async (req) => {
       case "checkout.session.completed": {
         if (obj.payment_status !== "paid" || !obj.payment_intent || !account) break;
         const pay = await paymentFor(obj.metadata);
-        if (pay) await markPaid(pay.id, piOf(obj), account);
+        if (pay) await markPlanPaid(pay.booking_id, piOf(obj), account);
         break;
       }
       case "payment_intent.succeeded": {
         if (!account) break;
         const pay = await paymentFor(obj.metadata, obj.id);
-        if (pay) await markPaid(pay.id, obj.id, account);
-        break;
-      }
-      case "payment_intent.payment_failed": {
-        // Off-session failures are handled where the charge is made
-        // (chargeSaved); this catches anything that fails later.
-        const pay = await paymentFor(obj.metadata, obj.id);
-        if (pay && pay.status === "processing") {
-          await db().from("booking_payments").update({
-            status: "failed", last_error: obj.last_payment_error?.message || "the card was declined.",
-            next_attempt_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-          }).eq("id", pay.id);
-        }
+        if (pay) await markPlanPaid(pay.booking_id, obj.id, account);
         break;
       }
       case "charge.refunded": {
+        // A refund the vendor made in their own Stripe dashboard: put the
+        // difference on the parts not yet released, last part first.
         const pay = await paymentFor(obj.metadata, piOf(obj));
-        if (pay && (obj.amount_refunded || 0) > (pay.refunded_cents || 0)) {
-          // A refund the vendor made in their own Stripe dashboard: keep our record right.
-          await db().from("booking_payments").update({ refunded_cents: obj.amount_refunded }).eq("id", pay.id);
+        if (pay) {
+          const { data: rows } = await db().from("booking_payments").select("*").eq("booking_id", pay.booking_id)
+            .eq("status", "paid").order("due_at", { ascending: false });
+          let extra = (obj.amount_refunded || 0) - (rows || []).reduce((n: number, r: any) => n + (r.refunded_cents || 0), 0);
+          for (const r of rows || []) {
+            if (extra <= 0) break;
+            const room = r.amount_cents + (r.host_fee_cents || 0) + (r.host_service_fee_cents || 0) - (r.refunded_cents || 0);
+            const take = Math.min(room, extra);
+            if (take > 0) await db().from("booking_payments").update({ refunded_cents: (r.refunded_cents || 0) + take }).eq("id", r.id);
+            extra -= take;
+          }
         }
         break;
       }
       case "charge.dispute.created": {
         const pay = await paymentFor(obj.metadata, piOf(obj));
         if (pay) {
-          await db().from("booking_payments").update({ disputed_cents: (pay.disputed_cents || 0) + (obj.amount || 0) }).eq("id", pay.id);
           await db().from("booking_payment_plans").update({ status: "on_hold",
             hold_reason: "The host's bank opened a dispute (chargeback)", updated_at: new Date().toISOString() })
             .eq("booking_id", pay.booking_id).eq("status", "active");
@@ -96,16 +95,16 @@ Deno.serve(async (req) => {
           if (plan) {
             await notify(plan.vendor_id, "payment_problem", "🚩 A host's bank disputed a payment",
               `The host's bank opened a dispute (chargeback) for ${money(obj.amount || 0)} on booking ${pay.booking_id}. `
-              + "Stripe took the amount and its dispute fee from your Stripe account. Answer it with evidence in your Stripe dashboard before Stripe's deadline. "
-              + "Payments still to be charged on this booking are paused.", pay.booking_id);
+              + "Stripe took the amount and its dispute fee from your Stripe balance. Answer it with evidence in your Stripe dashboard before Stripe's deadline. "
+              + "Releases still to come on this booking are frozen.", pay.booking_id);
             await notify(plan.host_id, "payment_problem", "Card dispute opened",
               `Your bank opened a dispute for ${money(obj.amount || 0)} on this booking. Your bank and the vendor will settle it through Stripe. `
-              + "Payments still to be charged on this booking are paused.", pay.booking_id);
+              + "Nothing more is released to the vendor while it is open.", pay.booking_id);
           }
         }
         await tellAdmins("payment_problem", "🚩 Chargeback opened (for your information)",
           `A card dispute for ${money(obj.amount || 0)} was opened` + (pay ? ` on booking ${pay.booking_id}` : "")
-          + ". It is on the vendor's Stripe account, so the vendor answers it; nothing is taken from PLUJ. Remaining payments on the booking are paused.",
+          + ". It is on the vendor's Stripe account, so the vendor answers it; nothing is taken from PLUJ. Releases on the booking are frozen.",
           pay?.booking_id);
         break;
       }
@@ -113,9 +112,6 @@ Deno.serve(async (req) => {
         const pay = await paymentFor(obj.metadata, piOf(obj));
         if (pay) {
           const { data: plan } = await db().from("booking_payment_plans").select("host_id, vendor_id").eq("booking_id", pay.booking_id).single();
-          if (obj.status === "won") {
-            await db().from("booking_payments").update({ disputed_cents: Math.max(0, (pay.disputed_cents || 0) - (obj.amount || 0)) }).eq("id", pay.id);
-          }
           if (plan) {
             await notify(plan.vendor_id, "payment_problem", `Card dispute closed: ${obj.status}`,
               `The dispute for ${money(obj.amount || 0)} on booking ${pay.booking_id} closed with status "${obj.status}".`
