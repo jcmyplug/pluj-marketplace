@@ -12517,31 +12517,19 @@ const CS_CSS = `
     radial-gradient(48% 50% at 92% 10%, #F4F8FF 0%, rgba(224,237,255,0.92) 38%, rgba(224,237,255,0) 76%),
     linear-gradient(165deg, #3350FF 0%, #8E9AFF 32%, #D3D0FF 58%, #E3EEFF 100%); }
 .cs-orb { position: absolute; border-radius: 50%; will-change: transform; }
-/* The two spheres sit low, either side of the centre, 7vmin apart, sized in
-   vmin so they meet the same way on any screen. Every 16 seconds they drift
-   together, touch, squash a little at the point of contact (each one scales
-   from the side that touches) and bounce apart in slow motion. */
-.cs-orb.o1 { width: 124vmin; height: 124vmin; left: calc(50% - 122.5vmin); top: calc(100% - 68vmin); transform-origin: 100% 50%;
+/* The two spheres sit low, either side of the centre, 3vmin apart (sized in
+   vmin so they behave the same on any screen). They are moved by a small
+   physics simulation in CsShell, not by a CSS loop: each one drifts on its
+   own slow, never-repeating path, and when they meet they bounce off each
+   other with real momentum and flatten slightly where they touch. */
+.cs-orb.o1 { width: 124vmin; height: 124vmin; left: calc(50% - 122.5vmin); top: calc(100% - 66vmin);
   background: radial-gradient(circle at 50% 50%, #FBFDFF 0%, #F1F5FF 30%, #DCE5FF 50%, #B8C3FF 62%, #8E9AFF 68%, #7480FF 70.7%, rgba(116,128,255,0) 71%);
-  filter: blur(5px); animation: cs-meet-a 16s infinite; }
-.cs-orb.o2 { width: 92vmin; height: 92vmin; left: calc(50% + 8.5vmin); top: calc(100% - 51vmin); transform-origin: 0% 50%;
+  filter: blur(5px); }
+.cs-orb.o2 { width: 92vmin; height: 92vmin; left: calc(50% + 4.5vmin); top: calc(100% - 49vmin);
   background: radial-gradient(circle at 50% 50%, #001EE0 0%, #0A2BFF 42%, #2846FF 56%, #5B62FF 65%, #9C93FF 69.5%, #B9B0FF 70.7%, rgba(185,176,255,0) 71%);
-  filter: blur(4px); animation: cs-meet-b 16s infinite; }
+  filter: blur(4px); }
 .cs-orb.o3 { width: 78vmin; height: 78vmin; left: 50%; top: 48%; transform: translate(-50%, -50%);
   background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0) 70%); }
-@keyframes cs-meet-a {
-  0%   { transform: translate(0, 0) scale(1, 1);                animation-timing-function: cubic-bezier(0.42, 0, 0.78, 0.55); }
-  42%  { transform: translate(3.6vmin, -1.2vmin) scale(1, 1);    animation-timing-function: cubic-bezier(0.1, 0.5, 0.4, 1); }
-  47%  { transform: translate(3.85vmin, -1.25vmin) scale(0.965, 1.025); animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
-  58%  { transform: translate(-1.4vmin, -0.6vmin) scale(1.008, 0.995); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
-  100% { transform: translate(0, 0) scale(1, 1); }
-}
-@keyframes cs-meet-b {
-  0%   { transform: translate(0, 0) scale(1, 1);                animation-timing-function: cubic-bezier(0.42, 0, 0.78, 0.55); }
-  42%  { transform: translate(-3.6vmin, -1.2vmin) scale(1, 1);   animation-timing-function: cubic-bezier(0.1, 0.5, 0.4, 1); }
-  47%  { transform: translate(-3.85vmin, -1.25vmin) scale(0.965, 1.025); animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
-  58%  { transform: translate(1.4vmin, -0.6vmin) scale(1.008, 0.995); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
-  100% { transform: translate(0, 0) scale(1, 1); }
 }
 
 .cs-top, .cs-main, .cs-foot { position: relative; z-index: 2; }
@@ -12555,9 +12543,10 @@ const CS_CSS = `
 .cs-main > :nth-child(n+5) { animation-delay: 210ms; }
 @keyframes cs-in { from { opacity: 0; transform: translateY(10px); } }
 
-.cs-logo svg { height: clamp(78px, 13vh, 132px); width: auto; }
+.cs-logo svg { height: clamp(64px, 11.5vh, 132px); width: auto; }
 .cs h1 { font-family: var(--display); font-weight: 800; font-size: clamp(46px, 7.4vw, 94px); line-height: 0.95;
-         letter-spacing: -0.04em; color: #000; margin: clamp(20px, 3.6vh, 36px) 0 0; max-width: 10.5ch; text-wrap: balance; }
+         letter-spacing: -0.04em; color: #000; margin: clamp(16px, 3vh, 36px) 0 0; max-width: 10.5ch; text-wrap: balance; }
+@media (min-width: 561px) { .cs h1 { font-size: clamp(46px, min(7.4vw, 10.2vh), 94px); } }
 .cs-tag { margin: 18px 0 0; font-size: clamp(17px, 1.9vw, 22px); letter-spacing: 0.34em; padding-left: 0.34em; }
 .cs-lede { margin: 22px 0 0; max-width: 33em; font-size: clamp(16px, 1.45vw, 18.5px); line-height: 1.55; color: #10132A; text-wrap: pretty; }
 
@@ -12605,7 +12594,7 @@ const CS_CSS = `
 .cs-thanks { margin: 26px 0 0; font-size: 16.5px; font-weight: 500; color: #10132A; }
 
 /* Room at the bottom where the spheres meet. */
-.cs-foot { height: clamp(40px, 9vmin, 110px); }
+.cs-foot { height: clamp(40px, 9vmin, 150px); }
 .cs-note { margin: 12px 0 0; font-size: 13px; color: #2A2F4F; }
 .cs-staff { border: 0; background: rgba(255,255,255,0.72); border-radius: 999px; padding: 7px 14px; cursor: pointer;
             font: 700 11.5px var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: #2A2F4F; }
@@ -12625,6 +12614,16 @@ const CS_CSS = `
   .cs-go { width: 52px; height: 52px; }
   .cs-caps { font-size: 11.5px; letter-spacing: 0.24em; }
 }
+/* Laptop-height screens: tighten the stack so the page fits the window and
+   the spot where the spheres meet stays below the text. */
+@media (max-height: 860px) and (min-width: 561px) {
+  .cs-main { padding-top: 4px; padding-bottom: 10px; }
+  .cs-tag { margin-top: 12px; }
+  .cs-lede { margin-top: 14px; }
+  .cs-form, .cs-done { margin-top: 22px; }
+  .cs-caps { margin-top: 16px; }
+  .cs-thanks { margin-top: 16px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .cs-orb, .cs-main > * { animation: none; }
   .cs-go, .cs-form { transition: none; }
@@ -12632,12 +12631,93 @@ const CS_CSS = `
 `;
 
 /* The page frame: gradient spheres, language switch, logo, and a footer. */
+/* Floating spheres. Each sphere is pushed by its own slow "breeze" (three
+   sine waves with unrelated, randomised frequencies, so the path never
+   repeats), pulled gently back toward where it sits, and slowed by air drag.
+   When the two touch, a soft spring pushes them apart: momentum is real (the
+   bigger sphere is heavier, mass ∝ r³, so it moves less), the bounce loses a
+   little energy, a contact lasts about a second, and each sphere flattens a
+   few percent along the line where they touch. Tuned offline (about two
+   meetings a minute at irregular times, typical speed 5 px/s on a laptop;
+   distances scale with the screen). Nothing moves for visitors who ask their
+   system for reduced motion. */
+const SPHERE_PHYSICS = { home: 0.06, drag: 0.32, wander: 0.6, stiff: 7, cdamp: 0.9 };
+
+function useFloatingSpheres(refA, refB) {
+  useEffect(() => {
+    const a = refA.current, b = refB.current;
+    if (!a || !b) return undefined;
+    try { if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined; } catch { /* old browser */ }
+    const P = SPHERE_PHYSICS, R = Math.random;
+    const waves = () => [0.11 + R() * 0.08, 0.047 + R() * 0.04, 0.23 + R() * 0.1]
+      .map((w, i) => ({ w, p: R() * 6.283, a: [1, 0.7, 0.35][i] }));
+    const wave = (ws, t) => (ws[0].a * Math.sin(ws[0].w * t + ws[0].p) + ws[1].a * Math.sin(ws[1].w * t + ws[1].p)
+                           + ws[2].a * Math.sin(ws[2].w * t + ws[2].p)) / 2.05;
+    const B = [a, b].map(el => ({ el, x: 0, y: 0, vx: 0, vy: 0, fx: waves(), fy: waves(), r: 1, m: 1, hx: 0, hy: 0 }));
+    let u = 1;
+    const measure = () => {
+      u = Math.min(window.innerWidth, window.innerHeight) / 100;
+      B.forEach(o => {
+        o.r = o.el.offsetWidth / 2; o.m = o.r * o.r * o.r;
+        o.hx = o.el.offsetLeft + o.r; o.hy = o.el.offsetTop + o.r;
+      });
+    };
+    measure();
+    /* A gentle nudge toward each other, so a first meeting comes a few seconds in. */
+    B[0].vx = 0.7 * u; B[1].vx = -0.7 * u;
+
+    const step = (t, dt) => {
+      for (const o of B) {
+        o.ax = P.wander * u * wave(o.fx, t) - P.home * o.x - P.drag * o.vx;
+        o.ay = P.wander * u * 0.7 * wave(o.fy, t) - P.home * o.y - P.drag * o.vy;
+      }
+      const [A1, A2] = B;
+      const dx = A2.hx + A2.x - A1.hx - A1.x, dy = A2.hy + A2.y - A1.hy - A1.y;
+      const d = Math.hypot(dx, dy) || 1, overlap = A1.r + A2.r - d;
+      let contact = null;
+      if (overlap > 0) {
+        const nx = dx / d, ny = dy / d, mu = A1.m * A2.m / (A1.m + A2.m);
+        const vn = (A2.vx - A1.vx) * nx + (A2.vy - A1.vy) * ny;
+        const F = mu * (P.stiff * overlap - P.cdamp * Math.min(vn, 0) * 2 - P.cdamp * vn);
+        A1.ax -= F * nx / A1.m; A1.ay -= F * ny / A1.m;
+        A2.ax += F * nx / A2.m; A2.ay += F * ny / A2.m;
+        contact = { overlap, angle: Math.atan2(ny, nx) };
+      }
+      for (const o of B) { o.vx += o.ax * dt; o.vy += o.ay * dt; o.x += o.vx * dt; o.y += o.vy * dt; }
+      return contact;
+    };
+
+    let raf = 0, last = performance.now();
+    const t0 = last;
+    const frame = (now) => {
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+      const t = (now - t0) / 1000;
+      step(t, dt / 2);
+      const c = step(t + dt / 2, dt / 2);
+      for (const o of B) {
+        let tf = `translate3d(${o.x.toFixed(2)}px, ${o.y.toFixed(2)}px, 0)`;
+        if (c) {
+          const q = Math.min(0.04, 4 * c.overlap / o.r);
+          tf += ` rotate(${c.angle}rad) scale(${(1 - q).toFixed(4)}, ${(1 + q * 0.5).toFixed(4)}) rotate(${-c.angle}rad)`;
+        }
+        o.el.style.transform = tf;
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    window.addEventListener("resize", measure);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); };
+  }, [refA, refB]);
+}
+
 function CsShell({ children, staff }) {
+  const orbA = useRef(null), orbB = useRef(null);
+  useFloatingSpheres(orbA, orbB);
   return (
     <div className="cs grain">
       <style>{CS_CSS}</style>
       <div className="cs-bg" aria-hidden="true">
-        <span className="cs-orb o1" /><span className="cs-orb o2" /><span className="cs-orb o3" />
+        <span ref={orbA} className="cs-orb o1" /><span ref={orbB} className="cs-orb o2" /><span className="cs-orb o3" />
       </div>
       <div className="cs-top">{staff || <span />}<LangToggle /></div>
       <main className="cs-main">
