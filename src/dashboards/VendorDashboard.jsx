@@ -132,14 +132,63 @@ function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
    3 days after the event or until someone presses Stop; admin threads only the
    admin can end. */
 
+
+/* The red message under a field that has a problem. */
+function FieldError({ on, msg }) {
+  if (!on || !msg) return null;
+  return <p role="alert" style={{ margin:"4px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:700 }}>⚠ {msg}</p>;
+}
+
+/* Which listing field a save error from the database is about. */
+function fieldForSaveError(msg) {
+  const m = String(msg || "").toLowerCase();
+  if (/capacity_max|maximum guests/.test(m)) return "capacity_max";
+  if (/capacity|minimum guests|guests/.test(m)) return "capacity_min";
+  if (/price/.test(m)) return "price_value";
+  if (/description|describe/.test(m)) return "description";
+  if (/photo|image|upload/.test(m)) return "photos";
+  if (/\bname\b/.test(m)) return "name";
+  return null;
+}
+
+/* Database wording a vendor can't act on ("permission denied for function
+   …", constraint names) becomes a sentence they can. */
+function friendlySaveError(msg) {
+  const m = String(msg || "");
+  if (/permission denied|row-level security|violates row-level/i.test(m)) {
+    return "We couldn't save this listing because of a problem on our side, not anything you entered. Please try again in a minute; if it keeps happening, contact PLUJ.";
+  }
+  if (/violates check constraint/i.test(m) && /capacity/i.test(m)) {
+    return "Check the guest numbers: the minimum can't be more than the maximum, and the maximum must be at least 1.";
+  }
+  if (/failed to fetch|network/i.test(m)) return "Couldn't reach PLUJ. Check your connection and try again.";
+  return m || "Something went wrong saving this listing. Please try again.";
+}
+
 function ServicesManager({ vendorId }) {
   const [services, setServices] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [editing,  setEditing]  = useState(null);   // service object or "new"
   const [err,      setErr]      = useState("");
+  const [errField, setErrField] = useState(null);   // which field the error is about, to highlight it
   const [ok,       setOk]       = useState("");
   const [busy,     setBusy]     = useState(false);
   const [uploading,setUploading]= useState(false);
+  const fieldRefs  = useRef({});
+  const formErrRef = useRef(null);
+
+  /* Show an error where the vendor is looking: highlight the field it is
+     about and scroll to it (or to the message next to Save), instead of only
+     printing it at the top of the page, out of sight. */
+  function fail(message, field = null) {
+    setErr(friendlySaveError(message)); setErrField(field);
+    setTimeout(() => {
+      const el = (field && fieldRefs.current[field]) || formErrRef.current;
+      if (!el) return;
+      try { el.scrollIntoView({ behavior:"smooth", block:"center" }); } catch { el.scrollIntoView(); }
+      if (field && el.focus) { try { el.focus({ preventScroll:true }); } catch { /* not focusable */ } }
+    }, 50);
+  }
 
   const blank = { category:"food", subcategory:"", subcategories:[], name:"", service_type:"", description:"",
                   price_value:"", capacity_min:"", capacity_max:"", photos:[], packages:[], active:true, offsite:false, travel_miles:"", service_areas:"", addons:[], avail_days:[], avail_blocks:[], max_per_day:1, gap_hours:2, simultaneous:false, min_notice_hours:0 };
@@ -183,6 +232,7 @@ function ServicesManager({ vendorId }) {
       capacity_min: s.capacity_min != null ? String(s.capacity_min) : "",
       capacity_max: s.capacity_max != null ? String(s.capacity_max) : "",
     } : { ...blank });
+    setErrField(null);
   }
 
   function setField(k, v) {
@@ -194,7 +244,7 @@ function ServicesManager({ vendorId }) {
       if (k === "category") { next.subcategory = ""; next.subcategories = []; }
       return next;
     });
-    setErr("");
+    setErr(""); setErrField(null);
   }
 
   async function addPhotos(e) {
@@ -202,9 +252,9 @@ function ServicesManager({ vendorId }) {
     if (!files.length) return;
     const roomLeft = MAX_PHOTOS - (editing.photos.length || 0);
     if (files.length > roomLeft) {
-      setErr(roomLeft <= 0
+      fail(roomLeft <= 0
         ? `You already have ${MAX_PHOTOS} photos, the maximum. Remove one to add another.`
-        : `You can add ${roomLeft} more photo${roomLeft === 1 ? "" : "s"} — ${MAX_PHOTOS} is the maximum.`);
+        : `You can add ${roomLeft} more photo${roomLeft === 1 ? "" : "s"} — ${MAX_PHOTOS} is the maximum.`, "photos");
       return;
     }
     setUploading(true); setErr("");
@@ -212,7 +262,7 @@ function ServicesManager({ vendorId }) {
     const added = [];
     for (const file of files) {
       const { url, error } = await uploadVendorPhoto(vendorId, file, session?.access_token);
-      if (error) { setErr(error); break; }
+      if (error) { fail(error, "photos"); break; }
       if (url) added.push(url);
     }
     if (added.length) setEditing(p => ({ ...p, photos: [...p.photos, ...added] }));
@@ -220,7 +270,7 @@ function ServicesManager({ vendorId }) {
   }
 
   async function save() {
-    if (!editing.description.trim()) { setErr("Please describe this service."); return; }
+    if (!editing.description.trim()) { fail("Please describe this service.", "description"); return; }
     /* Capacity is two optional numbers. Blank is allowed and meaningful, but a
        value that is there has to make sense, and the pair has to agree — the
        database enforces the same three rules, so catching them here is only
@@ -230,18 +280,18 @@ function ServicesManager({ vendorId }) {
     const capMin = capMinRaw === "" ? null : Number(capMinRaw);
     const capMax = capMaxRaw === "" ? null : Number(capMaxRaw);
     if (capMin !== null && (!Number.isInteger(capMin) || capMin < 0)) {
-      setErr("Minimum guests must be a whole number, 0 or more — or leave it blank."); return;
+      fail("Minimum guests must be a whole number, 0 or more — or leave it blank.", "capacity_min"); return;
     }
     if (capMax !== null && (!Number.isInteger(capMax) || capMax < 1)) {
-      setErr("Maximum guests must be a whole number of 1 or more — or leave it blank for no limit."); return;
+      fail("Maximum guests must be a whole number of 1 or more — or leave it blank for no limit.", "capacity_max"); return;
     }
     if (capMin !== null && capMax !== null && capMin > capMax) {
-      setErr(`Your minimum (${capMin}) is larger than your maximum (${capMax}). Swap them, or clear one.`); return;
+      fail(`Your minimum (${capMin}) is larger than your maximum (${capMax}). Swap them, or clear one.`, "capacity_min"); return;
     }
     setBusy(true);
     const res = await saveService(vendorId, editing);
     setBusy(false);
-    if (!res.ok) { setErr(res.error); return; }
+    if (!res.ok) { fail(res.error, fieldForSaveError(res.error)); return; }
     setOk("Service saved."); setEditing(null); load();
     setTimeout(() => setOk(""), 2500);
   }
@@ -258,6 +308,9 @@ function ServicesManager({ vendorId }) {
   const F = { width:"100%", height:42, padding:"0 12px", border:`1px solid ${C.border}`,
               borderRadius:9, fontSize:13, boxSizing:"border-box", background:"#fff" };
   const L = { display:"block", fontSize:11, fontWeight:700, color:C.midGray, margin:"10px 0 4px" };
+  /* Red outline on the field an error is about. */
+  const bad = (k, base) => errField === k
+    ? { ...base, border:"1.5px solid #DC2626", boxShadow:"0 0 0 3px #FEE2E2", background:"#FFFBFB" } : base;
   const catLabel = id => (CATEGORIES.find(c => c.id === id) || {}).label || id;
 
   return (
@@ -279,7 +332,7 @@ function ServicesManager({ vendorId }) {
         )}
       </div>
 
-      {err && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
+      {err && !editing && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                             borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
       {ok  && <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
                             borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>✓ {ok}</div>}
@@ -336,12 +389,14 @@ function ServicesManager({ vendorId }) {
           </p>
 
           <label style={L}>Business name * <span style={{ color:C.lightGray, fontWeight:500 }}>(the name clients will see)</span></label>
-          <input style={F} value={editing.name || ""}
+          <input style={bad("name", F)} value={editing.name || ""}
+            ref={el => { fieldRefs.current.name = el; }} aria-invalid={errField === "name"}
             onChange={e => setField("name", e.target.value)}
             placeholder="e.g. DJ Juanchis Entertainers, El Fuego Taco Truck" />
           <p style={{ margin:"3px 0 0", fontSize:10.5, color:C.lightGray }}>
             This is the headline customers see for this listing. Give each listing its own name so they can tell your offerings apart.
           </p>
+          <FieldError on={errField === "name"} msg={err} />
 
           <label style={L}>Service type *</label>
           <select style={F} value={editing.category}
@@ -414,29 +469,35 @@ function ServicesManager({ vendorId }) {
 
           <label style={L}>Describe this service *</label>
           <textarea value={editing.description} onChange={e => setField("description", e.target.value)}
+            ref={el => { fieldRefs.current.description = el; }} aria-invalid={errField === "description"}
             rows={3} placeholder="What's included, and what makes it different."
-            style={{ ...F, height:"auto", padding:"10px 12px", resize:"vertical", fontFamily:"inherit" }} />
+            style={{ ...bad("description", F), height:"auto", padding:"10px 12px", resize:"vertical", fontFamily:"inherit" }} />
+          <FieldError on={errField === "description"} msg={err} />
 
           <div style={{ display:"flex", gap:8 }}>
             <div style={{ flex:1 }}>
               <label style={L}>Starting price</label>
-              <input style={F} type="number" min="0" value={editing.price_value}
+              <input style={bad("price_value", F)} type="number" min="0" value={editing.price_value}
+                ref={el => { fieldRefs.current.price_value = el; }} aria-invalid={errField === "price_value"}
                 onChange={e => setField("price_value", e.target.value)} placeholder="Blank = contact us" />
             </div>
             <div style={{ flex:1 }}>
               <label style={L}>Guest capacity</label>
               <div style={{ display:"flex", gap:8 }}>
-                <input style={F} type="number" min="0" step="1" inputMode="numeric"
+                <input style={bad("capacity_min", F)} type="number" min="0" step="1" inputMode="numeric"
+                  ref={el => { fieldRefs.current.capacity_min = el; }} aria-invalid={errField === "capacity_min"}
                   value={editing.capacity_min ?? ""}
                   onChange={e => setField("capacity_min", e.target.value)}
                   placeholder="Min (optional)" aria-label="Minimum guests (optional)" />
-                <input style={F} type="number" min="1" step="1" inputMode="numeric"
+                <input style={bad("capacity_max", F)} type="number" min="1" step="1" inputMode="numeric"
+                  ref={el => { fieldRefs.current.capacity_max = el; }} aria-invalid={errField === "capacity_max"}
                   value={editing.capacity_max ?? ""}
                   onChange={e => setField("capacity_max", e.target.value)}
                   placeholder="Max" aria-label="Maximum guests" />
               </div>
             </div>
           </div>
+          <FieldError on={errField === "capacity_min" || errField === "capacity_max" || errField === "price_value"} msg={err} />
 
           {/* These two numbers decide which searches you appear in and which
               requests you are allowed to accept, so they are worth getting
@@ -654,8 +715,10 @@ function ServicesManager({ vendorId }) {
             onChange={(next) => setEditing(e => ({ ...e, photos: next }))}
             size={72} />
           <input type="file" accept="image/*" multiple onChange={addPhotos}
+            ref={el => { fieldRefs.current.photos = el; }}
             disabled={(editing.photos || []).length >= MAX_PHOTOS}
             style={{ fontSize:11, color:C.midGray }} />
+          <FieldError on={errField === "photos"} msg={err} />
           {uploading && <p style={{ fontSize:11, color:C.orange, margin:"4px 0 0" }}>Uploading…</p>}
 
           {/* Pricing options / packages */}
@@ -766,6 +829,13 @@ function ServicesManager({ vendorId }) {
             By saving, you confirm this listing is true and accurate, that the photos are your own
             work, that you can deliver it as described, and that you're responsible for it.
           </p>
+          {err && (
+            <div ref={formErrRef} role="alert"
+              style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
+                       borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600, lineHeight:1.5 }}>
+              ⚠ {err}{errField ? " The field is highlighted in red above." : ""}
+            </div>
+          )}
           <div style={{ display:"flex", gap:8, marginTop:10 }}>
             <button onClick={save} disabled={busy || uploading} className="btn"
               style={{ flex:1, padding:"10px 0", borderRadius:10, border:"none",
@@ -773,7 +843,7 @@ function ServicesManager({ vendorId }) {
                        fontSize:13, fontWeight:700 }}>
               {busy ? "Saving…" : "Save service"}
             </button>
-            <button onClick={() => { setEditing(null); setErr(""); }} className="btn"
+            <button onClick={() => { setEditing(null); setErr(""); setErrField(null); }} className="btn"
               style={{ flex:1, padding:"10px 0", borderRadius:10, border:"none",
                        background:"#F3F4F6", color:C.midGray, fontSize:13 }}>
               Cancel
