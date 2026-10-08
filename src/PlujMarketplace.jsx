@@ -1,3 +1,4 @@
+import { getLang, setLang, onLangChange } from "./i18n";
 import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -5028,6 +5029,32 @@ function AuthModal({ onClose, onAuth }) {
 
 
 /* ─── REQUEST SENT MODAL ─────────────────────────────────────────────────────── */
+/* English / Español switch. The page itself is translated in i18n.js; this
+   only flips it and remembers the choice. Never translated itself. */
+function LangToggle({ light = false }) {
+  const [cur, setCur] = useState(getLang());
+  const [busy, setBusy] = useState(false);
+  useEffect(() => onLangChange(setCur), []);
+  const next = cur === "es" ? "en" : "es";
+  return (
+    <button type="button" data-no-translate className="btn"
+      disabled={busy}
+      onClick={async () => { setBusy(true); try { await setLang(next); track("language_changed", { to: next }); } finally { setBusy(false); } }}
+      aria-label={cur === "es" ? "Switch to English" : "Cambiar a español"}
+      title={cur === "es" ? "Switch to English" : "Cambiar a español"}
+      style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 10px", borderRadius:99, cursor:"pointer",
+               fontSize:12, fontWeight:800, letterSpacing:"0.02em",
+               border:`1px solid ${light ? "rgba(255,255,255,0.35)" : C.border}`,
+               background: light ? "rgba(255,255,255,0.12)" : "#fff",
+               color: light ? "#fff" : C.black }}>
+      <span aria-hidden="true" style={{ fontSize:13 }}>🌐</span>
+      <span style={{ opacity: cur === "en" ? 1 : 0.55 }}>EN</span>
+      <span style={{ opacity:0.4 }}>|</span>
+      <span style={{ opacity: cur === "es" ? 1 : 0.55 }}>ES</span>
+    </button>
+  );
+}
+
 function RequestSentModal({ requests, onClose, onViewAccount }) {
   /* requests = array of {id, vendorName, status, eventDate, eventType} */
   const multi = requests.length > 1;
@@ -6547,7 +6574,7 @@ export function AvailabilityCalendar({ vendorId }) {
 
       {/* Day-of-week headers */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:3, marginBottom:3 }}>
-        {["S","M","T","W","T","F","S"].map((d,i) => (
+        {(getLang() === "es" ? ["D","L","M","M","J","V","S"] : ["S","M","T","W","T","F","S"]).map((d,i) => (
           <div key={i} style={{ textAlign:"center", fontSize:10, fontWeight:800,
                                  color:C.lightGray, padding:"4px 0" }}>{d}</div>
         ))}
@@ -11189,6 +11216,12 @@ export function InfoPageModal({ page, onClose }) {
           <p style={{ fontSize:11, color:"#888", margin:"5px 0 0" }}>
             Last updated {LEGAL_UPDATED} · scroll to read it all
           </p>
+          {getLang() === "es" && ["Terms","Privacy","Cancellations and refunds","Marketplace rules"].includes(page) && (
+            <p data-no-translate style={{ fontSize:11, color:"#92400E", background:"#FFFBEB", borderRadius:8,
+                                          padding:"5px 8px", margin:"6px 0 0", lineHeight:1.5 }}>
+              Traducción de cortesía. Si hay alguna diferencia entre esta versión y la versión en inglés, prevalece la versión en inglés.
+            </p>
+          )}
         </div>
 
         {/* Only this scrolls. overscrollBehavior keeps the scroll inside the
@@ -12834,6 +12867,7 @@ export default function PlujApp() {
 
         {/* Right side */}
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <LangToggle light={navOnHero} />
           {user ? (
             <>
               {user.type !== "guest" && (

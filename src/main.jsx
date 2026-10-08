@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import PlujApp from './PlujMarketplace';
+import { initI18n } from './i18n';
 
 /* ─── ERROR BOUNDARY ──────────────────────────────────────────────────────────
    PlujMarketplace is a single ~12,200-line component tree. Without a boundary,
@@ -145,9 +146,13 @@ window.addEventListener('error', (e) => {
   if (e.error) report(e.error);
 });
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <ErrorBoundary>
-    <PlujApp />
-  </ErrorBoundary>
-);
+/* Spanish, when the visitor chose it (or their browser is in Spanish), is
+   loaded before the first render so the page never flashes English. */
+initI18n().finally(() => {
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(
+    <ErrorBoundary>
+      <PlujApp />
+    </ErrorBoundary>
+  );
+});
