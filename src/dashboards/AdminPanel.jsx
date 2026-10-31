@@ -33,6 +33,9 @@ import {
   sendMessage,
   setVendorStatus,
   startConversation,
+  Ico,
+  IcoBadge,
+  ico,
 } from "../PlujMarketplace.jsx";
 
 function SecurityConfigPanel() {
@@ -215,7 +218,7 @@ function VendorReview({ vendorId, onDecided }) {
   if (!app) {
     return (
       <p style={{ margin:"10px 0 0", fontSize:12, color: err ? "#B91C1C" : C.midGray }}>
-        {err ? `⚠ ${err}` : "Loading application…"}
+        {ico(err ? `⚠ ${err}` : "Loading application…")}
       </p>
     );
   }
@@ -288,7 +291,7 @@ function VendorReview({ vendorId, onDecided }) {
                     wordBreak:"break-word" }}>{desc}</p>
       ) : (
         <p style={{ margin:0, fontSize:12.5, color:"#B45309", fontWeight:600 }}>
-          ⚠ This vendor hasn't described their business yet. Message them and ask before approving.
+          <Ico n="alert" /> This vendor hasn't described their business yet. Message them and ask before approving.
         </p>
       )}
 
@@ -298,7 +301,7 @@ function VendorReview({ vendorId, onDecided }) {
           <span key={good} style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99,
                                     background: ok ? C.greenSoft : "#FFFBEB",
                                     color: ok ? C.green : "#B45309" }}>
-            {ok ? "✓ " + good : "⚠ " + bad}
+            {ico(ok ? "✓ " + good : "⚠ " + bad)}
           </span>
         ))}
       </div>
@@ -308,7 +311,7 @@ function VendorReview({ vendorId, onDecided }) {
         {rows.map(([k, val]) => (
           <React.Fragment key={k}>
             <span style={{ fontSize:11.5, color:C.midGray }}>{k}</span>
-            <span style={{ fontSize:12, color:C.black, fontWeight:600, wordBreak:"break-word" }}>{val}</span>
+            <span style={{ fontSize:12, color:C.black, fontWeight:600, wordBreak:"break-word" }}>{ico(val)}</span>
           </React.Fragment>
         ))}
         {String(v.biz_website || "").trim() && (
@@ -412,7 +415,7 @@ function VendorReview({ vendorId, onDecided }) {
         </p>
       )}
 
-      {err && <p style={{ margin:"10px 0 0", fontSize:12, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+      {err && <p style={{ margin:"10px 0 0", fontSize:12, color:"#B91C1C", fontWeight:600 }}><Ico n="alert" /> {err}</p>}
 
       {declining ? (
         <div style={{ marginTop:12 }}>
@@ -456,7 +459,7 @@ function VendorReview({ vendorId, onDecided }) {
             <button onClick={()=>{ setDecl(true); setErr(""); }} disabled={busy} className="btn"
               style={{ flex:1, padding:"9px 0", borderRadius:9, background:"#FEF2F2", color:"#B91C1C",
                        border:"1px solid #FCA5A5", fontSize:12.5, fontWeight:800 }}>
-              ✗ {status === "approved" ? "Revoke approval" : "Decline"}
+              <Ico n="x" /> {status === "approved" ? "Revoke approval" : "Decline"}
             </button>
           )}
         </div>
@@ -525,7 +528,7 @@ function AdminPayments({ onChanged }) {
   return (
     <div>
       {err && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C", borderRadius:9,
-                            padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
+                            padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:600 }}><Ico n="alert" /> {err}</div>}
       {ok && <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:C.green, borderRadius:9,
                            padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:700 }}>✓ {ok}</div>}
 
@@ -533,7 +536,7 @@ function AdminPayments({ onChanged }) {
       <div style={{ ...card, background:"#fff" }}>
         <p style={{ margin:0, fontSize:13, fontWeight:800 }}>Stripe</p>
         {!st ? <p style={{ margin:"4px 0 0", fontSize:12, color:C.midGray }}>Checking…</p> : st.error ? (
-          <p style={{ margin:"4px 0 0", fontSize:12, color:"#B91C1C" }}>⚠ {st.error}</p>
+          <p style={{ margin:"4px 0 0", fontSize:12, color:"#B91C1C" }}><Ico n="alert" /> {st.error}</p>
         ) : (
           <>
             <p style={{ margin:"4px 0 0", fontSize:12, color: st.configured ? C.green : "#B45309", fontWeight:700 }}>
@@ -594,7 +597,7 @@ function AdminPayments({ onChanged }) {
         return (
           <div key={pr.id} style={{ ...card, background:"#FEF2F2", borderColor:"#FCA5A5" }}>
             <p style={{ margin:0, fontSize:12.5, fontWeight:800, color:"#991B1B" }}>
-              🚩 {PROBLEM_LABEL[pr.kind] || pr.kind} · {b.service_name || "Booking"} · {b.event_date || ""}
+              <Ico n="flag" /> {PROBLEM_LABEL[pr.kind] || pr.kind} · {b.service_name || "Booking"} · {b.event_date || ""}
             </p>
             <p style={{ margin:"3px 0 0", fontSize:11.5, color:C.midGray }}>
               Host {names[plan.host_id] || "—"} → vendor {names[plan.vendor_id] || "—"} · locked {fmtUSD(m.locked)} ·
@@ -811,14 +814,14 @@ function AdminAccounts({ adminId, onChanged }) {
     <div>
       {err && (
         <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
-                      borderRadius:9, padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>
+                      borderRadius:9, padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:600 }}><Ico n="alert" /> {err}</div>
       )}
       {okNote && (
         <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:C.green,
                       borderRadius:9, padding:"9px 12px", marginBottom:10, fontSize:12, fontWeight:700 }}>✓ {okNote}</div>
       )}
 
-      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search name, business or email…"
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, business or email…"
         style={{ width:"100%", height:38, padding:"0 12px", border:`1px solid ${C.border}`,
                  borderRadius:9, fontSize:12.5, marginBottom:8, boxSizing:"border-box" }} />
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
@@ -870,24 +873,24 @@ function AdminAccounts({ adminId, onChanged }) {
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
                 {isVendor && (
                   <Btn onClick={()=>setReviewFor(id => id === r.id ? null : r.id)} disabled={busyId===r.id}
-                    bg={C.orange} fg="#fff">{reviewFor === r.id ? "▴ Close review" : "📋 Review"}</Btn>
+                    bg={C.orange} fg="#fff">{ico(reviewFor === r.id ? "▴ Close review" : "📋 Review")}</Btn>
                 )}
                 {isVendor && r.vendorStatus !== "approved" && (
                   <Btn onClick={()=>act(r,"approve")} disabled={busyId===r.id} bg={C.green} fg="#fff">✓ Accept</Btn>
                 )}
                 {isVendor && r.vendorStatus !== "rejected" && (
-                  <Btn onClick={()=>act(r,"decline")} disabled={busyId===r.id} bg="#FFFBEB" fg="#B45309" bd="#FCD34D">✗ Decline</Btn>
+                  <Btn onClick={()=>act(r,"decline")} disabled={busyId===r.id} bg="#FFFBEB" fg="#B45309" bd="#FCD34D"><Ico n="x" /> Decline</Btn>
                 )}
                 <Btn onClick={()=>{ setMsgFor(r); setMsgKind("message"); }} disabled={busyId===r.id}
-                  bg="#EFF6FF" fg="#1D4ED8" bd="#BFDBFE">💬 Message</Btn>
+                  bg="#EFF6FF" fg="#1D4ED8" bd="#BFDBFE"><Ico n="chat" /> Message</Btn>
                 <Btn onClick={()=>{ setMsgFor(r); setMsgKind("warning"); }} disabled={busyId===r.id}
-                  bg="#FFFBEB" fg="#B45309" bd="#FCD34D">⚠️ Warn</Btn>
+                  bg="#FFFBEB" fg="#B45309" bd="#FCD34D"><Ico n="alert" /> Warn</Btn>
                 {blocked ? (
                   <Btn onClick={()=>act(r,"unblock")} disabled={busyId===r.id} bg={C.greenSoft} fg={C.green} bd={C.green+"55"}>↩ Unblock</Btn>
                 ) : (
-                  <Btn onClick={()=>act(r,"block")} disabled={busyId===r.id} bg="#FEF2F2" fg="#B91C1C" bd="#FCA5A5">🚫 Block</Btn>
+                  <Btn onClick={()=>act(r,"block")} disabled={busyId===r.id} bg="#FEF2F2" fg="#B91C1C" bd="#FCA5A5"><Ico n="ban" /> Block</Btn>
                 )}
-                <Btn onClick={()=>act(r,"delete")} disabled={busyId===r.id} bg="#111" fg="#fff">🗑 Delete</Btn>
+                <Btn onClick={()=>act(r,"delete")} disabled={busyId===r.id} bg="#111" fg="#fff"><Ico n="trash" /> Delete</Btn>
               </div>
             )}
             {isVendor && reviewFor === r.id && (
@@ -906,7 +909,7 @@ function AdminAccounts({ adminId, onChanged }) {
           <div onClick={e=>e.stopPropagation()}
             style={{ background:"#fff", borderRadius:16, padding:"20px 22px", width:"100%", maxWidth:440 }}>
             <p style={{ margin:"0 0 3px", fontSize:15, fontWeight:800 }}>
-              {msgKind === "warning" ? "⚠️ Send a warning" : "💬 Send a message"}
+              {ico(msgKind === "warning" ? "⚠️ Send a warning" : "💬 Send a message")}
             </p>
             <p style={{ margin:"0 0 12px", fontSize:12, color:C.midGray }}>
               To {msgFor.businessName || msgFor.displayName || msgFor.email}
@@ -917,7 +920,7 @@ function AdminAccounts({ adminId, onChanged }) {
                   style={{ flex:1, padding:"7px 0", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
                            border:`1.5px solid ${msgKind===k?C.orange:C.border}`,
                            background: msgKind===k ? "#EEF2FF" : "#fff",
-                           color: msgKind===k ? C.orange : C.midGray }}>{l}</button>
+                           color: msgKind===k ? C.orange : C.midGray }}>{ico(l)}</button>
               ))}
             </div>
             <input value={msgSubject} onChange={e=>setMsgSubject(e.target.value)}
@@ -985,7 +988,7 @@ function AdminPanel({ user, onClose, initialTab }) {
       <span style={{ background: ok ? C.greenSoft : "#FEF2F2", color: ok ? C.green : "#EF4444",
                      fontSize:9, fontWeight:800, padding:"3px 8px", borderRadius:99,
                      flexShrink:0, marginLeft:10 }}>
-        {ok ? "✓ ACTIVE" : "✗ BLOCKED"}
+        {ico(ok ? "✓ ACTIVE" : "✗ BLOCKED")}
       </span>
     </div>
   );
@@ -1017,14 +1020,14 @@ function AdminPanel({ user, onClose, initialTab }) {
         <div style={{ padding:"20px 26px 16px", background:"#0A0A0A", flexShrink:0 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:18 }}>🛡️</span>
+              <span style={{ fontSize:18, color:"#fff" }}><Ico n="shield" /></span>
               <h2 style={{ fontFamily:"'Fraunces', Georgia, serif", fontSize:19, fontWeight:800,
                            color:"#fff", margin:0 }}>Admin Panel</h2>
             </div>
-            <button onClick={onClose} className="btn"
+            <button aria-label="Close" onClick={onClose} className="btn"
               style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:"50%",
                        width:30, height:30, fontSize:15, color:"rgba(255,255,255,0.7)",
-                       display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                       display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="x" /></button>
           </div>
           {/* Tab bar */}
           <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginTop:12 }}>
@@ -1034,7 +1037,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                          border:"none", background: atab===k ? "#fff" : "rgba(255,255,255,0.08)",
                          color: atab===k ? C.black : "rgba(255,255,255,0.6)",
                          display:"flex", alignItems:"center", gap:5 }}>
-                {l}
+                {ico(l)}
                 {badge > 0 && (
                   <span style={{ background:"#EF4444", color:"#fff", fontSize:9, fontWeight:800,
                                   padding:"1px 5px", borderRadius:99 }}>{badge}</span>
@@ -1066,7 +1069,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                 <button onClick={()=>getVendorApps().then(setVendorApps)} className="btn"
                   style={{ fontSize:11, padding:"5px 12px", borderRadius:99,
                            border:`1px solid ${C.border}`, background:"#fff", color:C.midGray }}>
-                  ↻ Refresh
+                  <Ico n="refresh" /> Refresh
                 </button>
               </div>
 
@@ -1074,7 +1077,7 @@ function AdminPanel({ user, onClose, initialTab }) {
 
               {vendorApps.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"36px 0", color:C.lightGray }}>
-                  <div style={{ fontSize:40, marginBottom:10 }}>🏪</div>
+                  <div style={{ fontSize:40, marginBottom:10 }}><IcoBadge n="store" size={56} /></div>
                   <p style={{ fontSize:13 }}>No vendor applications yet.</p>
                   <p style={{ fontSize:11, marginTop:4 }}>New vendor sign-ups will appear here for review.</p>
                 </div>
@@ -1096,19 +1099,19 @@ function AdminPanel({ user, onClose, initialTab }) {
                           {app.geoSignal?.tz_city && (
                             <span style={{ fontSize:10, color:"#1D4ED8", background:"#EFF6FF",
                                            padding:"1px 6px", borderRadius:99 }}>
-                              📍 {app.geoSignal.tz_city} · {app.geoSignal.lang}
+                              <Ico n="pin" /> {app.geoSignal.tz_city} · {app.geoSignal.lang}
                             </span>
                           )}
                           {app.docFileName && (
                             <span style={{ fontSize:10, color:C.green, background:C.greenSoft,
                                            padding:"1px 6px", borderRadius:99 }}>
-                              📎 Doc uploaded: {app.docFileName}
+                              <Ico n="clip" /> Doc uploaded: {app.docFileName}
                             </span>
                           )}
                           {!app.docFileName && app.status==="pending" && (
                             <span style={{ fontSize:10, color:"#D97706", background:"#FFFBEB",
                                            padding:"1px 6px", borderRadius:99 }}>
-                              ⚠ No document uploaded
+                              <Ico n="alert" /> No document uploaded
                             </span>
                           )}
                         </div>
@@ -1116,7 +1119,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                       <span style={{ padding:"3px 10px", borderRadius:99, fontSize:10, fontWeight:800, flexShrink:0,
                                      background: app.status==="approved" ? C.greenSoft : app.status==="rejected" ? "#FEF2F2" : "#FFFBEB",
                                      color: app.status==="approved" ? C.green : app.status==="rejected" ? "#EF4444" : "#D97706" }}>
-                        {app.status==="approved" ? "✓ Approved" : app.status==="rejected" ? "✗ Rejected" : "⏳ Pending"}
+                        {ico(app.status==="approved" ? "✓ Approved" : app.status==="rejected" ? "✗ Rejected" : "⏳ Pending")}
                       </span>
                     </div>
                     {/* A two-line preview of their description, so the list
@@ -1129,7 +1132,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                       </p>
                     ) : (
                       <p style={{ margin:"8px 0 0", fontSize:11, color:"#B45309", fontWeight:600 }}>
-                        ⚠ No business description yet
+                        <Ico n="alert" /> No business description yet
                       </p>
                     )}
                     {/* Approve and Decline live inside the review, so every
@@ -1141,7 +1144,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                                border: app.status === "pending" ? "none" : `1px solid ${C.border}`,
                                background: app.status === "pending" ? C.black : "#fff",
                                color: app.status === "pending" ? "#fff" : C.black }}>
-                      {reviewing === app.vendorId ? "▴ Close review" : "📋 Review application"}
+                      {ico(reviewing === app.vendorId ? "▴ Close review" : "📋 Review application")}
                     </button>
                     {reviewing === app.vendorId && (
                       <VendorReview vendorId={app.vendorId}
@@ -1171,12 +1174,12 @@ function AdminPanel({ user, onClose, initialTab }) {
           {atab === "cors" && (
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-                <span style={{ fontSize:16 }}>🌐</span>
+                <span style={{ fontSize:16 }}><Ico n="globe" /></span>
                 <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>CORS / Origin Policy</h3>
                 <span style={{ background: originOk ? C.greenSoft : "#FEF2F2",
                                color: originOk ? C.green : "#EF4444",
                                fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99 }}>
-                  {originOk ? "✓ Enforced" : "⚠ Current origin unlisted"}
+                  {ico(originOk ? "✓ Enforced" : "⚠ Current origin unlisted")}
                 </span>
               </div>
               <div style={{ background:"#F9FAFB", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
@@ -1185,7 +1188,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                 <p style={{ margin:0, fontFamily:"monospace", fontSize:13, fontWeight:700,
                             color: originOk ? C.black : "#EF4444" }}>{origin}</p>
                 <p style={{ margin:"4px 0 0", fontSize:10, color: originOk ? C.green : "#EF4444", fontWeight:600 }}>
-                  {originOk ? "✓ On allowlist" : "✗ Not on allowlist — add to CORS_CONFIG.allowedOrigins"}
+                  {ico(originOk ? "✓ On allowlist" : "✗ Not on allowlist — add to CORS_CONFIG.allowedOrigins")}
                 </p>
               </div>
               <p style={{ margin:"0 0 8px", fontSize:12, fontWeight:700 }}>
@@ -1207,7 +1210,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           {atab === "rls" && (
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-                <span style={{ fontSize:16 }}>🔒</span>
+                <span style={{ fontSize:16 }}><Ico n="lock" /></span>
                 <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Row Level Security — Active Policies</h3>
               </div>
               <PolicyRow name="user_isolation"           rule="USING (session.userId = record.id)"                                  ok />
@@ -1223,7 +1226,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           {atab === "sec" && (
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                <span style={{ fontSize:16 }}>🔐</span>
+                <span style={{ fontSize:16 }}><Ico n="lock" /></span>
                 <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Security Headers</h3>
               </div>
               <p style={{ margin:"0 0 12px", fontSize:11, color:C.midGray, lineHeight:1.6 }}>
@@ -1245,7 +1248,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                     <span style={{ flexShrink:0, fontSize:9, fontWeight:800, padding:"2px 7px", borderRadius:99,
                                    background: meta ? "#EFF6FF" : "#FFFBEB",
                                    color: meta ? "#1D4ED8" : "#92400E" }}>
-                      {meta ? "✓ meta + server" : "⚠ server only"}
+                      {ico(meta ? "✓ meta + server" : "⚠ server only")}
                     </span>
                   </div>
                 );
@@ -1262,7 +1265,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           {atab === "settings" && (
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                <span style={{ fontSize:16 }}>⚙️</span>
+                <span style={{ fontSize:16 }}><Ico n="sliders" /></span>
                 <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Site Settings</h3>
               </div>
               <SiteSwitch />
@@ -1273,7 +1276,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           {atab === "acct" && (
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                <span style={{ fontSize:16 }}>👤</span>
+                <span style={{ fontSize:16 }}><Ico n="user" /></span>
                 <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Your Admin Account</h3>
               </div>
               <div style={{ background:"#F9FAFB", borderRadius:12, padding:"14px 16px", border:`1px solid ${C.border}` }}>
@@ -1289,7 +1292,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                     <span style={{ fontSize:11, color:C.midGray, fontWeight:600 }}>{label}</span>
                     <span style={{ fontSize:11, fontWeight:700, color:C.black,
                                    fontFamily: ff==="monospace" ? "monospace" : "inherit" }}>
-                      {val}
+                      {ico(val)}
                     </span>
                   </div>
                 ))}

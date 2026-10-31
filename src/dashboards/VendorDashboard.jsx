@@ -70,6 +70,9 @@ import {
   deleteRecap,
   RecapCards,
   RecapModal,
+  Ico,
+  IcoBadge,
+  ico,
 } from "../PlujMarketplace.jsx";
 
 /* Past events (8 Oct 2026): a pro posts an event they worked, with photos,
@@ -144,7 +147,7 @@ function RecapManager({ vendorId }) {
         Show hosts real events you worked. Credit the other PLUJ pros who were there: the event appears on their
         profiles too and links back to yours, so a good event brings bookings to the whole team.
       </p>
-      {err && <p style={{ margin:"0 0 10px", fontSize:12, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+      {err && <p style={{ margin:"0 0 10px", fontSize:12, color:"#B91C1C", fontWeight:600 }}><Ico n="alert" /> {err}</p>}
 
       {!form ? (
         <button onClick={() => setForm({ ...blank })} className="btn"
@@ -182,7 +185,7 @@ function RecapManager({ vendorId }) {
               <span key={p} style={{ position:"relative" }}>
                 <img src={p} alt="" style={{ width:72, height:54, objectFit:"cover", borderRadius:4, display:"block" }} />
                 <button onClick={() => set("photos", form.photos.filter((_, j) => j !== i))} className="btn" aria-label="Remove photo"
-                  style={{ position:"absolute", top:-6, right:-6, width:22, height:22, borderRadius:99, background:"#000", color:"#fff", fontSize:11 }}>✕</button>
+                  style={{ position:"absolute", top:-6, right:-6, width:22, height:22, borderRadius:99, background:"#000", color:"#fff", fontSize:11 }}><Ico n="x" /></button>
               </span>
             ))}
           </div>
@@ -205,7 +208,7 @@ function RecapManager({ vendorId }) {
                 <span key={id} style={{ background:"#000", color:"#fff", borderRadius:99, padding:"5px 10px", fontSize:12, fontWeight:700 }}>
                   {names[id]?.name || "PLUJ pro"}{" "}
                   <button className="btn" onClick={() => set("credited", form.credited.filter(x => x !== id))} aria-label="Remove credit"
-                    style={{ background:"none", color:"#fff", fontSize:12, padding:"0 2px" }}>✕</button>
+                    style={{ background:"none", color:"#fff", fontSize:12, padding:"0 2px" }}><Ico n="x" /></button>
                 </span>
               ))}
             </div>
@@ -284,10 +287,10 @@ function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
     <div style={{ marginTop:10, borderTop:`1px dashed ${C.border}`, paddingTop:10 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
         <span style={{ fontSize:11, color:C.midGray }}>
-          {customerName}{summary.count > 0 ? ` · ★ ${summary.avg} (${summary.count})` : " · no ratings yet"}
+          {customerName}{ico(summary.count > 0 ? ` · ★ ${summary.avg} (${summary.count})` : " · no ratings yet")}
         </span>
         {mine === undefined ? null : mine ? (
-          <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>✓ You rated ★{mine.rating}</span>
+          <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>✓ You rated <Ico n="starFill" />{mine.rating}</span>
         ) : !open ? (
           <button onClick={() => setOpen(true)} className="btn"
             style={{ padding:"5px 11px", borderRadius:8, border:`1px solid ${C.border}`,
@@ -303,7 +306,7 @@ function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
             placeholder="How was working with this customer? (optional)"
             style={{ width:"100%", minHeight:56, marginTop:8, border:`1px solid ${C.border}`,
                      borderRadius:9, padding:"8px 10px", fontSize:12, resize:"vertical", fontFamily:"inherit" }} />
-          {err && <p style={{ color:"#B91C1C", fontSize:11, margin:"6px 0 0", fontWeight:600 }}>⚠ {err}</p>}
+          {err && <p style={{ color:"#B91C1C", fontSize:11, margin:"6px 0 0", fontWeight:600 }}><Ico n="alert" /> {err}</p>}
           <div style={{ display:"flex", gap:7, marginTop:8 }}>
             <button onClick={submit} disabled={busy} className="btn"
               style={{ padding:"7px 16px", borderRadius:8, border:"none", background:C.orange,
@@ -331,7 +334,7 @@ function CustomerRating({ vendorId, customerId, customerName, bookingId }) {
 /* The red message under a field that has a problem. */
 function FieldError({ on, msg }) {
   if (!on || !msg) return null;
-  return <p role="alert" style={{ margin:"4px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:700 }}>⚠ {msg}</p>;
+  return <p role="alert" style={{ margin:"4px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:700 }}><Ico n="alert" /> {msg}</p>;
 }
 
 /* Which listing field a save error from the database is about. */
@@ -617,7 +620,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
         <div role="alert" style={{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10,
                                    padding:"11px 13px", marginTop:10 }}>
           <p style={{ margin:0, fontSize:12.5, fontWeight:800, color:"#92400E" }}>
-            ⚖️ Your profile isn't on PLUJ yet
+            <Ico n="scale" /> Your profile isn't on PLUJ yet
           </p>
           <p style={{ margin:"4px 0 8px", fontSize:11.5, color:"#92400E", lineHeight:1.55 }}>
             Hosts can't see your profile or listings until you add: {legalMissing.join(", ")}. It's private — only PLUJ sees it.
@@ -633,7 +636,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
       )}
 
       {err && !editing && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
-                            borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
+                            borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}><Ico n="alert" /> {err}</div>}
       {ok  && <div ref={okRef} role="status" style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
                             borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>✓ {ok}</div>}
 
@@ -672,18 +675,18 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
                     {[...new Set([s.service_type, catLabel(s.category)].filter(Boolean))].join(" · ")}
                     {s.price_value != null ? ` · $${Number(s.price_value).toLocaleString()}` : " · Contact for pricing"}
-                    {Number(s.duration_hours) > 0 ? ` · ⏱ ${fmtHours(s.duration_hours)}` : ""}
-                    {s.instant_book ? " · ⚡ Instant booking" : ""}
-                    {s.category !== "places" ? (s.offsite ? " · 🚗 off-site OK" : " · 📍 on-site only") : ""}
+                    {ico(Number(s.duration_hours) > 0 ? ` · ⏱ ${fmtHours(s.duration_hours)}` : "")}
+                    {ico(s.instant_book ? " · ⚡ Instant booking" : "")}
+                    {ico(s.category !== "places" ? (s.offsite ? " · 🚗 off-site OK" : " · 📍 on-site only") : "")}
                     {s.active === false ? " · hidden" : ""}
                   </p>
                 </div>
                 <button onClick={() => startEdit(s)} className="btn"
                   style={{ padding:"6px 10px", borderRadius:8, border:`1px solid ${C.border}`,
                            background:"#fff", fontSize:11, fontWeight:700, color:C.black }}>Edit</button>
-                <button onClick={() => remove(s)} disabled={busy} className="btn"
+                <button aria-label="Delete listing" onClick={() => remove(s)} disabled={busy} className="btn"
                   style={{ padding:"6px 9px", borderRadius:8, border:"1px solid #FCA5A5",
-                           background:"#FEF2F2", fontSize:11, fontWeight:700, color:"#B91C1C" }}>✕</button>
+                           background:"#FEF2F2", fontSize:11, fontWeight:700, color:"#B91C1C" }}><Ico n="x" /></button>
               </div>
             );
           })}
@@ -758,7 +761,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                                  background: on ? C.orangeSoft : "#fff",
                                  color: on ? C.orange : (full ? C.lightGray : C.midGray),
                                  opacity: full ? 0.55 : 1 }}>
-                        {on ? "✓ " : ""}{s.e} {s.l}
+                        {on ? "✓ " : ""}{s.l}
                       </button>
                     );
                   })}
@@ -826,7 +829,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
               below. */}
           <div style={{ marginTop:12, background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 14px" }}>
             <p style={{ margin:0, fontSize:12.5, fontWeight:800 }}>
-              {editing.category === "rentals" ? "⏱ Rental period" : "⏱ Service time"}
+              {ico(editing.category === "rentals" ? "⏱ Rental period" : "⏱ Service time")}
               {TIME_REQUIRED_CATEGORIES.includes(editing.category)
                 ? <span style={{ fontWeight:600, color:C.midGray }}> (required when you set a price)</span>
                 : <span style={{ fontWeight:500, color:C.lightGray }}> (optional)</span>}
@@ -878,7 +881,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                       style={{ flex:1, padding:"9px 8px", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer",
                                border:`1.5px solid ${on ? C.orange : C.border}`,
                                background: on ? "#EEF2FF" : "#fff", color: on ? C.orange : C.midGray }}>
-                      {l}
+                      {ico(l)}
                     </button>
                   );
                 })}
@@ -1063,7 +1066,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
               <input type="checkbox" checked={editing.instant_book === true}
                 onChange={e => setField("instant_book", e.target.checked)}
                 style={{ width:18, height:18, accentColor:C.green }} />
-              <span style={{ fontSize:12.5, fontWeight:800 }}>⚡ Instant booking</span>
+              <span style={{ fontSize:12.5, fontWeight:800 }}><Ico n="bolt" /> Instant booking</span>
               <span style={{ fontSize:10.5, fontWeight:700, color:"#065F46", background:C.greenSoft,
                              borderRadius:99, padding:"2px 8px" }}>Gets more bookings</span>
             </label>
@@ -1161,14 +1164,14 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                       onChange={e => { setErr(""); setErrField(null); setEditing(ed => ({ ...ed,
                         packages: ed.packages.map((x, j) => j===i ? { ...x, price:e.target.value } : x) })); }}
                       style={{ ...bad(`pkg_${i}_price`, F), height:36, width:100 }} />
-                    <button onClick={() => { if (String(errField || "").startsWith("pkg_") || errField === "packages") { setErr(""); setErrField(null); }
+                    <button aria-label="Remove option" onClick={() => { if (String(errField || "").startsWith("pkg_") || errField === "packages") { setErr(""); setErrField(null); }
                         setEditing(ed => ({ ...ed, packages: ed.packages.filter((_, j) => j !== i) })); }}
                       className="btn"
                       style={{ padding:"6px 9px", borderRadius:8, border:"1px solid #FCA5A5",
-                               background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}>✕</button>
+                               background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}><Ico n="x" /></button>
                   </div>
                   <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:6 }}>
-                    <span style={{ fontSize:11, fontWeight:700, color:C.midGray, whiteSpace:"nowrap" }}>⏱ Time</span>
+                    <span style={{ fontSize:11, fontWeight:700, color:C.midGray, whiteSpace:"nowrap" }}><Ico n="clock" /> Time</span>
                     <select value={p.hours == null ? "" : p.hours}
                       ref={el => { fieldRefs.current[`pkg_${i}_hours`] = el; }} aria-invalid={errField === `pkg_${i}_hours`}
                       onChange={e => { setErr(""); setErrField(null); setEditing(ed => ({ ...ed,
@@ -1198,7 +1201,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   <FieldError on={String(errField || "").startsWith(`pkg_${i}_`)} msg={err} />
                   {!priced && (
                     <p style={{ margin:"6px 0 0", fontSize:10.5, color:"#B45309", fontWeight:600 }}>
-                      ⚠ Hidden from customers — add a price to show this option.
+                      <Ico n="alert" /> Hidden from customers — add a price to show this option.
                     </p>
                   )}
                 </div>
@@ -1236,11 +1239,11 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   onChange={e => setEditing(ed => ({ ...ed,
                     addons: ed.addons.map((x, j) => j===i ? { ...x, price:e.target.value } : x) }))}
                   style={{ ...F, height:36, width:90 }} />
-                <button onClick={() => { if (errField === "packages") { setErr(""); setErrField(null); }
+                <button aria-label="Remove add-on" onClick={() => { if (errField === "packages") { setErr(""); setErrField(null); }
                     setEditing(ed => ({ ...ed, addons: ed.addons.filter((_, j) => j !== i) })); }}
                   className="btn"
                   style={{ padding:"6px 9px", borderRadius:8, border:"1px solid #FCA5A5",
-                           background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}>✕</button>
+                           background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}><Ico n="x" /></button>
               </div>
             ))}
           </div>
@@ -1256,7 +1259,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
             <div ref={formErrRef} role="alert"
               style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                        borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600, lineHeight:1.5 }}>
-              ⚠ {err}{errField ? " The field is highlighted in red above." : ""}
+              <Ico n="alert" /> {err}{errField ? " The field is highlighted in red above." : ""}
               {/legal information/i.test(err) && onOpenBusiness && (
                 <div style={{ marginTop:8 }}>
                   <button type="button" onClick={onOpenBusiness} className="btn"
@@ -1319,7 +1322,7 @@ function VendorInquiries({ vendorId }) {
       </p>
       {err && (
         <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
-                      borderRadius:9, padding:"9px 12px", marginBottom:12, fontSize:12, fontWeight:600 }}>⚠ {err}</div>
+                      borderRadius:9, padding:"9px 12px", marginBottom:12, fontSize:12, fontWeight:600 }}><Ico n="alert" /> {err}</div>
       )}
       {loading ? (
         <p style={{ fontSize:13, color:C.midGray, margin:0 }}>Loading inquiries…</p>
@@ -1329,7 +1332,7 @@ function VendorInquiries({ vendorId }) {
         <div key={q.id} style={{ borderTop:`1px solid ${C.border}`, padding:"12px 0" }}>
           <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
             <p style={{ margin:0, fontSize:13, fontWeight:800 }}>
-              👤 {q.userName}{q.serviceName ? <span style={{ color:C.midGray, fontWeight:600 }}> · about {q.serviceName}</span> : null}
+              <Ico n="user" /> {q.userName}{q.serviceName ? <span style={{ color:C.midGray, fontWeight:600 }}> · about {q.serviceName}</span> : null}
             </p>
             <span style={{ fontSize:10.5, color:C.lightGray }}>
               {new Date(q.createdAt).toLocaleDateString()}
@@ -1513,7 +1516,7 @@ function VendorDashboard({ user, onLogout }) {
           <button onClick={()=>setShowGuide(true)} className="btn"
             style={{ border:`1px solid ${C.border}`, background:"#fff", borderRadius:9,
                      padding:"6px 12px", fontSize:12, fontWeight:700, color:C.black }}>
-            📘 Vendor guide
+            <Ico n="book" /> Vendor guide
           </button>
           <button onClick={onLogout} className="btn"
             style={{ border:`1px solid ${C.border}`, background:"#fff", borderRadius:9,
@@ -1582,7 +1585,7 @@ function VendorDashboard({ user, onLogout }) {
         {err && (
           <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                         borderRadius:10, padding:"10px 12px", marginBottom:14, fontSize:12, fontWeight:600 }}>
-            ⚠ {err}
+            <Ico n="alert" /> {err}
           </div>
         )}
 
@@ -1676,7 +1679,7 @@ function VendorDashboard({ user, onLogout }) {
                              background: reqView===v ? "#fff" : "transparent",
                              color: reqView===v ? C.black : C.midGray,
                              boxShadow: reqView===v ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>
-                    {l}
+                    {ico(l)}
                   </button>
                 ))}
               </div>
@@ -1690,7 +1693,7 @@ function VendorDashboard({ user, onLogout }) {
                   <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", marginBottom:8 }}>
                     <div style={{ flex:1, minWidth:200 }}>
                       <p style={{ margin:0, fontSize:14, fontWeight:800 }}>
-                        🛎️ {r.serviceName || r.eventType || "Service request"}
+                        <Ico n="concierge" /> {r.serviceName || r.eventType || "Service request"}
                         {r.packageName ? <span style={{ color:C.midGray, fontWeight:600 }}> · {r.packageName}</span> : null}
                       </p>
                       <p style={{ margin:"3px 0 0", fontSize:10, color:C.lightGray, fontFamily:"monospace" }}>
@@ -1701,8 +1704,8 @@ function VendorDashboard({ user, onLogout }) {
                                    fontSize:11, fontWeight:800,
                                    background: isConfirmedStatus(r.status) ? C.greenSoft : isDeclinedStatus(r.status) ? "#FEF2F2" : isCancelledStatus(r.status) ? "#F3F4F6" : "#FFFBEB",
                                    color: isConfirmedStatus(r.status) ? C.green : isDeclinedStatus(r.status) ? "#EF4444" : isCancelledStatus(r.status) ? C.midGray : "#D97706" }}>
-                      {isConfirmedStatus(r.status) ? "✓ Confirmed" : isDeclinedStatus(r.status) ? "✗ Declined"
-                        : isCancelledStatus(r.status) ? "Cancelled" : "⏳ Pending — awaiting your response"}
+                      {ico(isConfirmedStatus(r.status) ? "✓ Confirmed" : isDeclinedStatus(r.status) ? "✗ Declined"
+                        : isCancelledStatus(r.status) ? "Cancelled" : "⏳ Pending — awaiting your response")}
                     </span>
                   </div>
 
@@ -1719,7 +1722,7 @@ function VendorDashboard({ user, onLogout }) {
                       ...(r.venueType ? [["🏛️ Venue type", r.venueType]] : []),
                     ].map(([label, val]) => (
                       <div key={label}>
-                        <p style={{ margin:0, fontSize:10, fontWeight:700, color:C.lightGray, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</p>
+                        <p style={{ margin:0, fontSize:10, fontWeight:700, color:C.lightGray, textTransform:"uppercase", letterSpacing:"0.04em" }}>{ico(label)}</p>
                         <p style={{ margin:"1px 0 0", fontSize:12.5, fontWeight:600, color:C.black, wordBreak:"break-word" }}>{val}</p>
                       </div>
                     ))}
@@ -1728,7 +1731,7 @@ function VendorDashboard({ user, onLogout }) {
                   {/* How to find / access the place */}
                   {r.accessInstructions && (
                     <div style={{ marginTop:8, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10, padding:"9px 12px" }}>
-                      <p style={{ margin:0, fontSize:10, fontWeight:800, color:"#92400E", textTransform:"uppercase", letterSpacing:"0.04em" }}>🗺️ How to find & access</p>
+                      <p style={{ margin:0, fontSize:10, fontWeight:800, color:"#92400E", textTransform:"uppercase", letterSpacing:"0.04em" }}><Ico n="map" /> How to find & access</p>
                       <p style={{ margin:"2px 0 0", fontSize:12.5, color:"#78350F", lineHeight:1.5 }}>{r.accessInstructions}</p>
                     </div>
                   )}
@@ -1736,7 +1739,7 @@ function VendorDashboard({ user, onLogout }) {
                   {/* Customer message */}
                   {r.message && (
                     <p style={{ margin:"8px 0 0", fontSize:12.5, color:"#444", fontStyle:"italic", lineHeight:1.5 }}>
-                      💬 “{r.message}”
+                      <Ico n="chat" /> “{r.message}”
                     </p>
                   )}
 
@@ -1761,7 +1764,7 @@ function VendorDashboard({ user, onLogout }) {
                       <button onClick={()=>respond(r.id,"declined")} disabled={busyId===r.id} className="btn"
                         style={{ flex:1, padding:"9px 0", borderRadius:9, background:"#FEF2F2",
                                  color:"#EF4444", border:"1px solid #FCA5A5", fontSize:12, fontWeight:700 }}>
-                        ✗ Decline
+                        <Ico n="x" /> Decline
                       </button>
                     </div>
                   )}
@@ -1772,7 +1775,7 @@ function VendorDashboard({ user, onLogout }) {
                           const hrs = when && !isNaN(when.getTime()) ? (when.getTime() - Date.now())/3600000 : null;
                           const soon = hrs != null && hrs < 48;
                           const msg = soon
-                            ? "Cancel this confirmed booking?\n\n⚠️ The event is less than 48 hours away. The customer will be refunded in full and we'll help them find a replacement. Late vendor cancellations affect your standing on PLUJ."
+                            ? "Cancel this confirmed booking?\n\nThe event is less than 48 hours away. The customer will be refunded in full and we'll help them find a replacement. Late vendor cancellations affect your standing on PLUJ."
                             : "Cancel this confirmed booking?\n\nThe customer will be refunded in full and notified so they can rebook.";
                           if (window.confirm(msg)) respond(r.id, "cancelled");
                         }}
@@ -2041,9 +2044,9 @@ function VendorDashboard({ user, onLogout }) {
                 <div key={n.id || i} style={{ borderTop:`1px solid ${C.border}`, padding:"10px 0",
                                               background: n.read ? "transparent" : "#F8FAFF" }}>
                   <p style={{ margin:0, fontSize:13, fontWeight: n.read ? 500 : 700 }}>
-                    {n.title || n.message || "Update"}
+                    {ico(n.title || n.message || "Update")}
                   </p>
-                  {n.body && <p style={{ margin:"2px 0 0", fontSize:12, color:C.midGray }}>{n.body}</p>}
+                  {n.body && <p style={{ margin:"2px 0 0", fontSize:12, color:C.midGray }}>{ico(n.body)}</p>}
                   {n.created_at && (
                     <p style={{ margin:"3px 0 0", fontSize:10, color:C.lightGray }}>
                       {new Date(n.created_at).toLocaleString()}

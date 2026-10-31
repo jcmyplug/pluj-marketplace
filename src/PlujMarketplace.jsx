@@ -1,5 +1,5 @@
 import { getLang, setLang, onLangChange } from "./i18n";
-import React, { useState, useMemo, useRef, useEffect, Suspense } from "react";
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { lazyWithReload } from "./staleBuild";
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -11,58 +11,11 @@ import { lazyWithReload } from "./staleBuild";
    SUPABASE_ANON = your anon public key from Supabase → Settings → API Keys
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* ─── TWEMOJI ────────────────────────────────────────────────────────────────
-   Renders any emoji as a crisp Twemoji PNG — consistent across every platform.
-   CDN: cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/ (GitHub path).
-   Strips fe0f variation selectors — Twemoji filenames don't include them.
-   Falls back to the original character if the image fails to load.
+/* ─── ICONS ──────────────────────────────────────────────────────────────────
+   31 Oct 2026: the Twemoji pictures are gone. Every icon on the site is a
+   monoline SVG from ICON_PATHS (see Icon, Ico and IcoBadge further down), so
+   the whole site shares the home page's look.
 ────────────────────────────────────────────────────────────────────────────── */
-function toTwemojiCp(emoji) {
-  const r = []; let c, p, i = 0;
-  while (i < emoji.length) {
-    c = emoji.charCodeAt(i++);
-    if (p) {
-      r.push((0x10000 + ((p - 0xD800) << 10) + (c - 0xDC00)).toString(16));
-      p = 0;
-    } else if (c >= 0xD800 && c <= 0xDBFF) {
-      p = c;
-    } else {
-      r.push(c.toString(16));
-    }
-  }
-  // Strip variation selector fe0f — not used in Twemoji file names
-  return r.filter(h => h !== "fe0f").join("-");
-}
-
-function Emoji({ e, size = 20, style: s = {} }) {
-  const [failed, setFailed] = useState(false);
-  const cp  = toTwemojiCp(e);
-  const url = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${cp}.png`;
-  if (failed) {
-    // Graceful fallback: render the original system emoji
-    return (
-      <span aria-label={e} style={{ fontSize: size * 0.8, lineHeight: 1,
-                                    display: "inline-block", verticalAlign: "middle",
-                                    flexShrink: 0, ...s }}>{e}</span>
-    );
-  }
-  return (
-    /* Every emoji on the page is its own network request to the Twemoji CDN,
-       and there are roughly seventy of them. Left at default priority they all
-       start immediately and compete with the hero image, the listing photos and
-       the JS bundle for a phone's handful of connections — decoration racing
-       the actual content.
-
-       `lazy` keeps the ones below the fold from being fetched until they are
-       scrolled near, and `low` tells the browser these can wait behind anything
-       that matters. Both degrade to a normal fetch on browsers that ignore
-       them, and the existing onError fallback to the system emoji is unchanged. */
-    <img src={url} alt={e} draggable={false} onError={() => setFailed(true)}
-      loading="lazy" decoding="async" fetchPriority="low"
-      style={{ width: size, height: size, display: "inline-block", verticalAlign: "middle",
-               objectFit: "contain", flexShrink: 0, ...s }} />
-  );
-}
 
 /* ─── PLUJ LOGO MARK (real brand asset — transparent PNG) ────────────────────
    Source: the official PLUJ chain-link + wordmark JPEG, white-bg removed.
@@ -197,7 +150,7 @@ function OriginBlockedScreen() {
       <div style={{ background:"#111", borderRadius:22, maxWidth:460, width:"100%",
                     padding:"44px 36px", textAlign:"center",
                     border:"1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ fontSize:52, marginBottom:20, lineHeight:1 }}>🚫</div>
+        <div style={{ fontSize:52, marginBottom:20, lineHeight:1 }}><IcoBadge n="ban" size={72} /></div>
         <h1 style={{ fontFamily:"var(--display)", fontSize:26, fontWeight:800,
                      color:"#fff", margin:"0 0 10px" }}>
           Access Denied
@@ -881,6 +834,9 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 @media (prefers-reduced-motion: reduce) { .recap-card:hover .recap-img img { transform: none; } }
 /* Trust badges on cards: what PLUJ checked by hand. */
 .badge-chk { font-size: 11.5px; font-weight: 700; color: var(--cobalt); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; line-height: 1.4; }
+/* Monoline icons in text and in soft circles (see Ico / IcoBadge). */
+.ico { display: inline-block; vertical-align: -0.2em; flex: 0 0 auto; }
+.ico-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: var(--accent-soft); color: var(--cobalt); }
 /* The Verified check mark: PLUJ checked a licence or permit AND insurance. */
 .vcheck { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: var(--cobalt); color: #fff; vertical-align: -0.18em; margin-left: 5px; }
 .vcheck svg { display: block; }
@@ -1203,7 +1159,7 @@ const VENUE_TYPES = [
 ];
 function venueTypeLabel(id) {
   const v = VENUE_TYPES.find(t => t.id === id);
-  return v ? `${v.icon} ${v.label}` : "";
+  return v ? v.label : "";
 }
 /* "14:30" → "2:30 PM". Leaves anything unexpected untouched. */
 export function fmtTime12(t) {
@@ -1472,6 +1428,8 @@ const VENDORS = [
    vendor_profiles.event_types. Kept in sync with the labels hosts pick. */
 export const EVENT_TYPES = [
   { id:"wedding",    icon:"💍", label:"Wedding" },
+  /* Everything around the wedding that isn't the wedding itself. */
+  { id:"wedding-events", icon:"💐", label:"Wedding Events" },
   { id:"quince",     icon:"👑", label:"Quinceañera / Sweet 16" },
   { id:"corporate",  icon:"💼", label:"Corporate Event" },
   { id:"birthday",   icon:"🎂", label:"Birthday Party" },
@@ -1485,7 +1443,7 @@ export const EVENT_TYPES = [
 ];
 function eventTypeLabel(id) {
   const t = EVENT_TYPES.find(e => e.id === id);
-  return t ? `${t.icon} ${t.label}` : id;
+  return t ? t.label : id;
 }
 /* Normalize whatever is stored (array or JSON string) into an id array. */
 export function parseEventTypes(raw) {
@@ -1500,6 +1458,9 @@ export function matchesEventType(v, typeId) {
   if (!typeId) return true;
   const tags = parseEventTypes(v.eventTypes);
   if (!tags.length) return true;
+  /* Showers, engagement parties and rehearsal dinners: vendors who tagged
+     weddings serve those too. */
+  if (typeId === "wedding-events" && tags.includes("wedding")) return true;
   return tags.includes(typeId);
 }
 
@@ -1509,6 +1470,10 @@ const EVENT_PACKAGES = [
     desc:"Ceremony, reception & everything in between",
     checklist:["Venue","DJ","Catering","Cake","Décor","Event Planner","Rentals (Linens, Chairs, Tables)","Audio & Visual","Photography","Live Band","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
     subs:["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","officiants","bartenders","servers","invitations","cakes","attire"] },
+  { id:"wedding-events", icon:"💐", label:"Wedding Events", color:"#FFF1F7", accent:"#BE185D",
+    desc:"Bridal showers, engagement parties, rehearsal dinners & more",
+    checklist:["Venue","Catering","Cake / Desserts","Décor & Florals","Bar Service","Photography","DJ / Live Music","Rentals (Linens, Chairs, Tables)","Invitations","Favors & Gifts","Event Planner","Hair & Makeup"],
+    subs:["venues","restaurants","catering","desserts","cakes","decor","flowers","balloons","mobile-bars","bartenders","photographers","photo-booths","djs","live-bands","tables-chairs","linens","invitations","favors","event-planner","hair","makeup","servers"] },
   { id:"quince", icon:"👑", label:"Quinceañera / Sweet 16", color:"#FDF2F8", accent:"#BE185D",
     desc:"Elegant milestone celebrations",
     checklist:["Venue","DJ","Catering","Cake","Décor","Event Planner","Rentals (Linens, Chairs, Tables)","Audio & Visual","Photography","Live Band","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
@@ -1549,6 +1514,7 @@ const EVENT_PACKAGES = [
 
 const RECS = {
   "Wedding": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","officiants","bartenders","servers","invitations","cakes","attire"],
+  "Wedding Events": ["venues","restaurants","catering","desserts","cakes","decor","flowers","balloons","mobile-bars","bartenders","photographers","photo-booths","djs","live-bands","tables-chairs","linens","invitations","favors","event-planner","hair","makeup","servers"],
   "Quinceañera / Sweet 16": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","bartenders","servers","invitations","cakes","attire","mc-hosts"],
   "Corporate Event": ["venues","djs","live-bands","catering","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","videographers","event-staff","bartenders","shuttles","speakers","signage","mc-hosts"],
   "Birthday Party": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","photo-booths","bartenders","cakes","party-buses","karaoke"],
@@ -1561,7 +1527,7 @@ const RECS = {
 };
 
 const WIZARD = [
-  { k:"eventType", q:"What type of event?",      opts:["Wedding","Quinceañera / Sweet 16","Corporate Event","Birthday Party","Concert / Festival","Baby Shower","Seminar / Conference","Kids Party","Graduation","Social Gathering"] },
+  { k:"eventType", q:"What type of event?",      opts:["Wedding","Wedding Events","Quinceañera / Sweet 16","Corporate Event","Birthday Party","Concert / Festival","Baby Shower","Seminar / Conference","Kids Party","Graduation","Social Gathering"] },
   { k:"guests",    q:"How many guests?",          opts:["Under 25","25–50","50–100","100–250","250–500","500+"] },
   { k:"date",      q:"When is your event?",       opts:["This week","2–4 weeks out","1–3 months out","3–6 months out","6+ months out","Not sure yet"] },
   { k:"time",      q:"What time does it start?",  opts:["Morning (8am–12pm)","Afternoon (12pm–5pm)","Evening (5pm–9pm)","Night (9pm+)"] },
@@ -4369,7 +4335,7 @@ export function Stars({ r, size=13, interactive=false, onRate }) {
       {[1,2,3,4,5].map(i => (
         <span key={i} onClick={() => interactive && onRate && onRate(i)}
           style={{ fontSize:size, color: i<=Math.round(r) ? "#F59E0B" : "#E5E7EB", cursor: interactive?"pointer":"default",
-                   transition:"color 150ms ease" }}>★</span>
+                   transition:"color 150ms ease" }}><Ico n="starFill" /></span>
       ))}
     </span>
   );
@@ -4389,7 +4355,7 @@ function InstBadge() {
   return (
     <span style={{ background:C.greenSoft, color:C.green, fontSize:10, fontWeight:700,
                    padding:"2px 8px", borderRadius:99, display:"inline-flex", alignItems:"center", gap:3 }}>
-      <Emoji e="⚡" size={10} /> Instant
+      <Ico n="bolt" /> Instant
     </span>
   );
 }
@@ -5028,7 +4994,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
           {/* Supabase sends the confirmation link itself, at the auth endpoint,
               so this screen only has to tell the truth and get out of the way.
               There is no code to type and nothing here to get wrong. */}
-          <div style={{ fontSize:48, marginBottom:12 }}>📧</div>
+          <div style={{ fontSize:48, marginBottom:12 }}><IcoBadge n="mail" size={68} /></div>
           <h2 style={{ fontFamily:"var(--display)", fontSize:20, fontWeight:800, margin:"0 0 8px" }}>
             Check your email
           </h2>
@@ -5086,8 +5052,8 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
           style={{ background:"#fff", borderRadius:22, maxWidth:440, width:"100%",
                    boxShadow:C.shadowModal, overflow:"hidden" }}>
           <div style={{ padding:"38px 30px 34px", textAlign:"center" }}>
-            <div style={{ fontSize:52, lineHeight:1, marginBottom:14 }}>
-              {isPending ? "⏳" : created.type==="admin" ? "🛡️" : "🎉"}
+            <div style={{ marginBottom:14 }}>
+              <IcoBadge n={isPending ? "hourglass" : created.type==="admin" ? "shield" : "party"} size={72} />
             </div>
             <h2 style={{ fontFamily:"var(--display)", fontSize:22, fontWeight:800, margin:"0 0 6px" }}>
               {isPending ? "Your business profile is created!" : `Welcome to PLUJ!`}
@@ -5137,12 +5103,12 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
                                color: created.emailVerified ? C.green : "#D97706",
                                background: created.emailVerified ? C.greenSoft : "#FFFBEB",
                                padding:"2px 8px", borderRadius:99 }}>
-                  {created.emailVerified ? "✓ Email verified" : "⏳ Email verified"}
+                  {ico(created.emailVerified ? "✓ Email verified" : "⏳ Email verified")}
                 </span>
                 {isPending && (
                   <span style={{ fontSize:10, fontWeight:700, color:"#D97706",
                                  background:"#FFFBEB", padding:"2px 8px", borderRadius:99 }}>
-                    ⏳ Awaiting admin approval
+                    <Ico n="hourglass" /> Awaiting admin approval
                   </span>
                 )}
               </div>
@@ -5220,7 +5186,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
           <div style={{ background:"#FEF2F2", borderRadius:10, padding:"10px 14px",
                         border:"1px solid #FCA5A5" }}>
             <p style={{ margin:0, fontSize:12, fontWeight:700, color:"#991B1B" }}>
-              🔒 Account temporarily locked
+              <Ico n="lock" /> Account temporarily locked
             </p>
             <p style={{ margin:"3px 0 0", fontSize:11, color:"#B91C1C" }}>
               Too many failed attempts. Try again in {rlState.resetIn} minute{rlState.resetIn===1?"":"s"}.
@@ -5231,7 +5197,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
           <div style={{ background:"#FFFBEB", borderRadius:10, padding:"8px 12px",
                         border:"1px solid #FCD34D" }}>
             <p style={{ margin:0, fontSize:11, color:"#92400E" }}>
-              ⚠️ {rlState.attemptsLeft} attempt{rlState.attemptsLeft===1?"":"s"} remaining before lockout.
+              <Ico n="alert" /> {rlState.attemptsLeft} attempt{rlState.attemptsLeft===1?"":"s"} remaining before lockout.
             </p>
           </div>
         )}
@@ -5343,7 +5309,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
       <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
         <div style={{ background:"#F9FAFB", borderRadius:12, padding:"14px 16px" }}>
           <p style={{ margin:"0 0 8px", fontSize:12, fontWeight:700, color:C.black }}>
-            🤖 Prove you're human
+            <Ico n="shield" /> Prove you're human
           </p>
           {TURNSTILE_SITE_KEY ? (
             /* Cloudflare verifies this, and Supabase Auth checks the token
@@ -5445,7 +5411,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
                   </span>
                   {!termsScrolled && (
                     <span style={{ display:"block", fontSize:11.5, fontWeight:700, color:"#B45309", marginBottom:3 }}>
-                      🔒 Scroll to the end of the terms above to accept.
+                      <Ico n="lock" /> Scroll to the end of the terms above to accept.
                     </span>
                   )}
                   <span style={{ display:"block", fontSize:11.5, color:C.midGray, lineHeight:1.6 }}>
@@ -5510,7 +5476,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
           <div style={{ background:"#FFFBEB", borderRadius:10, padding:"12px 14px",
                         border:"1px solid #FCD34D" }}>
             <p style={{ margin:0, fontSize:11, color:"#92400E", lineHeight:1.65 }}>
-              <strong>📋 What happens next:</strong> confirm your email → add your business
+              <strong><Ico n="clipboard" /> What happens next:</strong> confirm your email → add your business
               details and your listings from your dashboard → PLUJ reviews and approves your
               business → your listings go live. You'll see the approval in your dashboard.
             </p>
@@ -5548,10 +5514,10 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
               </button>
             ))}
           </div>
-          <button onClick={onClose} className="btn"
+          <button aria-label="Close" onClick={onClose} className="btn"
             style={{ background:"#F3F4F6", border:"none", borderRadius:"50%", width:30, height:30,
                      display:"flex", alignItems:"center", justifyContent:"center", fontSize:15,
-                     color:C.midGray }}>✕</button>
+                     color:C.midGray }}><Ico n="x" /></button>
         </div>
 
         {/* Body */}
@@ -5574,14 +5540,14 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
             <div>
               <p style={{ fontSize:11, fontWeight:600, color:C.midGray, marginBottom:8 }}>I am a…</p>
               <div style={{ display:"flex", gap:7 }}>
-                {[["user","👤","Host"],["vendor","🏪","Vendor"]].map(([r,em,label])=>(
+                {[["user","user","Host"],["vendor","store","Vendor"]].map(([r,em,label])=>(
                   <button key={r} onClick={()=>{setRole(r);setStep(1);setRespAccepted(false);}} className="btn"
                     style={{ flex:1, padding:"9px 6px", borderRadius:12,
                              border:`2px solid ${role===r ? C.orange : C.border}`,
                              background: role===r ? C.orangeSoft : "#fff",
                              fontSize:11, fontWeight:700, color: role===r ? C.orange : C.midGray,
                              display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
-                    <Emoji e={em} size={13} />{label}
+                    <Ico n={em} /> {label}
                   </button>
                 ))}
               </div>
@@ -5687,7 +5653,7 @@ function LangToggle({ light = false }) {
                border:`1px solid ${light ? "rgba(255,255,255,0.35)" : C.border}`,
                background: light ? "rgba(255,255,255,0.12)" : "#fff",
                color: light ? "#fff" : C.black }}>
-      <span aria-hidden="true" style={{ fontSize:13 }}>🌐</span>
+      <span aria-hidden="true" style={{ fontSize:13 }}><Ico n="globe" /></span>
       <span style={{ opacity: cur === "en" ? 1 : 0.55 }}>EN</span>
       <span style={{ opacity:0.4 }}>|</span>
       <span style={{ opacity: cur === "es" ? 1 : 0.55 }}>ES</span>
@@ -5709,7 +5675,7 @@ function RequestSentModal({ requests, onClose, onViewAccount }) {
         style={{ background:"#fff", borderRadius:22, maxWidth:420, width:"100%",
                  boxShadow:C.shadowModal, overflow:"hidden" }}>
         <div style={{ padding:"36px 28px 32px", textAlign:"center" }}>
-          <div style={{ fontSize:52, lineHeight:1, marginBottom:14 }}>{allBooked ? "⚡" : "📩"}</div>
+          <div style={{ marginBottom:14 }}><IcoBadge n={allBooked ? "bolt" : "mail"} size={72} /></div>
           <h2 style={{ fontFamily:"var(--display)", fontSize:22, fontWeight:800, margin:"0 0 8px" }}>
             {allBooked ? (multi ? "You're booked!" : "You're booked!")
               : booked.length ? `${booked.length} booked, ${requests.length - booked.length} sent`
@@ -5740,12 +5706,12 @@ function RequestSentModal({ requests, onClose, onViewAccount }) {
                 {req.status === "confirmed" ? (
                   <span style={{ fontSize:10, fontWeight:800, padding:"3px 9px", borderRadius:99,
                                  background:C.greenSoft, color:"#065F46" }}>
-                    ⚡ Booked
+                    <Ico n="bolt" /> Booked
                   </span>
                 ) : (
                   <span style={{ fontSize:10, fontWeight:800, padding:"3px 9px", borderRadius:99,
                                  background:"#FFFBEB", color:"#D97706" }}>
-                    ⏳ Pending
+                    <Ico n="hourglass" /> Pending
                   </span>
                 )}
               </div>
@@ -5755,7 +5721,7 @@ function RequestSentModal({ requests, onClose, onViewAccount }) {
           <div style={{ background:"#EFF6FF", borderRadius:12, padding:"11px 14px",
                         marginBottom:20, textAlign:"left" }}>
             <p style={{ margin:0, fontSize:11, color:"#1D4ED8", lineHeight:1.65 }}>
-              <strong>📱 What happens next:</strong> Each vendor reviews your request and confirms
+              <strong><Ico n="phone" /> What happens next:</strong> Each vendor reviews your request and confirms
               or declines. You'll receive a notification when they respond. You can track all
               requests in your account.
             </p>
@@ -5920,10 +5886,10 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <span style={{ fontSize:11, fontWeight:800, padding:"4px 10px", borderRadius:99,
-                           background:sc.bg, color:sc.c }}>{sc.t}</span>
-            <button onClick={onClose} className="btn"
+                           background:sc.bg, color:sc.c }}>{ico(sc.t)}</span>
+            <button aria-label="Close" onClick={onClose} className="btn"
               style={{ background:"#F3F4F6", border:"none", borderRadius:"50%", width:28, height:28,
-                       fontSize:14, color:C.midGray, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                       fontSize:14, color:C.midGray, display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="x" /></button>
           </div>
         </div>
 
@@ -5933,7 +5899,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
           {/* Status banners */}
           {isConfirmedStatus(req.status) && (
             <div style={{ background:"#ECFDF5", borderRadius:10, padding:"10px 14px", marginBottom:14, border:"1px solid #86EFAC" }}>
-              <p style={{ margin:0, fontSize:12, fontWeight:700, color:"#065F46" }}>🎉 Booking confirmed!</p>
+              <p style={{ margin:0, fontSize:12, fontWeight:700, color:"#065F46" }}><Ico n="party" /> Booking confirmed!</p>
               <p style={{ margin:"4px 0 0", fontSize:11, color:"#047857" }}>Contact the vendor to finalize payment details.</p>
             </div>
           )}
@@ -5974,7 +5940,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
           {/* Edit form or view */}
           {editing ? (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              <p style={{ margin:"0 0 4px", fontSize:12, fontWeight:700, color:C.black }}>✏️ Edit your request</p>
+              <p style={{ margin:"0 0 4px", fontSize:12, fontWeight:700, color:C.black }}><Ico n="pencil" /> Edit your request</p>
               <div>
                 <label style={{ fontSize:11, fontWeight:600, color:C.midGray }}>Event type</label>
                 <select value={form.eventType} onChange={e => upd("eventType", e.target.value)}
@@ -5982,7 +5948,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                            border:`1px solid ${C.border}`, borderRadius:9, fontSize:13, color:C.black, background:"#fff" }}>
                   <option value="">Select event type</option>
                   {EVENT_PACKAGES.filter(p => p.id !== "custom").map(p => (
-                    <option key={p.id} value={p.label}>{p.icon} {p.label}</option>
+                    <option key={p.id} value={p.label}>{p.label}</option>
                   ))}
                 </select>
               </div>
@@ -6031,7 +5997,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
 
               {/* Structured location */}
               <div style={{ marginTop:2, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-                <label style={{ fontSize:11, fontWeight:700, color:C.orange }}>📍 Event location</label>
+                <label style={{ fontSize:11, fontWeight:700, color:C.orange }}><Ico n="pin" /> Event location</label>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                 <div>
@@ -6041,7 +6007,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                              border:`1px solid ${C.border}`, borderRadius:9, fontSize:13,
                              color: form.venueType ? C.black : C.lightGray, background:"#fff" }}>
                     <option value="">Select…</option>
-                    {VENUE_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+                    {VENUE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -6159,7 +6125,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                                 borderRadius:12, padding:"12px 14px" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                       <span style={{ fontSize:11, fontWeight:800, color:C.orange, textTransform:"uppercase", letterSpacing:"0.05em" }}>
-                        📍 Event location
+                        <Ico n="pin" /> Event location
                       </span>
                       {req.venueType && (
                         <span style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7",
@@ -6183,14 +6149,14 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                       <p style={{ margin:"7px 0 0", padding:"6px 9px", borderRadius:8,
                                   background:"#FEF3C7", border:"1px solid #FCD34D",
                                   fontSize:11.5, color:"#92400E", lineHeight:1.45 }}>
-                        ⚠ Entered by hand — not confirmed against an address database.
+                        <Ico n="alert" /> Entered by hand — not confirmed against an address database.
                         Worth checking with the customer before you travel.
                       </p>
                     )}
                     {req.accessInstructions && (
                       <div style={{ marginTop:8, paddingTop:8, borderTop:"1px dashed #FCD9B6" }}>
                         <p style={{ margin:"0 0 2px", fontSize:10, fontWeight:700, color:C.midGray,
-                                    textTransform:"uppercase", letterSpacing:"0.04em" }}>🔑 Access notes</p>
+                                    textTransform:"uppercase", letterSpacing:"0.04em" }}><Ico n="key" /> Access notes</p>
                         <p style={{ margin:0, fontSize:12, color:C.black, lineHeight:1.5, whiteSpace:"pre-wrap" }}>{req.accessInstructions}</p>
                       </div>
                     )}
@@ -6200,7 +6166,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                          style={{ display:"inline-block", marginTop:10, fontSize:12, fontWeight:700,
                                   color:"#fff", background:C.orange, padding:"7px 14px", borderRadius:9,
                                   textDecoration:"none" }}>
-                        🧭 Get directions
+                        <Ico n="compass" /> Get directions
                       </a>
                     )}
                   </div>
@@ -6232,7 +6198,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                             borderRadius:10, padding:"9px 12px" }}>
                 <p style={{ margin:0, fontSize:11, fontWeight:800,
                             color: lateCancel ? "#B91C1C" : C.midGray }}>
-                  {lateCancel ? "⚠️ Within 48 hours of the event" : "🗓 Cancellation policy"}
+                  {ico(lateCancel ? "⚠️ Within 48 hours of the event" : "🗓 Cancellation policy")}
                 </p>
                 <p style={{ margin:"3px 0 0", fontSize:11.5, lineHeight:1.55,
                             color: lateCancel ? "#7F1D1D" : C.midGray }}>
@@ -6252,7 +6218,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
               <button onClick={() => setEditing(true)} className="btn"
                 style={{ flex:1, padding:"10px 0", borderRadius:10, background:C.black,
                          color:"#fff", border:"none", fontSize:13, fontWeight:700 }}>
-                ✏️ Edit request
+                <Ico n="pencil" /> Edit request
               </button>
             )}
             {canCancel && (
@@ -6260,7 +6226,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                   const msg = paymentsOn() && isConfirmedStatus(req.status)
                     ? `Cancel this confirmed booking?\n\nYou'll get back what you paid less the card fee and PLUJ's service fees: all of it 7+ days before the event, 70% at 5–7 days, 50% at 3–5 days, 25% at 2–3 days. The vendor will be notified.`
                     : lateCancel
-                    ? `Cancel this confirmed booking?\n\n⚠️ This is within 48 hours of the event, so a late-cancellation fee applies under PLUJ's cancellation policy.\n\nThe vendor will be notified immediately.`
+                    ? `Cancel this confirmed booking?\n\nThis is within 48 hours of the event, so a late-cancellation fee applies under PLUJ's cancellation policy.\n\nThe vendor will be notified immediately.`
                     : isConfirmedStatus(req.status)
                       ? `Cancel this confirmed booking?\n\nYou're more than 48 hours out, so no cancellation fee applies. The vendor will be notified.`
                       : `Withdraw this request?\n\nIt hasn't been confirmed yet, so there's no charge.`;
@@ -6270,7 +6236,7 @@ function RequestDetailModal({ req, user, onClose, onUpdate, onCancel }) {
                 }} className="btn"
                 style={{ flex:1, padding:"10px 0", borderRadius:10, background:"#FEF2F2",
                          color:"#EF4444", border:"1px solid #FCA5A5", fontSize:13, fontWeight:600 }}>
-                {lateCancel ? "✕ Cancel (fee applies)" : "✕ Cancel booking"}
+                {ico(lateCancel ? "✕ Cancel (fee applies)" : "✕ Cancel booking")}
               </button>
             )}
             {!canEdit && !canCancel && (
@@ -6576,7 +6542,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
     };
     const s = map[status] || map.pending;
     return <span style={{ fontSize:10, fontWeight:800, padding:"3px 9px", borderRadius:99,
-                           background:s.bg, color:s.c }}>{s.t}</span>;
+                           background:s.bg, color:s.c }}>{ico(s.t)}</span>;
   };
 
   const pendingCount = requests.filter(r => r.status === "pending").length;
@@ -6605,10 +6571,10 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                 {memberId(user)}{user.email ? " · " + user.email : ""}
               </p>
             </div>
-            <button onClick={onClose} className="btn"
+            <button aria-label="Close" onClick={onClose} className="btn"
               style={{ background:"#F3F4F6", border:"none", borderRadius:"50%",
                        width:28, height:28, fontSize:14, color:C.midGray,
-                       display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                       display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="x" /></button>
           </div>
 
           {/* Vendor status banner */}
@@ -6616,7 +6582,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
             <div style={{ background:"#FFFBEB", borderRadius:8, padding:"7px 10px",
                           border:"1px solid #FCD34D", marginBottom:8 }}>
               <p style={{ margin:0, fontSize:10, fontWeight:700, color:"#92400E" }}>
-                ⏳ Application under review — your services are not public yet
+                <Ico n="hourglass" /> Application under review — your services are not public yet
               </p>
             </div>
           )}
@@ -6633,7 +6599,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
             <button onClick={()=>setEditListing(true)} className="btn"
               style={{ width:"100%", marginBottom:8, padding:"9px 0", borderRadius:9,
                        background:C.black, color:"#fff", border:"none", fontSize:12, fontWeight:700 }}>
-              🏪 Edit my listing, services & photos
+              <Ico n="store" /> Edit my listing, services & photos
             </button>
           )}
 
@@ -6664,7 +6630,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                          background: tab===k ? C.orangeSoft : "#fff",
                          color: tab===k ? C.orange : C.midGray,
                          display:"flex", alignItems:"center", gap:4 }}>
-                {l}
+                {ico(l)}
                 {k==="requests" && pendingCount > 0 && (
                   <span style={{ background:"#EF4444", color:"#fff", fontSize:8, fontWeight:800,
                                   padding:"1px 5px", borderRadius:99 }}>{pendingCount}</span>
@@ -6688,7 +6654,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                              background: reqView===v ? "#fff" : "transparent",
                              color: reqView===v ? C.black : C.midGray,
                              boxShadow: reqView===v ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>
-                    {l}
+                    {ico(l)}
                   </button>
                 ))}
               </div>
@@ -6697,12 +6663,12 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                 <EventsCalendar bookings={requests} role={user.type} />
               ) : loading ? (
                 <div style={{ textAlign:"center", padding:"28px 0", color:C.lightGray }}>
-                  <div style={{ fontSize:28, marginBottom:8 }}>⏳</div>
+                  <div style={{ fontSize:28, marginBottom:8 }}><IcoBadge n="hourglass" size={44} /></div>
                   <p style={{ fontSize:12 }}>Loading requests…</p>
                 </div>
               ) : requests.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"28px 0", color:C.lightGray }}>
-                  <div style={{ fontSize:36, marginBottom:8 }}>📭</div>
+                  <div style={{ fontSize:36, marginBottom:8 }}><IcoBadge n="inbox" size={52} /></div>
                   <p style={{ fontSize:13, fontWeight:600 }}>
                     {user.type === "vendor" ? "No booking requests yet" : "No requests yet"}
                   </p>
@@ -6737,7 +6703,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                         {req.serviceName && (
                           <span style={{ fontSize:10, background:"#F5F3FF", color:"#6D28D9",
                                          padding:"2px 8px", borderRadius:99, fontWeight:700 }}>
-                            🛎️ {req.serviceName}{req.packageName ? ` · ${req.packageName}` : ""}
+                            <Ico n="concierge" /> {req.serviceName}{req.packageName ? ` · ${req.packageName}` : ""}
                           </span>
                         )}
                         {req.eventType && (
@@ -6749,25 +6715,25 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                         {req.eventDate && (
                           <span style={{ fontSize:10, background:C.orangeSoft, color:C.orange,
                                          padding:"2px 7px", borderRadius:99, fontWeight:600 }}>
-                            📅 {req.eventDate}
+                            <Ico n="calendar" /> {req.eventDate}
                           </span>
                         )}
                         {(req.startTime || req.endTime) && (
                           <span style={{ fontSize:10, background:"#F5F3FF", color:"#6D28D9",
                                          padding:"2px 7px", borderRadius:99, fontWeight:600 }}>
-                            🕐 {fmtTimeRange(req.startTime, req.endTime) || fmtTime12(req.startTime)}
+                            <Ico n="clock" /> {fmtTimeRange(req.startTime, req.endTime) || fmtTime12(req.startTime)}
                           </span>
                         )}
                         {(req.city || req.streetAddress || req.venue) && (
                           <span style={{ fontSize:10, background:"#ECFDF5", color:"#047857",
                                          padding:"2px 7px", borderRadius:99, fontWeight:600 }}>
-                            📍 {req.city || req.venue || (formatEventLocation(req) || "").split(",")[0]}
+                            <Ico n="pin" /> {req.city || req.venue || (formatEventLocation(req) || "").split(",")[0]}
                           </span>
                         )}
                         {req.guests && (
                           <span style={{ fontSize:10, background:"#F3F4F6", color:C.midGray,
                                          padding:"2px 7px", borderRadius:99, fontWeight:600 }}>
-                            👥 {req.guests}
+                            <Ico n="users" /> {req.guests}
                           </span>
                         )}
                       </div>
@@ -6808,7 +6774,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                             style={{ flex:1, padding:"7px 0", borderRadius:9,
                                      background:"#FEF2F2", color:"#EF4444",
                                      border:"1px solid #FCA5A5", fontSize:12, fontWeight:700 }}>
-                            ✗ Decline
+                            <Ico n="x" /> Decline
                           </button>
                         </div>
                       )}
@@ -6819,14 +6785,14 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                         const locked = !canChangeBooking(req.eventDate || req.event_date, req.startTime || req.start_time);
                         return locked ? (
                           <p style={{ marginTop:8, fontSize:11, color:"#B45309" }}>
-                            🔒 Within 48 hours of the event — contact the customer directly to change anything.
+                            <Ico n="lock" /> Within 48 hours of the event — contact the customer directly to change anything.
                           </p>
                         ) : (
                           <button onClick={() => vendorCancel(req)} className="btn"
                             style={{ marginTop:8, width:"100%", padding:"7px 0", borderRadius:9,
                                      background:"#FEF2F2", color:"#B91C1C",
                                      border:"1px solid #FCA5A5", fontSize:12, fontWeight:600 }}>
-                            ✕ Cancel this booking
+                            <Ico n="x" /> Cancel this booking
                           </button>
                         );
                       })()}
@@ -6842,7 +6808,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                           return (
                             <div style={{ marginTop:8, padding:"9px 12px", borderRadius:9, background:"#FFFBEB",
                                           border:"1px solid #FCD34D", fontSize:11, color:"#B45309", lineHeight:1.5 }}>
-                              🔒 This event is within 48 hours, so it can no longer be cancelled or changed online. Message the vendor directly if something urgent comes up.
+                              <Ico n="lock" /> This event is within 48 hours, so it can no longer be cancelled or changed online. Message the vendor directly if something urgent comes up.
                             </div>
                           );
                         }
@@ -6853,13 +6819,13 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                                      background:"#F3F4F6", color:C.midGray,
                                      border:"1px solid #E5E7EB", fontSize:12, fontWeight:600,
                                      display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
-                            ✕ Cancel booking
+                            <Ico n="x" /> Cancel booking
                           </button>
                           <button onClick={e => { e.stopPropagation(); setModifying(req); }} className="btn"
                             style={{ width:"100%", padding:"7px 0", borderRadius:9, marginTop:6,
                                      background:"#fff", color:C.black,
                                      border:`1px solid ${C.border}`, fontSize:12, fontWeight:600 }}>
-                            ✎ Modify booking
+                            <Ico n="pencil" /> Modify booking
                           </button>
                         </div>
                         );
@@ -7002,7 +6968,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                          borderRadius:12, background:"#fff",
                          border:`1px solid ${C.border}`, cursor:"pointer" }}>
                 <span>
-                  <span style={{ fontSize:13, fontWeight:800, color:C.black }}>⚙️ Account settings</span>
+                  <span style={{ fontSize:13, fontWeight:800, color:C.black }}><Ico n="sliders" /> Account settings</span>
                   <span style={{ display:"block", fontSize:11, color:C.midGray, marginTop:2 }}>
                     Deactivate or delete your account
                   </span>
@@ -7233,7 +7199,7 @@ export function AvailabilityCalendar({ vendorId }) {
         {[["#F0FDF4","#065F46","✓ Available"],["#FEF2F2","#EF4444","✗ Blocked"],["#EFF6FF","#1D4ED8","✓ Confirmed"],["#F3F4F6","#9CA3AF","Off (not a working day)"]].map(([bg,c,l]) => (
           <div key={l} style={{ display:"flex", alignItems:"center", gap:5 }}>
             <div style={{ width:14, height:14, borderRadius:4, background:bg, border:`1.5px solid ${c}` }} />
-            <span style={{ fontSize:10, color:C.midGray }}>{l}</span>
+            <span style={{ fontSize:10, color:C.midGray }}>{ico(l)}</span>
           </div>
         ))}
       </div>
@@ -7344,11 +7310,11 @@ export function PhotoManager({ photos, onChange, size = 78 }) {
           <img src={url} alt={"Photo " + (i + 1)}
                style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
 
-          <button type="button" onClick={() => remove(i)} className="btn"
+          <button aria-label="Remove" type="button" onClick={() => remove(i)} className="btn"
             title="Remove this photo"
             style={{ position:"absolute", top:2, right:2, width:19, height:19, borderRadius:99,
                      border:"none", background:"rgba(0,0,0,0.68)", color:"#fff",
-                     fontSize:10, lineHeight:1, cursor:"pointer" }}>✕</button>
+                     fontSize:10, lineHeight:1, cursor:"pointer" }}><Ico n="x" /></button>
 
           {i === 0 ? (
             <span style={{ position:"absolute", bottom:0, left:0, right:0,
@@ -7363,7 +7329,7 @@ export function PhotoManager({ photos, onChange, size = 78 }) {
               <button type="button" onClick={() => move(i, 0)} className="btn"
                 title="Make this the cover photo"
                 style={{ ...ctrl, background:"rgba(234,88,12,0.9)", fontSize:9, fontWeight:800 }}>
-                ★
+                <Ico n="starFill" />
               </button>
               <button type="button" onClick={() => move(i, i + 1)} className="btn"
                 title="Move right" style={ctrl}
@@ -7420,11 +7386,11 @@ function NotificationBell({ userId, onClick, open, onOpenTarget }) {
 
   return (
     <div style={{ position:"relative" }}>
-      <button onClick={onClick} className="btn"
+      <button onClick={onClick} className="btn" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
         style={{ background:"transparent", border:"none", padding:"6px 8px",
                  borderRadius:10, cursor:"pointer", position:"relative",
                  display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <span style={{ fontSize:20 }}>🔔</span>
+        <span style={{ fontSize:20 }}><Ico n="bell" /></span>
         {unread > 0 && (
           <span style={{ position:"absolute", top:2, right:2, background:"#EF4444",
                           color:"#fff", fontSize:8, fontWeight:800, borderRadius:99,
@@ -7451,7 +7417,7 @@ function NotificationBell({ userId, onClick, open, onOpenTarget }) {
           </div>
           {notifs.length === 0 ? (
             <div style={{ padding:"24px 16px", textAlign:"center", color:C.lightGray }}>
-              <div style={{ fontSize:28, marginBottom:6 }}>🔕</div>
+              <div style={{ fontSize:28, marginBottom:6 }}><IcoBadge n="bellOff" size={44} /></div>
               <p style={{ fontSize:12 }}>No notifications yet</p>
             </div>
           ) : notifs.map(n => (
@@ -7467,11 +7433,11 @@ function NotificationBell({ userId, onClick, open, onOpenTarget }) {
               style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, cursor:"pointer",
                        background: (n.read || n.is_read) ? "#fff" : "#EEF2FF" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-                <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>{n.title}</p>
+                <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.black }}>{ico(n.title)}</p>
                 {(!n.read && !n.is_read) && <div style={{ width:7, height:7, borderRadius:"50%",
                                            background:C.orange, flexShrink:0, marginTop:4 }} />}
               </div>
-              <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.55 }}>{n.body}</p>
+              <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.55 }}>{ico(n.body)}</p>
               <p style={{ margin:"4px 0 0", fontSize:9, color:C.lightGray }}>
                 {new Date(n.ts || n.created_at || Date.now()).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
               </p>
@@ -7932,7 +7898,7 @@ function AddressAutocomplete({ onSelect, placeholder }) {
     <div ref={boxRef} style={{ position:"relative", marginBottom:8 }}>
       <div ref={detailsDiv} style={{ display:"none" }} />
       <input value={q} onChange={e => onType(e.target.value)} onFocus={() => q && setOpen(true)}
-        placeholder={placeholder || "🔍 Search the event address…"}
+        placeholder={placeholder || "Search the event address…"}
         style={{ width:"100%", height:42, padding:"0 12px", border:`1.5px solid ${C.orange}`,
                  borderRadius:10, fontSize:13, boxSizing:"border-box", background:"#fff" }} />
       {open && (q.trim().length >= 3) && (loading || results.length > 0 || showNoMatch) && (
@@ -7957,7 +7923,7 @@ function AddressAutocomplete({ onSelect, placeholder }) {
               style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 12px",
                        border:"none", borderTop: i ? `1px solid ${C.border}` : "none",
                        background:"#fff", fontSize:12, color:C.black, cursor:"pointer" }}>
-              {r.kind === "census" ? "✓ " : "📍 "}{r.full}
+              {ico(r.kind === "census" ? "✓ " : "📍 ")}{r.full}
               {/* Confirmed against real US address ranges, house number and all. */}
               {r.kind === "census" && (
                 <span style={{ display:"block", marginTop:2, fontSize:10.5,
@@ -8203,7 +8169,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         </div>
 
         {/* Location */}
-        <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}>📍 Location</label>
+        <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}><Ico n="pin" /> Location</label>
         <select value={wizCity} onChange={e => setWizCity(e.target.value)}
           style={{ width:"100%", height:46, padding:"0 12px", borderRadius:11, fontSize:14, marginBottom:18,
                    border:`1.5px solid ${wizCity ? C.orange : C.border}`, background:"#fff", cursor:"pointer",
@@ -8213,7 +8179,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         </select>
 
         {/* Guest count */}
-        <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}>👥 How many guests?</label>
+        <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}><Ico n="users" /> How many guests?</label>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:9 }}>
           {[25,50,100,150,200,300,500].map(n => {
             const on = String(wizGuests) === String(n);
@@ -8236,7 +8202,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
 
         {/* Start date */}
         <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}>
-          📅 Start date{wizDate ? <span style={{ color:C.orange }}> · {new Date(wizDate+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"long",day:"numeric",year:"numeric"})}</span> : ""}
+          <Ico n="calendar" /> Start date{wizDate ? <span style={{ color:C.orange }}> · {new Date(wizDate+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"long",day:"numeric",year:"numeric"})}</span> : ""}
         </label>
         <div style={{ marginBottom:18 }}>
           <ClickCalendar value={wizDate} onChange={(d)=>{
@@ -8247,7 +8213,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         </div>
 
         {/* Start time */}
-        <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}>⏰ Start time</label>
+        <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}><Ico n="clock" /> Start time</label>
         <div style={{ marginBottom:14 }}>
           <TimeGrid value={wizStart}
             allowTime={wizDate === isoDate(new Date()) ? (t => `${wizDate}T${t}` > localStamp()) : undefined}
@@ -8259,7 +8225,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
             {/* Finish. Same day by default, because most events are — but one
                 tap opens a second calendar for anything running past midnight,
                 which the single-date version could not express at all. */}
-            <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}>🌙 Finishes</label>
+            <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}><Ico n="moon" /> Finishes</label>
             <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
               {[[true,"Same day"],[false,"Next day or later"]].map(([same,label]) => {
                 const on = endSameDay === same;
@@ -8285,7 +8251,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
               </div>
             )}
 
-            <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}>⏰ End time</label>
+            <label style={{ display:"block", fontSize:13, fontWeight:800, marginBottom:7 }}><Ico n="clock" /> End time</label>
             <div style={{ marginBottom:18 }}>
               <TimeGrid value={wizEnd} onChange={setWizEnd}
                 after={wizStart} sameDay={endSameDay} />
@@ -8303,7 +8269,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         <button onClick={onExit} className="btn"
           style={{ width:"100%", marginTop:10, padding:"10px 0", borderRadius:11, border:`1px solid ${C.border}`,
                    background:"#fff", color:C.midGray, fontSize:13, fontWeight:600 }}>
-          ✕ Exit
+          <Ico n="x" /> Exit
         </button>
       </div>
     );
@@ -8326,16 +8292,18 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
           </p>
           <p style={{ fontSize:15, color:C.black, margin:"10px 0 0", fontWeight:700 }}>What are you planning?</p>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(min(100%, 220px), 1fr))", gap:14 }}>
           {EVENT_PACKAGES.map(p => (
             <button key={p.id} onClick={() => chooseEvent(p.id)} className="btn"
-              style={{ textAlign:"left", padding:"18px 18px", borderRadius:16, cursor:"pointer",
-                       border:`1.5px solid ${C.border}`, background:p.color, transition:"transform .1s" }}
+              style={{ textAlign:"left", padding:"20px 20px 22px", borderRadius:22, cursor:"pointer",
+                       border:"1px solid #DCE2F5", background:`linear-gradient(140deg, ${p.color} 0%, #FFFFFF 92%)`,
+                       display:"flex", flexDirection:"column", alignItems:"flex-start", justifyContent:"flex-start",
+                       transition:"transform .12s ease, box-shadow .12s ease" }}
               onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
               onMouseLeave={e=>e.currentTarget.style.transform="none"}>
-              <div style={{ fontSize:30, marginBottom:8 }}>{p.icon}</div>
-              <p style={{ margin:0, fontSize:15, fontWeight:800, color:C.black }}>{p.label}</p>
-              <p style={{ margin:"3px 0 0", fontSize:11.5, color:C.midGray, lineHeight:1.5 }}>{p.desc}</p>
+              <span style={{ display:"block", marginBottom:14 }}><IcoBadge n={iconOf(p.icon)} size={58} /></span>
+              <p style={{ margin:0, fontSize:18, fontWeight:800, color:"#000", letterSpacing:"-0.01em" }}>{p.label}</p>
+              <p style={{ margin:"5px 0 0", fontSize:13.5, color:C.midGray, lineHeight:1.45 }}>{p.desc}</p>
             </button>
           ))}
         </div>
@@ -8347,7 +8315,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
   if (phase === "define") {
     return (
       <div className="fade-up" style={{ maxWidth:520, margin:"0 auto", textAlign:"center" }}>
-        <div style={{ fontSize:34, marginBottom:8 }}>🥂</div>
+        <div style={{ fontSize:34, marginBottom:8 }}><IcoBadge n="cheers" size={48} /></div>
         <h2 style={{ fontFamily:"var(--display)", fontSize:24, fontWeight:800, margin:"0 0 6px" }}>
           Tell us about your gathering
         </h2>
@@ -8441,10 +8409,10 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
           <button onClick={onExit} className="btn"
             style={{ background:"none", border:"none", fontSize:13, color:C.midGray, fontWeight:600, padding:0 }}>
-            ✕ Exit
+            <Ico n="x" /> Exit
           </button>
           <span style={{ fontSize:12, color:C.midGray }}>
-            {evt?.icon} {evt?.label}{eventId==="social" && social ? ` · ${social}` : ""} · Step {catIdx+1} of {walk.length}
+            {evt ? <Ico n={iconOf(evt.icon)} /> : null} {evt?.label}{eventId==="social" && social ? ` · ${social}` : ""} · Step {catIdx+1} of {walk.length}
           </span>
         </div>
         <Progress />
@@ -8564,7 +8532,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
   return (
     <div className="fade-up" style={{ maxWidth:720, margin:"0 auto" }}>
       <div style={{ textAlign:"center", marginBottom:22 }}>
-        <div style={{ fontSize:34, marginBottom:6 }}>{evt?.icon}</div>
+        <div style={{ marginBottom:8 }}><IcoBadge n={iconOf(evt?.icon)} size={56} /></div>
         <h1 style={{ fontFamily:"var(--display)", fontSize:28, fontWeight:900, margin:"0 0 4px" }}>
           Your {evt?.label}
         </h1>
@@ -8657,7 +8625,7 @@ function EventPackagesPage({ onSelectPackage, onPickCat }) {
       <div style={{ textAlign:"center", padding:"40px 20px 32px" }}>
         <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#EEF2FF",
                       borderRadius:99, padding:"6px 16px", marginBottom:16 }}>
-          <span style={{ fontSize:14 }}>✦</span>
+          <span style={{ fontSize:14 }}><Ico n="sparkle" /></span>
           <span style={{ fontSize:12, fontWeight:700, color:C.orange }}>One-stop event marketplace</span>
         </div>
         <h1 style={{ fontFamily:"var(--display)", fontSize:34, fontWeight:800,
@@ -8685,7 +8653,7 @@ function EventPackagesPage({ onSelectPackage, onPickCat }) {
                      transition:"all 0.18s ease",
                      boxShadow: hovered===pkg.id ? `0 8px 28px ${pkg.accent}22` : C.shadowCard,
                      transform: hovered===pkg.id ? "translateY(-2px)" : "none" }}>
-            <div style={{ fontSize:32, marginBottom:10, lineHeight:1 }}>{pkg.icon}</div>
+            <span style={{ display:"block", marginBottom:12 }}><IcoBadge n={iconOf(pkg.icon)} size={52} /></span>
             <p style={{ margin:"0 0 4px", fontSize:15, fontWeight:800, color:C.black }}>
               {pkg.label}
             </p>
@@ -8720,12 +8688,12 @@ function EventPackagesPage({ onSelectPackage, onPickCat }) {
           Browse by category to find exactly what you're looking for.
         </p>
         <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
-          {[["food","🍽️","Food & Drinks"],["music","🎵","Music"],["production","✨","Production"],["logistics","📦","Logistics"]].map(([id,icon,label]) => (
+          {[["food","cloche","Food & Drinks"],["music","headphones","Music"],["production","flower","Production"],["logistics","box","Logistics"]].map(([id,icon,label]) => (
             <button key={id} onClick={() => onPickCat(id)} className="btn"
               style={{ padding:"8px 16px", borderRadius:99, background:"#fff",
                        border:`1.5px solid ${C.border}`, fontSize:12, fontWeight:700,
                        color:C.black, display:"flex", alignItems:"center", gap:5 }}>
-              <span>{icon}</span>{label}
+              <Ico n={icon} /> {label}
             </button>
           ))}
         </div>
@@ -8808,7 +8776,7 @@ function SlotEditor({ v, eventStart, eventEnd, sameDay, onChange }) {
     <div style={{ marginTop:5 }}>
       {!open ? (
         <p style={{ margin:0, fontSize:10.5, color: custom ? "#6D28D9" : C.midGray, lineHeight:1.5 }}>
-          🕐 Needed {fmtTimeRange(start, end)}
+          <Ico n="clock" /> Needed {fmtTimeRange(start, end)}
           {custom ? "" : " (whole event)"}
           <button type="button" onClick={() => setOpen(true)} className="btn"
             style={{ background:"none", border:"none", padding:"0 0 0 6px", fontSize:10.5,
@@ -9147,17 +9115,17 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
               {cart.length} {cart.length!==1?"vendors":"vendor"} · Est. {fmtTotal(cart)}
             </p>
           </div>
-          <button onClick={onClose} className="btn"
+          <button aria-label="Close" onClick={onClose} className="btn"
             style={{ background:"#F3F4F6", border:"none", borderRadius:"50%",
                      width:30, height:30, fontSize:15, color:C.midGray,
-                     display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                     display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="x" /></button>
         </div>
 
         {/* Vendor list */}
         <div style={{ flex:1, overflowY:"auto", padding:"14px 18px" }}>
           {cart.length === 0 ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:C.lightGray }}>
-              <div style={{ fontSize:36, marginBottom:8 }}>🛒</div>
+              <div style={{ fontSize:36, marginBottom:8 }}><IcoBadge n="cart" size={52} /></div>
               <p style={{ fontSize:13 }}>Your cart is empty</p>
               <p style={{ fontSize:11, marginTop:4 }}>Browse vendors and add them here.</p>
             </div>
@@ -9171,7 +9139,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                                             padding:"10px 12px", border:`1px solid ${C.border}` }}>
                     {v.img
                       ? <img src={v.img} alt={v.name} style={{ width:44, height:44, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
-                      : <div style={{ width:44, height:44, borderRadius:8, background:"#F3F4F6", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏪</div>
+                      : <div style={{ width:44, height:44, borderRadius:8, background:"#F3F4F6", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}><Ico n="store" /></div>
                     }
                     <div style={{ flex:1, minWidth:0 }}>
                       <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }}>
@@ -9179,7 +9147,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                       </p>
                       {v.serviceName && (
                         <p style={{ margin:"1px 0 0", fontSize:11.5, fontWeight:700, color:"#6D28D9" }}>
-                          🛎️ {v.serviceName}
+                          <Ico n="concierge" /> {v.serviceName}
                         </p>
                       )}
                       <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
@@ -9196,7 +9164,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                         if (!off.length) return null;
                         return (
                           <p style={{ margin:"3px 0 0", fontSize:10, color:"#B45309", lineHeight:1.45 }}>
-                            🚫 Unavailable: {off.slice(0,4).join(", ")}
+                            <Ico n="ban" /> Unavailable: {off.slice(0,4).join(", ")}
                             {off.length > 4 ? ` +${off.length - 4} more` : ""}
                           </p>
                         );
@@ -9208,7 +9176,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                         if (!days && !blocks) return null;
                         return (
                           <p style={{ margin:"2px 0 0", fontSize:10, color:C.midGray, lineHeight:1.45 }}>
-                            🕒 Works: {v.schedule}
+                            <Ico n="clock" /> Works: {v.schedule}
                           </p>
                         );
                       })()}
@@ -9216,9 +9184,9 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                         sameDay={endSameDay}
                         onChange={patch => onUpdateItem && onUpdateItem(v.id, patch)} />
                     </div>
-                    <button onClick={() => onRemove(v.id)} className="btn"
+                    <button aria-label="Remove from cart" onClick={() => onRemove(v.id)} className="btn"
                       style={{ background:"none", border:"none", color:C.lightGray,
-                               fontSize:15, padding:"2px 4px" }}>✕</button>
+                               fontSize:15, padding:"2px 4px" }}><Ico n="x" /></button>
                   </div>
                 ))}
               </div>
@@ -9227,7 +9195,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
               <div style={{ background:"#EEF2FF", borderRadius:14, padding:"14px 16px",
                             border:`1px solid ${C.orangeBorder}`, marginBottom:14 }}>
                 <p style={{ margin:"0 0 10px", fontSize:12, fontWeight:800, color:C.orange }}>
-                  📋 Event details — sent to all vendors
+                  <Ico n="clipboard" /> Event details — sent to all vendors
                 </p>
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   <select value={eventType} onChange={e => setEventType(e.target.value)}
@@ -9236,9 +9204,9 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                              background:"#fff" }}>
                     <option value="">Event type (optional)</option>
                     {EVENT_PACKAGES.filter(p => p.id !== "custom").map(p => (
-                      <option key={p.id} value={p.label}>{p.icon} {p.label}</option>
+                      <option key={p.id} value={p.label}>{p.label}</option>
                     ))}
-                    <option value="Other">➕ Other</option>
+                    <option value="Other">Other</option>
                   </select>
                   {/* Anything we haven't listed — let them describe it. */}
                   {eventType === "Other" && (
@@ -9276,7 +9244,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                                background:"#fff" }}>
                       <option value="">Venue type *</option>
                       {VENUE_TYPES.map(t => (
-                        <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
+                        <option key={t.id} value={t.id}>{t.label}</option>
                       ))}
                     </select>
                     )}
@@ -9287,7 +9255,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                     <div style={{ background:"#F0FDF4", border:"1px solid #86EFAC", borderRadius:10,
                                   padding:"11px 13px" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                        <span style={{ fontSize:11, fontWeight:800, color:"#065F46" }}>📍 Event location</span>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#065F46" }}><Ico n="pin" /> Event location</span>
                         <span style={{ fontSize:10, color:"#047857" }}>— set by the venue</span>
                       </div>
                       <p style={{ margin:"0 0 2px", fontSize:13, fontWeight:800, color:C.black }}>{placeVendor.name}</p>
@@ -9299,7 +9267,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                   <>
                   {/* Structured location — a vendor needs this to show up */}
                   <div style={{ display:"flex", alignItems:"center", gap:6, margin:"2px 0 -2px" }}>
-                    <span style={{ fontSize:11, fontWeight:800, color:C.orange }}>📍 Event location</span>
+                    <span style={{ fontSize:11, fontWeight:800, color:C.orange }}><Ico n="pin" /> Event location</span>
                     <span style={{ fontSize:10, color:C.midGray }}>— where the vendor should go</span>
                   </div>
                   <input placeholder="Venue name (optional) — e.g. The Grand Ballroom" value={eventVenue}
@@ -9312,7 +9280,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                   {!addrConfirmed ? (
                     <>
                       <AddressAutocomplete
-                        placeholder="🔍 Start typing the event address…"
+                        placeholder="Start typing the event address…"
                         onSelect={(a) => {
                           const st = (a.street || "").trim();
                           const ct = (a.city   || "").trim();
@@ -9472,7 +9440,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                   </div>
                   <div>
                     <label style={{ fontSize:11, fontWeight:700, color:C.black, display:"block", marginBottom:4 }}>
-                      🗺️ How to find & access the place <span style={{ color:C.lightGray, fontWeight:500 }}>(optional but helpful)</span>
+                      <Ico n="map" /> How to find & access the place <span style={{ color:C.lightGray, fontWeight:500 }}>(optional but helpful)</span>
                     </label>
                     <textarea
                       placeholder="Directions to find it, how to get in, which entrance/gate, parking or loading dock, who to ask for, gate/callbox codes…"
@@ -9494,7 +9462,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
               {deadlineOptions.length > 0 && (
                 <div style={{ padding:"10px 0", borderTop:`1px solid ${C.border}`, marginBottom:4 }}>
                   <label style={{ fontSize:11, fontWeight:700, color:C.black, display:"block", marginBottom:6 }}>
-                    ⏱️ How soon do you need an answer?
+                    <Ico n="clock" /> How soon do you need an answer?
                   </label>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" }} role="radiogroup"
                        aria-label="How soon do you need an answer?">
@@ -9555,7 +9523,7 @@ function CartPanel({ cart, onRemove, onUpdateItem, onClose, onSubmitRequests, us
                         <div style={{ width:`${pct}%`, height:"100%", background:col, borderRadius:99,
                                       transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)" }} />
                       </div>
-                      {pct >= 100 && <p style={{ fontSize:10, color:"#EF4444", fontWeight:700, marginTop:3 }}>⚠️ Over budget by ${(spent-budget).toLocaleString()}</p>}
+                      {pct >= 100 && <p style={{ fontSize:10, color:"#EF4444", fontWeight:700, marginTop:3 }}><Ico n="alert" /> Over budget by ${(spent-budget).toLocaleString()}</p>}
                     </div>
                   );
                 })()}
@@ -9647,7 +9615,7 @@ function MarketSelector({ market, onSelect, light }) {
         style={{ background: light ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.05)",
                  border: `1px solid ${light ? "rgba(255,255,255,0.3)" : C.border}`,
                  color: light ? "#fff" : C.black, fontSize:12, fontWeight:700 }}>
-        <span>📍</span>
+        <span><Ico n="pin" /></span>
         <span>{market.label}</span>
         <span style={{ fontSize:9, opacity:0.7 }}>▾</span>
       </button>
@@ -9667,7 +9635,7 @@ function MarketSelector({ market, onSelect, light }) {
                   style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 10px",
                            borderRadius:10, background: m.id===market.id ? C.orangeSoft : "transparent",
                            border:"none", textAlign:"left" }}>
-                  <span style={{ fontSize:18 }}>{COUNTRIES[m.country]?.flag}</span>
+                  <span style={{ fontSize:18, color:C.midGray }}><Ico n="pin" /></span>
                   <div>
                     <p style={{ margin:0, fontSize:13, fontWeight:700,
                                 color: m.id===market.id ? C.orange : C.black }}>{m.label}</p>
@@ -9688,7 +9656,7 @@ function MarketSelector({ market, onSelect, light }) {
                   <span key={m.id} style={{ fontSize:11, padding:"3px 10px", borderRadius:99,
                                              background:"#fff", border:`1px solid ${C.border}`,
                                              color:C.lightGray, fontWeight:600 }}>
-                    {COUNTRIES[m.country]?.flag} {m.city}
+                    <Ico n="pin" /> {m.city}
                   </span>
                 ))}
               </div>
@@ -9706,7 +9674,7 @@ function FiltersBar({ filters, onChange, totalCount }) {
 
   const Pill = ({ id, label, active }) => (
     <button onClick={() => onChange(id, !active)} className={`filter-pill${active?" active":""} btn`}>
-      {label}
+      {ico(label)}
     </button>
   );
 
@@ -9721,7 +9689,7 @@ function FiltersBar({ filters, onChange, totalCount }) {
       <div style={{ position:"relative" }}>
         <button onClick={() => setOpen(o=>!o)}
           className={`filter-pill btn${(filters.maxPrice < 5000) ? " active":""}`}>
-          💰 Budget: {filters.maxPrice >= 5000 ? "Any" : `under $${filters.maxPrice.toLocaleString()}`}
+          <Ico n="dollar" /> Budget: {filters.maxPrice >= 5000 ? "Any" : `under $${filters.maxPrice.toLocaleString()}`}
         </button>
         {open && (
           <>
@@ -9838,10 +9806,134 @@ const ICON_PATHS = {
   wand:       <><path d="M4 20L15.5 8.5"/><path d="M14.5 3.5v3M18.5 5.5l-2 2M20.5 9.5h-3M13 7l4 4"/></>,
   sparkle:    <><path d="M11 3.5l1.7 4.8 4.8 1.7-4.8 1.7L11 16.5l-1.7-4.8L4.5 10l4.8-1.7z"/><path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></>,
   arrow:      <><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></>,
+  /* 31 Oct 2026: the rest of the site's icons, drawn in the same monoline
+     style (24 grid, round ends), replacing the emoji that used to stand in. */
+  bolt:       <><path d="M13.2 2.8 5.6 13.2h5.6l-1.4 8 7.6-10.4h-5.6z"/></>,
+  hourglass:  <><path d="M7 3.5h10M7 20.5h10"/><path d="M8.2 3.5v2.8a4 4 0 0 0 1.5 3.1L12 11.5l2.3-2.1a4 4 0 0 0 1.5-3.1V3.5"/><path d="M8.2 20.5v-2.8a4 4 0 0 1 1.5-3.1L12 12.5l2.3 2.1a4 4 0 0 1 1.5 3.1v2.8"/></>,
+  lock:       <><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.2 10.5V7.6a3.8 3.8 0 0 1 7.6 0v2.9"/><path d="M12 14.4v2.4"/></>,
+  shield:     <><path d="M12 3 5 5.7v5.5c0 4.4 2.9 8 7 9.6 4.1-1.6 7-5.2 7-9.6V5.7z"/><path d="M9.1 12.1l2.1 2.1 3.8-4"/></>,
+  chat:       <><path d="M4.5 5h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17h-1A1.5 1.5 0 0 1 3 15.5v-9A1.5 1.5 0 0 1 4.5 5z"/><path d="M7.5 9.6h9M7.5 12.8h6"/></>,
+  clock:      <><circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.2 2.1"/></>,
+  star:       <><path d="M12 3.4l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.8l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></>,
+  starFill:   <><path d="M12 3.4l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.8l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" fill="currentColor"/></>,
+  user:       <><circle cx="12" cy="8.2" r="3.9"/><path d="M4.6 20.4a7.4 7.4 0 0 1 14.8 0"/></>,
+  users:      <><circle cx="9" cy="8.6" r="3.4"/><path d="M2.8 19.6a6.2 6.2 0 0 1 12.4 0"/><path d="M15.4 5.5a3.2 3.2 0 0 1 0 6.2"/><path d="M17.6 13.9a5.8 5.8 0 0 1 3.6 5.4"/></>,
+  calendar:   <><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 9.8h17"/><path d="M8 3v4M16 3v4"/><path d="M7.6 13.4h.1M12 13.4h.1M16.4 13.4h.1M7.6 16.8h.1M12 16.8h.1"/></>,
+  store:      <><path d="M4.2 9.4 5.6 4h12.8l1.4 5.4"/><path d="M4.2 9.4a2.6 2.6 0 0 0 5.2 0 2.6 2.6 0 0 0 5.2 0 2.6 2.6 0 0 0 5.2 0"/><path d="M5.6 11.6V20h12.8v-8.4"/><path d="M10.2 20v-4.4h3.6V20"/></>,
+  heart:      <><path d="M12 19.8s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.6 2.7c0 5.5-7.6 10.1-7.6 10.1z"/></>,
+  heartFill:  <><path d="M12 19.8s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.6 2.7c0 5.5-7.6 10.1-7.6 10.1z" fill="currentColor"/></>,
+  columns:    <><path d="M3.5 8.8 12 4l8.5 4.8z"/><path d="M5.6 8.8v9.2M9.9 8.8v9.2M14.1 8.8v9.2M18.4 8.8v9.2"/><path d="M3.8 18.2h16.4M3 21h18"/></>,
+  plus:       <><path d="M12 5v14M5 12h14"/></>,
+  briefcase:  <><rect x="3.5" y="7" width="17" height="12.5" rx="2.2"/><path d="M9 7V5.4A1.4 1.4 0 0 1 10.4 4h3.2A1.4 1.4 0 0 1 15 5.4V7"/><path d="M3.5 12.4h17"/><path d="M10.6 12.4v1.6h2.8v-1.6"/></>,
+  inbox:      <><path d="M3.5 13.4 6 5.5h12l2.5 7.9v5.3a1.3 1.3 0 0 1-1.3 1.3H4.8a1.3 1.3 0 0 1-1.3-1.3z"/><path d="M3.5 13.4h5l1.4 2.4h4.2l1.4-2.4h5"/></>,
+  mail:       <><rect x="3" y="5.5" width="18" height="13" rx="2.2"/><path d="M3.6 7.2l8.4 6.3 8.4-6.3"/></>,
+  search:     <><circle cx="10.6" cy="10.6" r="6.2"/><path d="M15.2 15.2l5.3 5.3"/></>,
+  ban:        <><circle cx="12" cy="12" r="8.6"/><path d="M5.9 5.9l12.2 12.2"/></>,
+  cake:       <><path d="M4.5 20.5h15V13.6a1.6 1.6 0 0 0-1.6-1.6H6.1a1.6 1.6 0 0 0-1.6 1.6z"/><path d="M4.5 15.8c1.25 1.1 2.5 1.1 3.75 0s2.5-1.1 3.75 0 2.5 1.1 3.75 0 2.5-1.1 3.75 0"/><path d="M8 12V8.8M12 12V8.8M16 12V8.8"/><path d="M8 5.6v.6M12 5.6v.6M16 5.6v.6"/></>,
+  ring:       <><circle cx="12" cy="15" r="5.6"/><path d="M10 3.6h4l1.6 2.3-3.6 3.4-3.6-3.4z"/></>,
+  bear:       <><path d="M9.4 7.55A2.4 2.4 0 1 0 6.6 9.97"/><path d="M14.6 7.55A2.4 2.4 0 1 1 17.4 9.97"/><circle cx="12" cy="13.4" r="6.4"/><ellipse cx="12" cy="15.6" rx="2.4" ry="1.9"/><path d="M11.4 15h1.2"/><path d="M9.7 12.1h.1M14.3 12.1h.1"/></>,
+  cheers:     <><path d="M4.6 6.3 9.7 4.9l1.2 4.9a2.7 2.7 0 0 1-2 3.2 2.7 2.7 0 0 1-3.2-1.9z"/><path d="M8.8 13l1.5 5.6M8.3 19.2l4-1.1"/><path d="M19.4 6.3l-5.1-1.4-1.2 4.9a2.7 2.7 0 0 0 2 3.2 2.7 2.7 0 0 0 3.2-1.9z"/><path d="M15.2 13l-1.5 5.6M15.7 19.2l-4-1.1"/><path d="M12 1.8v1.6M9.6 2.5l.7 1.1M14.4 2.5l-.7 1.1"/></>,
+  party:      <><path d="M4 20.2 8.6 8.4l7 7z"/><path d="M6.6 13.6l3.8 3.8"/><path d="M13.6 4.2v1.8M18.2 9.6H20M16.4 6.8l1.3-1.3"/><path d="M10.4 6.4c.6-1 .6-2.1 0-3.1M17.6 13.8c1-.6 2.1-.6 3.1 0"/></>,
+  globe:      <><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2"/><path d="M12 3.4c2.3 2.4 3.5 5.3 3.5 8.6s-1.2 6.2-3.5 8.6c-2.3-2.4-3.5-5.3-3.5-8.6S9.7 5.8 12 3.4z"/></>,
+  bell:       <><path d="M6.2 16.6V11a5.8 5.8 0 0 1 11.6 0v5.6l1.6 2H4.6z"/><path d="M10 20.6a2.1 2.1 0 0 0 4 0"/></>,
+  bellOff:    <><path d="M6.2 16.6V11a5.8 5.8 0 0 1 11.6 0v5.6l1.6 2H4.6z"/><path d="M10 20.6a2.1 2.1 0 0 0 4 0"/><path d="M3.8 3.8l16.4 16.4"/></>,
+  concierge:  <><path d="M5 17a7 7 0 0 1 14 0"/><path d="M3.5 17.2h17"/><path d="M4.5 20h15"/><path d="M12 10V7.6M10.4 7.4h3.2"/></>,
+  sliders:    <><path d="M4 7h9.5M18 7h2M4 17h4M12.5 17H20"/><circle cx="15.8" cy="7" r="2.2"/><circle cx="10.2" cy="17" r="2.2"/></>,
+  card:       <><rect x="3" y="5.5" width="18" height="13" rx="2.2"/><path d="M3 9.8h18"/><path d="M6.5 14.6h4"/></>,
+  stop:       <><circle cx="12" cy="12" r="8.6"/><path d="M8 12h8"/></>,
+  checkCircle:<><circle cx="12" cy="12" r="8.6"/><path d="M8.3 12.3l2.5 2.5 5-5.2"/></>,
+  check:      <><path d="M5 12.6l4.4 4.4L19 7.4"/></>,
+  note:       <><path d="M9 17.8V5.6l10-2.1V15.6"/><circle cx="6.7" cy="17.8" r="2.3"/><circle cx="16.7" cy="15.6" r="2.3"/><path d="M9 9.2l10-2.1"/></>,
+  box:        <><path d="M12 3 20 7v10l-8 4-8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/><path d="M8 5l8 4"/></>,
+  bottle:     <><path d="M10.6 3h2.8l.6 2.6h-4z"/><rect x="8.6" y="5.6" width="6.8" height="2.4" rx=".8"/><path d="M9.4 8h5.2a1 1 0 0 1 1 1v10.4a1.6 1.6 0 0 1-1.6 1.6h-4A1.6 1.6 0 0 1 8.4 19.4V9a1 1 0 0 1 1-1z"/><path d="M8.4 12.2h2.6M8.4 15.4h2.6"/></>,
+  presentation:<><path d="M2.6 4h18.8"/><rect x="3.8" y="4" width="16.4" height="11" rx="1"/><path d="M12 15v2.2M8 21l4-3.8 4 3.8"/><path d="M8.6 12v-2M12 12V7.8M15.4 12V9"/></>,
+  gradcap:    <><path d="M2.5 9.4 12 5l9.5 4.4L12 13.8z"/><path d="M6.4 11.4v4.1c1.5 1.3 3.4 2 5.6 2s4.1-.7 5.6-2v-4.1"/><path d="M21.5 9.4v5"/></>,
+  map:        <><path d="M3.5 6.6 9 4.6l6 2 5.5-2v12.8l-5.5 2-6-2-5.5 2z"/><path d="M9 4.6v12.8M15 6.6v12.8"/></>,
+  scale:      <><path d="M12 4v16M8.2 20h7.6M5 7.2h14"/><path d="M5 7.2l-2.6 6M5 7.2l2.6 6M19 7.2l-2.6 6M19 7.2l2.6 6"/><path d="M2.4 13.2a2.6 2.6 0 0 0 5.2 0zM16.4 13.2a2.6 2.6 0 0 0 5.2 0z"/></>,
+  pencil:     <><path d="M15.4 4.6l4 4L8.6 19.4 4 20l.6-4.6z"/><path d="M13.4 6.6l4 4"/></>,
+  key:        <><circle cx="8" cy="15.6" r="4.2"/><path d="M11 12.6l8.6-8.6M16.6 7l2.2 2.2M14.4 9.2l1.6 1.6"/></>,
+  list:       <><path d="M4 6.5h16M4 12h16M4 17.5h16"/></>,
+  cart:       <><path d="M3 4h2.2l2.3 11.2h10.4l2.1-7.6H6.3"/><circle cx="9.2" cy="19.2" r="1.4"/><circle cx="16.4" cy="19.2" r="1.4"/></>,
+  moon:       <><path d="M19.6 14.6A8 8 0 0 1 9.4 4.4a8 8 0 1 0 10.2 10.2z"/></>,
+  dollar:     <><circle cx="12" cy="12" r="8.6"/><path d="M14.7 9.2c-.4-.9-1.4-1.5-2.7-1.5-1.6 0-2.7.8-2.7 2 0 2.8 5.5 1.5 5.5 4.5 0 1.2-1.1 2-2.8 2-1.4 0-2.4-.6-2.8-1.6"/><path d="M12 6.1v1.6M12 16.2v1.7"/></>,
+  tag:        <><path d="M3.5 11.6V4.6a1.1 1.1 0 0 1 1.1-1.1h7l8.9 8.9-8.1 8.1z"/><circle cx="8" cy="8" r="1.3"/></>,
+  book:       <><path d="M5 18.6V4.8A1.8 1.8 0 0 1 6.8 3H19v15.6H6.8A1.8 1.8 0 0 0 5 20.4 1.8 1.8 0 0 0 6.8 22H19v-3.4"/><path d="M9 7.4h6"/></>,
+  flag:       <><path d="M5.5 21V3.6"/><path d="M5.5 4h11.4l-2.2 4.2 2.2 4.2H5.5"/></>,
+  trash:      <><path d="M4 6.6h16"/><path d="M9.4 6.6V4.4h5.2v2.2"/><path d="M6.4 6.6l1 13.4h9.2l1-13.4"/><path d="M10 10.4v6M14 10.4v6"/></>,
+  clip:       <><path d="M15.6 7.2l-6.7 6.7a1.9 1.9 0 0 0 2.7 2.7l7-7a3.8 3.8 0 0 0-5.4-5.4l-7 7a5.7 5.7 0 0 0 8.1 8.1l6.1-6.1"/></>,
+  phone:      <><rect x="7" y="2.6" width="10" height="18.8" rx="2.2"/><path d="M11 18.2h2"/></>,
+  compass:    <><circle cx="12" cy="12" r="8.6"/><path d="M15.6 8.4l-2 5.2-5.2 2 2-5.2z"/></>,
+  house:      <><path d="M3.8 11.2 12 4.2l8.2 7"/><path d="M6 9.6V20h12V9.6"/><path d="M10 20v-5.2h4V20"/></>,
+  building:   <><rect x="5" y="3" width="14" height="18" rx="1.4"/><path d="M9 7h1.6M13.4 7H15M9 10.8h1.6M13.4 10.8H15M9 14.6h1.6M13.4 14.6H15"/><path d="M10.6 21v-2.8h2.8V21"/></>,
+  bed:        <><path d="M3 18.8V5.8"/><path d="M3 14.6h18v4.2"/><path d="M21 14.6v-2.8a2.8 2.8 0 0 0-2.8-2.8H11v5.6"/><circle cx="7" cy="11.4" r="2"/></>,
+  cutlery:    <><path d="M6.4 3v5.2a2 2 0 0 0 4 0V3M8.4 3v18"/><path d="M17.6 21V3c-2 1.4-3 3.9-3 6.9h3"/></>,
+  tree:       <><path d="M12 3 7.2 9.6h2.6L6 15.4h12l-3.8-5.8h2.6z"/><path d="M12 15.4V21"/></>,
+  crown:      <><path d="M4.2 17.4 3 7.6l5 3.9L12 5l4 6.5 5-3.9-1.2 9.8z"/><path d="M4.4 20.4h15.2"/></>,
+  mic:        <><circle cx="15" cy="9" r="4.4"/><path d="M11.9 12.1 4.6 19.4l1.9 1.9 7.3-7.3"/><path d="M12 6l6 6"/></>,
+  x:          <><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></>,
+  alert:      <><path d="M12 4.2 2.9 19.6h18.2z"/><path d="M12 10.2v4.2M12 17.1v.2"/></>,
+  bouquet:    <><circle cx="12" cy="6.4" r="2.4"/><circle cx="8" cy="9" r="2.4"/><circle cx="16" cy="9" r="2.4"/><path d="M8.2 13.2h7.6l-2.3 7.8h-3z"/><path d="M10.2 11.2l1.3 2M13.8 11.2l-1.3 2"/></>,
+  refresh:    <><path d="M19.6 12a7.6 7.6 0 1 1-2.2-5.4"/><path d="M19.8 4.4v4.2h-4.2"/></>,
 };
 export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo:"camera", production:"flower",
   rentals:"chair", av:"speaker", staff:"cocktail", beauty:"lipstick", transport:"car", kids:"balloons",
   logistics:"clipboard", other:"dots", build:"wand", all:"sparkle" };
+/* Emoji that may still arrive as text (older saved notifications, labels
+   built from data) and the monoline icon that replaces each one. */
+const EMOJI_ICON = {
+  "📍":"pin", "⚡":"bolt", "⏳":"hourglass", "🔒":"lock", "🔐":"lock", "🛡":"shield", "💬":"chat",
+  "⏱":"clock", "🕐":"clock", "🕒":"clock", "⏰":"clock", "🚗":"car", "🚘":"car", "★":"starFill", "⭐":"starFill",
+  "👤":"user", "🧑":"user", "👥":"users", "📅":"calendar", "🗓":"calendar", "📋":"clipboard", "🏪":"store",
+  "✨":"sparkle", "🍽":"cloche", "🎤":"mic", "🎙":"mic", "❤":"heartFill", "🤍":"heart", "🏛":"columns",
+  "🎈":"balloons", "➕":"plus", "💼":"briefcase", "📬":"inbox", "📭":"inbox", "📩":"mail", "📧":"mail", "✉":"mail",
+  "🔍":"search", "🚫":"ban", "📷":"camera", "🎂":"cake", "💍":"ring", "🧸":"bear", "🥂":"cheers", "🎉":"party",
+  "🌐":"globe", "🌍":"globe", "🛎":"concierge", "🔔":"bell", "🔕":"bellOff", "⚙":"sliders", "💳":"card",
+  "⛔":"stop", "✅":"checkCircle", "🎵":"note", "🪑":"chair", "🔊":"speaker", "🤵":"cocktail", "💄":"lipstick",
+  "📦":"box", "🍼":"bottle", "📊":"presentation", "🎓":"gradcap", "🗺":"map", "⚖":"scale", "✏":"pencil",
+  "✎":"pencil", "🔑":"key", "☰":"list", "🛒":"cart", "🌙":"moon", "💰":"dollar", "🆓":"tag", "📘":"book",
+  "🚩":"flag", "🗑":"trash", "📎":"clip", "🤖":"shield", "📱":"phone", "🧭":"compass", "🏠":"house",
+  "🏬":"building", "🏨":"bed", "🍴":"cutlery", "🌳":"tree", "🏢":"building", "👑":"crown", "✕":"x", "✗":"x",
+  "⚠":"alert", "🔄":"refresh", "↻":"refresh", "💐":"bouquet", "✦":"sparkle",
+};
+const EMOJI_RE = new RegExp("(" + Object.keys(EMOJI_ICON).sort((a, b) => b.length - a.length).join("|") + ")\uFE0F?", "gu");
+
+/* An icon that sits in a line of text: sized to the text, coloured like it. */
+export function Ico({ n, title, stroke = 1.8 }) {
+  return (
+    <svg className="ico" width="1.15em" height="1.15em" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" focusable="false"
+      {...(title ? { role:"img", "aria-label":title } : { "aria-hidden":"true" })}>
+      {ICON_PATHS[n] || ICON_PATHS.dots}
+    </svg>
+  );
+}
+/* The home page look for a standalone icon: cobalt line icon in a soft circle. */
+export function IcoBadge({ n, size = 56, title }) {
+  return (
+    <span className="ico-badge" style={{ width:size, height:size }}
+      {...(title ? { role:"img", "aria-label":title } : { "aria-hidden":"true" })}>
+      <Icon name={n} size={Math.round(size * 0.52)} stroke={1.5} />
+    </span>
+  );
+}
+/* The icon name for an emoji kept in data (event types, venue types). */
+export function iconOf(e) { return EMOJI_ICON[String(e || "").replace(/\uFE0F/g, "")] || "sparkle"; }
+/* Text that may contain an emoji → the text with monoline icons in its place. */
+export function ico(s) {
+  if (typeof s !== "string" || !s) return s;
+  EMOJI_RE.lastIndex = 0;
+  if (!EMOJI_RE.test(s)) return s;
+  const out = []; let last = 0, m;
+  EMOJI_RE.lastIndex = 0;
+  while ((m = EMOJI_RE.exec(s))) {
+    if (m.index > last) out.push(s.slice(last, m.index));
+    out.push(<Ico key={m.index} n={EMOJI_ICON[m[1]]} />);
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out;
+}
+
 export function Icon({ name, size = 24, stroke = 1.6 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke}
@@ -9938,7 +10030,7 @@ export function RecapModal({ recap, names, onClose, onViewVendor }) {
           <img src={recap.photos[photo] || LISTING_PLACEHOLDER} alt=""
             style={{ width:"100%", maxHeight:"58vh", objectFit:"contain", display:"block" }} />
           <button onClick={onClose} className="btn" aria-label="Close"
-            style={{ position:"absolute", top:12, right:12, width:40, height:40, borderRadius:99, background:"#fff", color:"#000", fontSize:16 }}>✕</button>
+            style={{ position:"absolute", top:12, right:12, width:40, height:40, borderRadius:99, background:"#fff", color:"#000", fontSize:16 }}><Ico n="x" /></button>
         </div>
         {recap.photos.length > 1 && (
           <div style={{ display:"flex", gap:6, padding:"8px 12px", overflowX:"auto" }}>
@@ -10019,7 +10111,7 @@ function StatsTicker({ market }) {
       <div className="ticker-track" style={{ display:"inline-flex", gap:0 }}>
         {doubled.map((item, i) => (
           <span key={i} style={{ padding:"0 24px", borderRight:"1px solid rgba(255,255,255,0.15)" }}>
-            {item}
+            {ico(item)}
           </span>
         ))}
       </div>
@@ -10039,10 +10131,10 @@ function SavedVendorsPanel({ userId, allCards }) {
 
   if (favs.length === 0) return (
     <div style={{ textAlign:"center", padding:"28px 0", color:C.lightGray }}>
-      <div style={{ fontSize:36, marginBottom:8 }}>🤍</div>
+      <div style={{ fontSize:36, marginBottom:8 }}><IcoBadge n="heart" size={52} /></div>
       <p style={{ fontSize:13, fontWeight:600 }}>No saved vendors yet</p>
       <p style={{ fontSize:11, marginTop:4, lineHeight:1.6 }}>
-        Tap the ❤️ on any vendor card to save vendors for later.
+        Tap the <Ico n="heartFill" /> on any vendor card to save vendors for later.
       </p>
     </div>
   );
@@ -10069,7 +10161,7 @@ function SavedVendorsPanel({ userId, allCards }) {
           </div>
           <div style={{ textAlign:"right", flexShrink:0 }}>
             <p style={{ margin:0, fontSize:11, fontWeight:800, color:"#F59E0B" }}>
-              ⭐ {v.rating}
+              <Ico n="starFill" /> {v.rating}
             </p>
             <p style={{ margin:"2px 0 0", fontSize:9, color:C.lightGray }}>
               {v.revCount}+ reviews
@@ -10313,7 +10405,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
   const Stat = ({ icon, label, value, sub, accent }) => (
     <div style={{ background:"#FAFAFA", border:`1px solid ${C.border}`, borderRadius:14,
                   padding:"14px 16px", display:"flex", flexDirection:"column", gap:3 }}>
-      <span style={{ fontSize:18 }}>{icon}</span>
+      <span style={{ fontSize:18, color:"#1E40FF" }}>{ico(icon)}</span>
       <p style={{ margin:0, fontSize:11, color:C.lightGray, fontWeight:700,
                   textTransform:"uppercase", letterSpacing:"0.05em" }}>{label}</p>
       <p style={{ margin:0, fontSize:15, fontWeight:800, color: accent || C.black,
@@ -10373,8 +10465,8 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
           washed out by a bright image the way an overlay caption can. */}
       <div style={{ marginBottom:14 }}>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:7 }}>
-          {vendor.feat    && <span style={{ background:C.orangeSoft, color:C.orange, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>✦ Featured</span>}
-          {disp.instant && <span style={{ background:C.greenSoft, color:C.green, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>⚡ Instant booking</span>}
+          {vendor.feat    && <span style={{ background:C.orangeSoft, color:C.orange, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}><Ico n="sparkle" /> Featured</span>}
+          {disp.instant && <span style={{ background:C.greenSoft, color:C.green, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}><Ico n="bolt" /> Instant booking</span>}
           {disp.cat && <span style={{ background:"#F3F4F6", color:C.midGray, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99 }}>{catLabelOf(disp.cat)}</span>}
         </div>
         {/* Save sits on the title row, not over the photo. People decide to
@@ -10390,7 +10482,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             <p style={{ margin:"5px 0 0", fontSize:14, color:C.midGray }}>
               by <span style={{ fontWeight:800, color:C.black }}>{disp.name}</span>
               {(full ? isVerifiedVendor(full) : vendor.verified) && <VerifiedMark size={17} />}
-              {disp.city ? <span style={{ color:C.lightGray }}> · 📍 {disp.city}</span> : null}
+              {disp.city ? <span style={{ color:C.lightGray }}> · <Ico n="pin" /> {disp.city}</span> : null}
             </p>
             {(full ? isVerifiedVendor(full) : vendor.verified) && (
               <p style={{ margin:"8px 0 0" }}>
@@ -10411,7 +10503,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                        borderRadius:99, padding:"9px 15px", cursor:"pointer",
                        fontSize:13, fontWeight:700,
                        color: isFav ? "#B91C1C" : C.black }}>
-              <span style={{ fontSize:15, lineHeight:1 }}>{isFav ? "❤️" : "🤍"}</span>
+              <span style={{ fontSize:15, lineHeight:1 }}><Ico n={isFav ? "heartFill" : "heart"} /></span>
               {isFav ? "Saved" : "Save"}
             </button>
           )}
@@ -10514,7 +10606,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
           {photos.length < 2 && (
             <div style={{ flex:1, minHeight:0, background:"#F3F4F6", display:"flex", alignItems:"center",
                           justifyContent:"center", borderRadius:"0 20px 20px 0" }}>
-              <span style={{ fontSize:28 }}>📷</span>
+              <span style={{ fontSize:28 }}><IcoBadge n="camera" size={44} /></span>
             </div>
           )}
         </div>
@@ -10571,12 +10663,12 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             <h2 style={{ fontSize:17, fontWeight:800, margin:"0 0 14px" }}>Service Area & Availability</h2>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
               <div>
-                <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:800, color:C.midGray, textTransform:"uppercase", letterSpacing:"0.06em" }}>📍 Areas covered</p>
+                <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:800, color:C.midGray, textTransform:"uppercase", letterSpacing:"0.06em" }}><Ico n="pin" /> Areas covered</p>
                 <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.7 }}>{disp.serviceAreas || disp.city || "Houston, TX"}</p>
               </div>
               <div>
                 <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:800, color:C.midGray, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                  🗓 Days {selService ? "this listing works" : "worked"}
+                  <Ico n="calendar" /> Days {selService ? "this listing works" : "worked"}
                 </p>
                 {(() => {
                   /* The days the vendor marked on THIS listing. A listing with no
@@ -10623,7 +10715,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             {Number(disp.travelMiles) > 0 && (
               <div style={{ marginTop:14, background:"#EFF6FF", borderRadius:10, padding:"10px 14px", border:"1px solid #BFDBFE" }}>
                 <p style={{ margin:0, fontSize:12, color:"#1D4ED8" }}>
-                  <strong>🚗 Travel radius:</strong> Up to <strong>{disp.travelMiles} miles</strong> from base. Events outside this range may have a travel fee.
+                  <strong><Ico n="car" /> Travel radius:</strong> Up to <strong>{disp.travelMiles} miles</strong> from base. Events outside this range may have a travel fee.
                 </p>
               </div>
             )}
@@ -10676,7 +10768,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 {ratingBreakdown.map(({ star, count, pct }) => (
                   <div key={star} style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <span style={{ fontSize:10, color:C.midGray, width:12, textAlign:"right" }}>{star}</span>
-                    <span style={{ fontSize:10 }}>★</span>
+                    <span style={{ fontSize:10 }}><Ico n="starFill" /></span>
                     <div style={{ flex:1, height:6, background:"#F3F4F6", borderRadius:3, overflow:"hidden" }}>
                       <div style={{ width:`${pct}%`, height:"100%", background: pct > 0 ? "#F59E0B" : "transparent", borderRadius:3 }} />
                     </div>
@@ -10728,7 +10820,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             {revErr && (
               <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                             borderRadius:9, padding:"9px 12px", marginBottom:14, fontSize:12, fontWeight:600 }}>
-                ⚠ {revErr}
+                <Ico n="alert" /> {revErr}
               </div>
             )}
 
@@ -10858,14 +10950,14 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             </p>
             {selService && Number(selService.duration_hours) > 0 && !pickedPkg?.hours && (
               <p style={{ fontSize:12, color:C.black, fontWeight:700, margin:"0 0 4px" }}>
-                ⏱ Includes {fmtHours(selService.duration_hours)}
+                <Ico n="clock" /> Includes {fmtHours(selService.duration_hours)}
                 {selService.extra_hour_price != null && Number(selService.extra_hour_price) > 0
                   ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour {fmtAllIn(selService.extra_hour_price)}</span> : null}
               </p>
             )}
             {pickedPkg?.hours > 0 && (
               <p style={{ fontSize:12, color:C.black, fontWeight:700, margin:"0 0 4px" }}>
-                ⏱ {fmtHours(pickedPkg.hours)}
+                <Ico n="clock" /> {fmtHours(pickedPkg.hours)}
                 {selService && Number(selService.extra_hour_price) > 0
                   ? <span style={{ fontWeight:500, color:C.midGray }}> · extra hour {fmtAllIn(selService.extra_hour_price)}</span> : null}
               </p>
@@ -10900,7 +10992,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                           </span>
                         </div>
                         {p.hours > 0 && (
-                          <p style={{ margin:"3px 0 0", fontSize:11, color:C.black, fontWeight:700 }}>⏱ {fmtHours(p.hours)}</p>
+                          <p style={{ margin:"3px 0 0", fontSize:11, color:C.black, fontWeight:700 }}><Ico n="clock" /> {fmtHours(p.hours)}</p>
                         )}
                         {p.description && (
                           <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
@@ -10929,7 +11021,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 ["🏢","In business", disp.yearsInBiz ? `${disp.yearsInBiz} yrs` : "N/A"],
               ].map(([icon,label,val]) => (
                 <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:12, color:C.midGray }}>{icon} {label}</span>
+                  <span style={{ fontSize:12, color:C.midGray }}>{ico(icon)} {label}</span>
                   <span style={{ fontSize:12, fontWeight:700, color:C.black }}>{val}</span>
                 </div>
               ))}
@@ -10977,15 +11069,15 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   cannot act on. They do not need to log in, they need an
                   account. The helper line below already said so; the button
                   disagreed with it. */}
-              {!user ? "🔒 Log in to book"
+              {ico(!user ? "🔒 Log in to book"
                 : user.type === "guest" ? "🔒 Sign up to book"
-                : inCartHere ? "✓ Added — set date & details in cart" : disp.instant ? "⚡ Book now" : "Start booking request"}
+                : inCartHere ? "✓ Added — set date & details in cart" : disp.instant ? "⚡ Book now" : "Start booking request")}
             </button>
             <p style={{ fontSize:11, color:C.midGray, textAlign:"center", margin:"0 0 4px", lineHeight:1.5 }}>
               {(!user || user.type === "guest")
                 ? "You need an account to send booking requests."
                 : disp.instant
-                  ? "⚡ Instant booking: open dates 3+ days away are confirmed right away, at this price. Otherwise it goes to the vendor as a request."
+                  ? ico("⚡ Instant booking: open dates 3+ days away are confirmed right away, at this price. Otherwise it goes to the vendor as a request.")
                   : "You'll pick the date, time, and location next — no details needed here."}
             </p>
 
@@ -11000,7 +11092,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 <>
                   {inquiryErr && (
                     <p style={{ fontSize:11, color:"#B91C1C", background:"#FEF2F2", border:"1px solid #FCA5A5",
-                                borderRadius:8, padding:"7px 10px", margin:"0 0 8px", fontWeight:600 }}>⚠ {inquiryErr}</p>
+                                borderRadius:8, padding:"7px 10px", margin:"0 0 8px", fontWeight:600 }}><Ico n="alert" /> {inquiryErr}</p>
                   )}
                   <textarea placeholder={(!user || user.type === "guest") ? "Log in to send an inquiry to this vendor…" : "Ask about availability, custom packages, group rates..."}
                     value={inquiryMsg} onChange={e => setInquiryMsg(e.target.value)}
@@ -11024,9 +11116,9 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                     }} className="btn" disabled={inquiryBusy}
                     style={{ width:"100%", padding:"10px 0", borderRadius:10, background:C.black, color:"#fff",
                              border:"none", fontSize:13, fontWeight:700, marginTop:8 }}>
-                    {!user ? "🔒 Log in to inquire"
+                    {ico(!user ? "🔒 Log in to inquire"
                       : user.type === "guest" ? "🔒 Sign up to inquire"
-                      : inquiryBusy ? "Sending…" : "Send inquiry"}
+                      : inquiryBusy ? "Sending…" : "Send inquiry")}
                   </button>
                 </>
               )}
@@ -11099,7 +11191,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
         {v.instant && (
           <span style={{ position:"absolute", top:12, left:12, background:"#1E40FF", color:"#fff", fontSize:12,
                          fontWeight:800, padding:"4px 10px", borderRadius:99, boxShadow:"0 2px 8px rgba(23,18,15,0.15)" }}>
-            ⚡ Instant booking
+            <Ico n="bolt" /> Instant booking
           </span>
         )}
         <button className={`heart-btn${isFav ? " active" : ""}`}
@@ -11107,7 +11199,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
           aria-pressed={isFav ? "true" : "false"}
           title={isFav ? "Remove from favorites" : "Save to favorites"}
           aria-label={isFav ? "Remove from favorites" : "Save to favorites"}>
-          {isFav ? "❤️" : "🤍"}
+          <Ico n={isFav ? "heartFill" : "heart"} />
         </button>
         {inCartNow && (
           <span style={{ position:"absolute", bottom:12, left:12, background:C.orange, color:"#fff",
@@ -11122,7 +11214,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
             {v.serviceName || v.name}
           </h3>
           <span style={{ fontSize:13, fontWeight:700, color:C.black, whiteSpace:"nowrap", flexShrink:0 }}>
-            {hasRating ? <>★ {v.rating} <span style={{ color:C.lightGray, fontWeight:500 }}>({v.revCount})</span></>
+            {hasRating ? <><Ico n="starFill" /> {v.rating} <span style={{ color:C.lightGray, fontWeight:500 }}>({v.revCount})</span></>
                        : <span style={{ color:C.green, fontWeight:700 }}>New</span>}
           </span>
         </div>
@@ -11145,8 +11237,8 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
         )}
         {(guests || v.travelMiles) && (
           <p style={{ margin:"8px 0 0", fontSize:12.5, color:C.midGray, display:"flex", gap:12, flexWrap:"wrap" }}>
-            {guests && <span>{`👥 ${guests}`}</span>}
-            {v.travelMiles ? <span>{`🚗 Travels ${v.travelMiles} mi`}</span> : null}
+            {guests && <span><Ico n="users" /> {guests}</span>}
+            {v.travelMiles ? <span><Ico n="car" /> {`Travels ${v.travelMiles} mi`}</span> : null}
           </p>
         )}
 
@@ -11163,7 +11255,7 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
             style={{ padding:"10px 16px", borderRadius:99, fontSize:13.5, fontWeight:800, whiteSpace:"nowrap",
                      background: inCartNow ? C.bgAlt : "#000",
                      color: inCartNow ? C.midGray : "#fff", minHeight:40 }}>
-            {inCartNow ? "✓ Added" : v.instant ? "⚡ Book now" : "Request to book"}
+            {ico(inCartNow ? "✓ Added" : v.instant ? "⚡ Book now" : "Request to book")}
           </button>
         </div>
       </div>
@@ -11269,7 +11361,7 @@ function ResetPasswordScreen({ token, onDone }) {
       <div style={{ background:"#fff", borderRadius:16, padding:"28px 24px", width:"100%", maxWidth:380,
                     boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
-          <span style={{ fontSize:20 }}>🔑</span>
+          <span style={{ fontSize:20 }}><Ico n="key" /></span>
           <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>Reset your password</h2>
         </div>
 
@@ -11292,7 +11384,7 @@ function ResetPasswordScreen({ token, onDone }) {
             {err && (
               <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                             borderRadius:9, padding:"9px 12px", marginBottom:12, fontSize:12, fontWeight:600 }}>
-                ⚠ {err}
+                <Ico n="alert" /> {err}
               </div>
             )}
             <PasswordInput placeholder="New password" value={pw} autoComplete="new-password"
@@ -11575,9 +11667,9 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
         style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:520,
                  maxHeight:"88vh", overflowY:"auto", padding:"22px 22px 26px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <h2 style={{ margin:0, fontSize:17, fontWeight:800 }}>🏪 Business details</h2>
-          <button onClick={onClose} className="btn"
-            style={{ border:"none", background:"#F3F4F6", borderRadius:99, width:28, height:28 }}>✕</button>
+          <h2 style={{ margin:0, fontSize:17, fontWeight:800 }}><Ico n="store" /> Business details</h2>
+          <button aria-label="Close" onClick={onClose} className="btn"
+            style={{ border:"none", background:"#F3F4F6", borderRadius:99, width:28, height:28 }}><Ico n="x" /></button>
         </div>
 
         {loading || !f ? (
@@ -11661,7 +11753,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             <div style={{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10,
                           padding:"4px 12px 12px", marginTop:14 }}>
               <p style={{ margin:"8px 0 0", fontSize:12, fontWeight:800, color:"#92400E" }}>
-                ⚖️ Legal information — required
+                <Ico n="scale" /> Legal information — required
               </p>
               <p style={{ margin:"3px 0 0", fontSize:11, color:"#92400E", lineHeight:1.5 }}>
                 Your profile and listings aren't shown on PLUJ until these four are filled in.
@@ -11745,14 +11837,14 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             {uploading && <p style={{ fontSize:11, color:C.midGray, margin:"6px 0 0" }}>Uploading…</p>}
             {!uploading && f.photos.length > 0 && (
               <p style={{ fontSize:11, color:"#B45309", margin:"6px 0 0", fontWeight:600 }}>
-                ⚠ Press “Save business details” below or your photos won't be kept.
+                <Ico n="alert" /> Press “Save business details” below or your photos won't be kept.
               </p>
             )}
 
             {err && (
               <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                                          borderRadius:9, padding:"9px 12px", marginTop:16, fontSize:12, fontWeight:600, lineHeight:1.5 }}>
-                ⚠ {err} {badKeys.size ? "The fields are outlined in red above." : ""}
+                <Ico n="alert" /> {err} {badKeys.size ? "The fields are outlined in red above." : ""}
               </div>
             )}
             <button onClick={save} disabled={saving || uploading} className="btn"
@@ -12035,7 +12127,7 @@ export function BookingPayments({ req, user, onChanged }) {
     <div onClick={e => e.stopPropagation()}
       style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:"10px 12px" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6 }}>
-        <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.black }}>💳 Payment · {fmtUSD(plan.total_cents)}</p>
+        <p style={{ margin:0, fontSize:12, fontWeight:800, color:C.black }}><Ico n="card" /> Payment · {fmtUSD(plan.total_cents)}</p>
         <span style={{ fontSize:10.5, fontWeight:800, padding:"2px 9px", borderRadius:99, background:chip[1], color:chip[2] }}>
           {chip[0]}
         </span>
@@ -12160,7 +12252,7 @@ export function BookingPayments({ req, user, onChanged }) {
         </div>
       )}
 
-      {err && <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+      {err && <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:600 }}><Ico n="alert" /> {err}</p>}
       {msg && <p style={{ margin:"8px 0 0", fontSize:11.5, color:C.green, fontWeight:700 }}>✓ {msg}</p>}
     </div>
   );
@@ -12239,7 +12331,7 @@ export function VendorPayoutsCard({ user }) {
     <div style={{ background: ready ? C.greenSoft : "#FFF7ED", border:`1px solid ${ready ? C.green + "55" : "#FED7AA"}`,
                   borderRadius:14, padding:"14px 16px", marginBottom:14 }}>
       <p style={{ margin:0, fontSize:14, fontWeight:800, color:C.black }}>
-        {ready ? "✓ Stripe payments set up" : "💳 Get paid with Stripe"}
+        {ico(ready ? "✓ Stripe payments set up" : "💳 Get paid with Stripe")}
       </p>
       <p style={{ margin:"4px 0 10px", fontSize:12, color:C.midGray, lineHeight:1.55 }}>
         {ready
@@ -12254,7 +12346,7 @@ export function VendorPayoutsCard({ user }) {
                  boxShadow: ready ? `inset 0 0 0 1px ${C.border}` : "none" }}>
         {busy ? "Opening Stripe…" : ready ? "Open Stripe dashboard" : started ? "Finish Stripe setup" : "Set up payments with Stripe"}
       </button>
-      {err && <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:600 }}>⚠ {err}</p>}
+      {err && <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", fontWeight:600 }}><Ico n="alert" /> {err}</p>}
     </div>
   );
 }
@@ -12319,7 +12411,7 @@ export function InfoPageModal({ page, onClose }) {
                  borderRadius:99, border:"none", cursor:"pointer",
                  background:"rgba(255,255,255,0.95)", color:"#111", fontSize:19, lineHeight:1,
                  boxShadow:"0 2px 10px rgba(0,0,0,0.3)", display:"flex",
-                 alignItems:"center", justifyContent:"center" }}>✕</button>
+                 alignItems:"center", justifyContent:"center" }}><Ico n="x" /></button>
 
       <div onClick={e=>e.stopPropagation()}
         style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:1100,
@@ -12333,7 +12425,7 @@ export function InfoPageModal({ page, onClose }) {
             <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>{page}</h2>
             <button onClick={onClose} className="btn" aria-label="Close"
               style={{ border:"none", background:"#F3F4F6", borderRadius:99, width:34, height:34,
-                       fontSize:16, lineHeight:1, cursor:"pointer", flexShrink:0, color:C.black }}>✕</button>
+                       fontSize:16, lineHeight:1, cursor:"pointer", flexShrink:0, color:C.black }}><Ico n="x" /></button>
           </div>
           <p style={{ fontSize:11, color:"#888", margin:"5px 0 0" }}>
             Last updated {LEGAL_UPDATED} · scroll to read it all
@@ -12453,7 +12545,12 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
     return () => clearInterval(t);
   }, [openId, loadMsgs]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
+  /* Show the newest message by scrolling the thread box itself.
+     scrollIntoView also scrolled the whole page down to the thread. */
+  useEffect(() => {
+    const end = endRef.current, box = end && end.parentElement;
+    if (box && box.scrollHeight > box.clientHeight) box.scrollTop = box.scrollHeight;
+  }, [msgs.length]);
 
   async function send() {
     const text = draft.trim();
@@ -12492,7 +12589,7 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
                      fontSize:12, fontWeight:700, cursor:"pointer" }}>← Back</button>
           <div style={{ flex:1, minWidth:0 }}>
             <p style={{ margin:0, fontSize:13.5, fontWeight:800, color:C.black }}>
-              {openConv.kind === "admin" ? "🛡️ " : ""}{openConv.otherName}
+              {openConv.kind === "admin" ? <><Ico n="shield" /> </> : ""}{openConv.otherName}
             </p>
             {openConv.serviceName && (
               <p style={{ margin:0, fontSize:11, color:C.midGray }}>about {openConv.serviceName}</p>
@@ -12502,14 +12599,14 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
             <button onClick={stopConv} disabled={busy} className="btn"
               style={{ border:"1px solid #FCA5A5", background:"#FEF2F2", color:"#B91C1C",
                        borderRadius:8, padding:"6px 11px", fontSize:11.5, fontWeight:700, cursor:"pointer" }}>
-              ⛔ Stop
+              <Ico n="stop" /> Stop
             </button>
           )}
         </div>
 
         {err && (
           <p style={{ margin:"8px 0 0", fontSize:11.5, color:"#B91C1C", background:"#FEF2F2",
-                      border:"1px solid #FCA5A5", borderRadius:8, padding:"7px 10px", fontWeight:600 }}>⚠ {err}</p>
+                      border:"1px solid #FCA5A5", borderRadius:8, padding:"7px 10px", fontWeight:600 }}><Ico n="alert" /> {err}</p>
         )}
 
         {/* Messages */}
@@ -12540,7 +12637,7 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
         {openConv.status === "closed" ? (
           <div style={{ flexShrink:0, background:"#F3F4F6", borderRadius:10, padding:"11px 13px", textAlign:"center" }}>
             <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.midGray }}>
-              ⛔ This conversation was ended. History stays visible.
+              <Ico n="stop" /> This conversation was ended. History stays visible.
             </p>
           </div>
         ) : expiredByDate ? (
@@ -12585,7 +12682,7 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
                    borderTopStyle:"solid", background:"#fff", padding:"11px 2px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", gap:8 }}>
             <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }}>
-              {c.kind === "admin" ? "🛡️ " : ""}{c.otherName}
+              {c.kind === "admin" ? <><Ico n="shield" /> </> : ""}{c.otherName}
               {c.serviceName ? <span style={{ color:C.midGray, fontWeight:600 }}> · {c.serviceName}</span> : null}
             </p>
             <span style={{ fontSize:10, color:C.lightGray, whiteSpace:"nowrap" }}>
@@ -12593,8 +12690,8 @@ export function MessagesPanel({ user, isAdmin = false, focusId = null }) {
             </span>
           </div>
           <p style={{ margin:"2px 0 0", fontSize:11, color: c.active ? C.green : C.lightGray, fontWeight:600 }}>
-            {c.status === "closed" ? "⛔ Ended"
-              : c.active ? "● Open" : "⏳ Closed automatically (3 days after event)"}
+            {ico(c.status === "closed" ? "⛔ Ended"
+              : c.active ? "● Open" : "⏳ Closed automatically (3 days after event)")}
           </p>
         </button>
       ))}
@@ -12807,7 +12904,7 @@ export function EmailLinkScreen({ link, onSession, onFinish, onRequestNew }) {
     }}>
       <div style={{ maxWidth:400, width:"100%" }}>
         <div style={{ marginBottom:28 }}><PlujMark size={48} light /></div>
-        {stage === "done" && <div style={{ fontSize:44, marginBottom:8 }}>✅</div>}
+        {stage === "done" && <div style={{ fontSize:44, marginBottom:8 }}><IcoBadge n="checkCircle" size={64} /></div>}
         <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.02em", margin:"0 0 10px" }}>{title}</h1>
         <p style={{ margin:"0 0 24px", color:"rgba(255,255,255,0.72)", fontSize:15 }}>{body}</p>
         {action}
@@ -13291,7 +13388,7 @@ export function WaitlistAdmin() {
   return (
     <div>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-        <span style={{ fontSize:16 }}>📬</span>
+        <span style={{ fontSize:16 }}><Ico n="inbox" /></span>
         <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Waitlist</h3>
         <a href="/?preview=coming-soon" target="_blank" rel="noopener noreferrer"
            style={{ marginLeft:"auto", fontSize:12.5, fontWeight:700, color:C.cobalt }}>See the sign-up page</a>
@@ -13740,6 +13837,32 @@ export default function PlujApp() {
       if (link) link.setAttribute("href", SITE_ORIGIN + want);
     } catch { /* history is unavailable in some embedded webviews */ }
   }, [vendorPage, activeCat, activeSub]);
+
+  /* ── A new page starts at the top ─────────────────────────────────────────
+     Opening a listing, a category or Build my event used to keep the old
+     scroll position. Clicked from far down a long page, that left you at the
+     bottom of the next, shorter one (the browser can't scroll past the end),
+     which looked like the page jumping to the bottom by itself. Now a new page
+     opens at the top, and "Back to results" returns to where you were in the
+     list. Picking a subcategory stays put: it's the same page, filtered.
+     Buttons that scroll somewhere on purpose (to the results, to the
+     directory) do it after this runs, so they still win. */
+  const pageKey = vendorPage ? "vendor:" + vendorPage.id : "cat:" + (activeCat || "all");
+  const pageKeyRef = useRef(pageKey);
+  const scrollMemo = useRef({});
+  useEffect(() => {
+    const remember = () => { scrollMemo.current[pageKeyRef.current] = window.scrollY; };
+    window.addEventListener("scroll", remember, { passive: true });
+    return () => window.removeEventListener("scroll", remember);
+  }, []);
+  useLayoutEffect(() => {
+    const prev = pageKeyRef.current;
+    if (prev === pageKey) return;
+    pageKeyRef.current = pageKey;
+    const back = prev.startsWith("vendor:") && !pageKey.startsWith("vendor:");
+    const y = back ? (scrollMemo.current[pageKey] || 0) : 0;
+    try { window.scrollTo({ top: y, left: 0, behavior: "instant" }); } catch { window.scrollTo(0, y); }
+  }, [pageKey]);
 
 
   /* ── Title and description per view ────────────────────────────────────────
@@ -14467,10 +14590,10 @@ export default function PlujApp() {
                    background: payBanner.tone === "ok" ? "#ECFDF5" : payBanner.tone === "warn" ? "#FFFBEB" : "#EFF6FF",
                    color: payBanner.tone === "ok" ? "#065F46" : payBanner.tone === "warn" ? "#92400E" : "#1E3A8A",
                    border: `1px solid ${payBanner.tone === "ok" ? "#A7F3D0" : payBanner.tone === "warn" ? "#FCD34D" : "#BFDBFE"}` }}>
-          {payBanner.text}
+          {ico(payBanner.text)}
           <button onClick={() => setPayBanner(null)} aria-label="Dismiss" className="btn"
             style={{ position:"absolute", right:8, top:8, width:28, height:28, borderRadius:99, border:"none",
-                     background:"rgba(0,0,0,0.06)", cursor:"pointer", fontSize:13 }}>✕</button>
+                     background:"rgba(0,0,0,0.06)", cursor:"pointer", fontSize:13 }}><Ico n="x" /></button>
         </div>
       )}
 
@@ -14613,16 +14736,20 @@ export default function PlujApp() {
                                color: user.type==="admin" ? "#fff" : C.black, marginLeft: user.type==="admin" ? 7 : 0 }}>
                   {(user.displayName||user.name||"").split(" ")[0]}
                 </span>
-                {user.type==="admin"  && <span style={{ fontSize:10, background:"rgba(255,255,255,0.15)", color:"#fff", padding:"1px 7px", borderRadius:99, fontWeight:800 }}>🛡️ Admin</span>}
+                {user.type==="admin"  && <span style={{ fontSize:10, background:"rgba(255,255,255,0.15)", color:"#fff", padding:"1px 7px", borderRadius:99, fontWeight:800 }}><Ico n="shield" /> Admin</span>}
                 {user.type==="vendor" && <span style={{ fontSize:10, background:"#F5F3FF", color:"#7C3AED", padding:"1px 7px", borderRadius:99, fontWeight:700 }}>
-                  {user.status==="approved" ? "✓ Vendor" : user.status==="rejected" ? "✗ Vendor" : "⏳ Vendor"}
+                  {ico(user.status==="approved" ? "✓ Vendor" : user.status==="rejected" ? "✗ Vendor" : "⏳ Vendor")}
                 </span>}
                 {user.type==="admin" && (
-                  <button onClick={e=>{e.stopPropagation();setAdminPanelTab("accounts");setAdminPanelOpen(true);}} className="btn"
-                    style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:99,
+                  /* A span, not a button: it sits inside the account button, and a
+                     button inside a button is invalid HTML. */
+                  <span role="button" tabIndex={0} className="btn"
+                    onClick={e=>{e.stopPropagation();setAdminPanelTab("accounts");setAdminPanelOpen(true);}}
+                    onKeyDown={e=>{ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setAdminPanelTab("accounts"); setAdminPanelOpen(true); } }}
+                    style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:99, cursor:"pointer",
                              padding:"2px 8px", fontSize:10, color:"#fff", fontWeight:700, marginLeft:2 }}>
                     Panel
-                  </button>
+                  </span>
                 )}
               </button>
               <button onClick={async()=>{await clearSession();setUser(null);}} className="btn"
@@ -14650,7 +14777,7 @@ export default function PlujApp() {
                      color: cart.length ? "#fff" : C.black,
                      border:"none", borderRadius:99, padding:"8px 14px", fontSize:13,
                      fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-            <Emoji e="🛒" size={15} />
+            <Ico n="cart" />
             {cart.length > 0 && (
               <span style={{ background:C.orange, color:"#fff", borderRadius:99,
                              fontSize:11, fontWeight:800, padding:"0 6px" }}>{cart.length}</span>
@@ -14675,7 +14802,7 @@ export default function PlujApp() {
           <div style={{ maxWidth:1240, margin:"0 auto", display:"flex", flexWrap:"wrap", gap:8, alignItems:"stretch" }}>
             <label className="sq" style={{ flex:"2 1 220px", minWidth:180, display:"flex", alignItems:"center", gap:8,
                             border:`1px solid ${C.border}`, borderRadius:12, padding:"0 12px", background:"#fff" }}>
-              <span aria-hidden="true">🔍</span>
+              <span aria-hidden="true"><Ico n="search" /></span>
               <input ref={searchRef} placeholder="Search DJs, catering, flowers, lighting..."
                 value={search} onChange={e => setSearch(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") pickCat("all"); }}
@@ -14683,7 +14810,7 @@ export default function PlujApp() {
                 style={{ flex:1, border:"none", outline:"none", fontSize:14, height:40, background:"transparent", minWidth:0 }} />
               {search && (
                 <button onClick={() => setSearch("")} className="btn" aria-label="Clear search"
-                  style={{ background:"none", color:C.lightGray, fontSize:16, padding:"0 2px" }}>✕</button>
+                  style={{ background:"none", color:C.lightGray, fontSize:16, padding:"0 2px" }}><Ico n="x" /></button>
               )}
             </label>
             {[
@@ -14699,7 +14826,7 @@ export default function PlujApp() {
               ["Event", <select value={qEventType} onChange={e=>setQEventType(e.target.value)} aria-label="Event type"
                           style={{ color: qEventType ? C.black : C.lightGray }}>
                           <option value="">Any occasion</option>
-                          {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+                          {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                         </select>],
               ["Guests", <input type="number" min="1" value={qGuests} onChange={e=>setQGuests(e.target.value)}
                           placeholder="How many" aria-label="Guests" />],
@@ -14821,7 +14948,7 @@ export default function PlujApp() {
                 </div>
                 <div className="tear" />
                 <div className="bottom">
-                  <div className="ok">⚡ Booked instantly</div>
+                  <div className="ok"><Ico n="bolt" /> Booked instantly</div>
                   <div className="total">$3,150</div>
                   <div className="note">The total you pay. Nothing added.</div>
                 </div>
@@ -14936,7 +15063,7 @@ export default function PlujApp() {
               <div className="occasions">
                 <h3>For every kind of celebration</h3>
                 <div className="pills sm" role="group" aria-label="Occasions">
-                  {["birthday","wedding","baby","graduation","corporate","kids","social","quince","concert","seminar"].map(id => {
+                  {["birthday","wedding","wedding-events","baby","graduation","corporate","kids","social","quince","concert","seminar"].map(id => {
                     const t = EVENT_TYPES.find(e => e.id === id);
                     if (!t) return null;
                     return (
