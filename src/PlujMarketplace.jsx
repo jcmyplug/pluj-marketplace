@@ -8108,6 +8108,29 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
   const [wizEndDate, setWizEndDate] = useState("");
   const endSameDay = !wizEndDate || wizEndDate === wizDate;
 
+  /* Each step of the builder starts at its top. The page used to stay where
+     the person had scrolled to on the step before (often far down a list of
+     vendors or below the time pickers), so a shorter next step showed the
+     footer, which looked like the page jumping to the bottom by itself. This
+     only ever moves up, to the new step's heading; scrolling down is left to
+     the person. */
+  const stepKey = `${phase}:${catIdx}`;
+  const lastStepKey = useRef(stepKey);
+  useLayoutEffect(() => {
+    if (lastStepKey.current === stepKey) return;
+    lastStepKey.current = stepKey;
+    if (window.scrollY > 0) {
+      try { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); } catch { window.scrollTo(0, 0); }
+    }
+  }, [stepKey]);
+  /* Focus the occasion box without letting the browser scroll to it. */
+  const socialRef = useRef(null);
+  useEffect(() => {
+    if (phase === "define" && socialRef.current) {
+      try { socialRef.current.focus({ preventScroll: true }); } catch { /* old browser */ }
+    }
+  }, [phase]);
+
   const evt = EVENT_PACKAGES.find(p => p.id === eventId);
   const walk = BUILD_CATEGORY_WALK;
   const curCat = walk[catIdx];
@@ -8322,7 +8345,7 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         <p style={{ fontSize:13, color:C.midGray, margin:"0 0 18px" }}>
           A reunion, dinner party, holiday get-together… what's the occasion?
         </p>
-        <input value={social} onChange={e=>setSocial(e.target.value)} autoFocus
+        <input ref={socialRef} value={social} onChange={e=>setSocial(e.target.value)}
           placeholder="e.g. Family reunion for 40"
           style={{ width:"100%", height:46, padding:"0 14px", borderRadius:11, fontSize:14,
                    border:`1.5px solid ${C.border}`, boxSizing:"border-box", marginBottom:14 }} />
