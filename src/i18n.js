@@ -116,6 +116,12 @@ export function translate(s) {
     const done = parts.map(p => dict.exact[p.trim()] ?? translateDates(p));
     if (done.some((v, i) => v !== parts[i])) return lead + done.join(" · ") + trail;
   }
+  /* A list the code joined with commas ("legal business name, EIN (9 digits)"),
+     when every item is a known phrase. */
+  if (key.includes(", ")) {
+    const parts = key.split(", ");
+    if (parts.every(x => dict.exact[x.trim()] != null)) return lead + parts.map(x => dict.exact[x.trim()]).join(", ") + trail;
+  }
   const dated = translateDates(key);
   if (dated !== key) return lead + dated + trail;
   /* Multi-line messages (alerts, notices): translate line by line. */

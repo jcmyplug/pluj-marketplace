@@ -231,6 +231,12 @@ function VendorReview({ vendorId, onDecided }) {
     ...listings.flatMap(l => parsePhotos(l.photos)),
   ])].filter(u => typeof u === "string" && /^https:\/\//i.test(u));
 
+  /* Same rule as the database (vendor_missing_items): without these the
+     profile is not shown to hosts, approved or not. The licence is optional. */
+  const legalComplete = !!(String(v.biz_legal || "").trim() && String(v.biz_type || "").trim() &&
+    String(v.ein || "").replace(/\D/g, "").length === 9 && String(v.managing_members || "").trim() &&
+    String(v.biz_address || "").trim() && String(v.biz_city || "").trim() && String(v.biz_state || "").trim() &&
+    /^\d{5}(-\d{4})?$/.test(String(v.biz_zip || "").trim()) && String(v.biz_phone || "").replace(/\D/g, "").length >= 10);
   const checks = [
     [!!p.responsibility_accepted_at, "Confirmed their information is true",
                                     "Signed up before the truthfulness box existed"],
@@ -239,6 +245,8 @@ function VendorReview({ vendorId, onDecided }) {
                                     desc ? "Business description is very short" : "No business description"],
     [String(phone).replace(/\D/g,"").length >= 10, "Phone number given",     "No phone number"],
     [!!String(v.biz_website || "").trim(), "Website or social media given",  "No website or social media"],
+    [legalComplete,                 "Legal information complete",
+                                    "Legal information missing: profile stays hidden even if approved"],
     [listings.length > 0,           `${listings.length} listing${listings.length===1?"":"s"} added`, "No listings yet"],
     [photos.length > 0,             `${photos.length} photo${photos.length===1?"":"s"} uploaded`,     "No photos yet"],
   ];
@@ -317,7 +325,12 @@ function VendorReview({ vendorId, onDecided }) {
       </div>
 
       <H>Badge checks</H>
+      <p style={{ margin:"0 0 4px", fontSize:11.5, color:C.midGray, lineHeight:1.5 }}>
+        A license (or DSHS / TABC permit) plus insurance, both checked, gives the vendor the blue ✓ Verified mark.
+      </p>
       {[
+        ["license_checked_at", "Business license / permit", v.biz_license || "",
+          "Look the number up with the city, county or state office that issued it."],
         ["coi_checked_at",  "Certificate of insurance",
           v.coi_insurer ? `${v.coi_insurer}${v.coi_expires_on ? `, expires ${v.coi_expires_on}` : ""}` : "",
           "Call or email the insurer to confirm the policy is active and the dates match."],

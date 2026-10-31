@@ -881,6 +881,11 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 @media (prefers-reduced-motion: reduce) { .recap-card:hover .recap-img img { transform: none; } }
 /* Trust badges on cards: what PLUJ checked by hand. */
 .badge-chk { font-size: 11.5px; font-weight: 700; color: var(--cobalt); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; line-height: 1.4; }
+/* The Verified check mark: PLUJ checked a licence or permit AND insurance. */
+.vcheck { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: var(--cobalt); color: #fff; vertical-align: -0.18em; margin-left: 5px; }
+.vcheck svg { display: block; }
+.verified-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--cobalt); background: var(--accent-soft); border-radius: 999px; padding: 4px 11px 4px 5px; }
+.verified-pill .vcheck { margin-left: 0; }
 /* The PLUJ promise: an icy panel with the brand light in the corner. */
 .promise-block { margin-top: 72px; border-radius: 32px; padding: 48px 44px 40px; background: var(--field); overflow: hidden; }
 .promise-block .kicker { margin: 0 0 14px; font-size: 14px; font-weight: 700; color: var(--cobalt); }
@@ -2495,6 +2500,11 @@ function dbVendorToCard(v) {
     blurb:       v.description || "This vendor hasn't added a description yet.",
     tags:        (v.service_areas ? [v.service_areas] : []).concat(v.capacity ? [v.capacity] : []),
     instant:     false,
+    insured:     v.coi_checked === true,
+    dshsOk:      v.dshs_checked === true,
+    tabcOk:      v.tabc_checked === true,
+    licensed:    v.license_checked === true,
+    verified:    isVerifiedVendor(v),
     feat:        false,
     yearsInBiz:  v.years_in_biz || 0,
     travelMiles: v.travel_miles || 0,
@@ -2857,6 +2867,8 @@ function dbServiceToCard(s, v) {
     insured:     v.coi_checked === true,
     dshsOk:      v.dshs_checked === true,
     tabcOk:      v.tabc_checked === true,
+    licensed:    v.license_checked === true,
+    verified:    isVerifiedVendor(v),
     feat:        false,
     yearsInBiz:  v.years_in_biz || 0,
     travelMiles: (s.travel_miles != null ? s.travel_miles : v.travel_miles) || 0,
@@ -10377,8 +10389,14 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
             </h1>
             <p style={{ margin:"5px 0 0", fontSize:14, color:C.midGray }}>
               by <span style={{ fontWeight:800, color:C.black }}>{disp.name}</span>
+              {(full ? isVerifiedVendor(full) : vendor.verified) && <VerifiedMark size={17} />}
               {disp.city ? <span style={{ color:C.lightGray }}> · 📍 {disp.city}</span> : null}
             </p>
+            {(full ? isVerifiedVendor(full) : vendor.verified) && (
+              <p style={{ margin:"8px 0 0" }}>
+                <span className="verified-pill"><VerifiedMark size={18} /> Verified · licensed and insured, checked by PLUJ</span>
+              </p>
+            )}
           </div>
           {onToggleFav && (
             <button type="button" className="btn"
@@ -11022,7 +11040,8 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 {[
                   [true, "Business reviewed and approved by hand"],
                   [full?.legal_on_file === true, "Legal name, EIN, address and owners on file"],
-                  [full?.license_on_file === true, "License or permit number on file"],
+                  [full?.license_checked === true, "Business license or permit checked"],
+                  [full?.license_on_file === true && full?.license_checked !== true, "License or permit number on file"],
                   [full?.coi_checked === true, full?.coi_valid_until
                       ? `Insurance certificate checked, valid until ${new Date(full.coi_valid_until + "T12:00:00").toLocaleDateString("en-US", { month:"short", year:"numeric" })}`
                       : "Insurance certificate checked"],
@@ -11112,10 +11131,12 @@ function VCard({ v, inCart, onAdd, onRemove, onView, isFav, onToggleFav }) {
         </p>
         <p style={{ margin:"2px 0 0", fontSize:13.5, color:C.midGray }}>
           by <span data-no-translate style={{ fontWeight:700, color:C.black }}>{v.name}</span>
+          {v.verified && <VerifiedMark size={15} />}
           {city ? <> · {city}</> : null}
         </p>
-        {(v.insured || v.dshsOk || v.tabcOk || (v.langs || []).includes("es")) && (
+        {(v.licensed || v.insured || v.dshsOk || v.tabcOk || (v.langs || []).includes("es")) && (
           <p style={{ margin:"8px 0 0", display:"flex", gap:6, flexWrap:"wrap" }}>
+            {v.licensed && <span className="badge-chk">Licensed</span>}
             {v.insured && <span className="badge-chk">Insured</span>}
             {v.dshsOk && <span className="badge-chk">DSHS permit</span>}
             {v.tabcOk && <span className="badge-chk">TABC permit</span>}
@@ -11320,6 +11341,24 @@ export const VENDOR_LANGUAGES = [
   ["en","English"], ["es","Spanish"], ["vi","Vietnamese"], ["zh","Chinese"], ["ar","Arabic"], ["fr","French"],
   ["hi","Hindi"], ["ur","Urdu"], ["tl","Tagalog"], ["ko","Korean"], ["pt","Portuguese"],
 ];
+/* Blue check mark next to a vendor's name. Shown only when PLUJ has checked a
+   licence or permit and a current insurance certificate, by hand. */
+export function isVerifiedVendor(v) {
+  if (!v) return false;
+  const licensed = v.license_checked === true || v.dshs_checked === true || v.tabc_checked === true || v.licensed === true || v.dshsOk === true || v.tabcOk === true;
+  const insured  = v.coi_checked === true || v.insured === true;
+  return licensed && insured;
+}
+export function VerifiedMark({ size = 16 }) {
+  return (
+    <span className="vcheck" role="img" aria-label="Verified by PLUJ: licensed and insured"
+      title="Verified by PLUJ: licensed and insured" style={{ width:size, height:size }}>
+      <svg width={Math.round(size * 0.62)} height={Math.round(size * 0.62)} viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M2.2 6.3 4.9 8.9 9.8 3.4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
 function CheckStatus({ at, filled }) {
   if (!filled) return null;
   return (
@@ -11375,6 +11414,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
         coi_checked_at:  d?.coi_checked_at  || null,
         dshs_checked_at: d?.dshs_checked_at || null,
         tabc_checked_at: d?.tabc_checked_at || null,
+        license_checked_at: d?.license_checked_at || null,
       };
       loadedRef.current = JSON.stringify(loaded);
       let merged = loaded;
@@ -11471,7 +11511,6 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
     need(!f.biz_state.trim(), "biz_state", "state");
     need(!!f.biz_zip.trim() && !/^\d{5}(-\d{4})?$/.test(f.biz_zip.trim()), "biz_zip", "a 5-digit ZIP code");
     need(!!f.biz_phone.trim() && f.biz_phone.replace(/\D/g, "").length < 10, "biz_phone", "a 10-digit business phone");
-    need(!f.biz_license.trim() && !f.license_not_required, "biz_license", "licence / permit number (or tick that you don't need one)");
     need(!!f.coi_insurer.trim() && !f.coi_expires_on, "coi_expires_on", "the date your insurance certificate expires");
     need(!f.coi_insurer.trim() && !!f.coi_expires_on, "coi_insurer", "your insurance company's name");
     if (missing.length) {
@@ -11500,7 +11539,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
       service_areas: f.service_areas,
       years_in_biz:  yrs === "" ? null : parseInt(yrs, 10),
       biz_legal:     f.biz_legal.trim() || null,
-      biz_license:   f.license_not_required ? (f.biz_license.trim() || null) : f.biz_license.trim(),
+      biz_license:   f.biz_license.trim() || null,      /* optional: earns the Licensed badge once PLUJ checks it */
       biz_website:   f.biz_website.trim() || null,
       biz_type:      f.biz_type,
       biz_state:     f.biz_state.trim().toUpperCase(),
@@ -11622,10 +11661,11 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             <div style={{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10,
                           padding:"4px 12px 12px", marginTop:14 }}>
               <p style={{ margin:"8px 0 0", fontSize:12, fontWeight:800, color:"#92400E" }}>
-                ⚖️ Legal information — required before you can post a listing
+                ⚖️ Legal information — required
               </p>
               <p style={{ margin:"3px 0 0", fontSize:11, color:"#92400E", lineHeight:1.5 }}>
-                Private: only PLUJ sees it. Hosts never see your EIN, address or owners.
+                Your profile and listings aren't shown on PLUJ until these four are filled in.
+                Private: only PLUJ sees them. Hosts never see your EIN, address or owners.
               </p>
               <label style={L}>Legal business name *</label>
               <input style={bz("biz_legal", F)} data-bf="biz_legal" value={f.biz_legal} onChange={e=>set("biz_legal", e.target.value)}
@@ -11645,17 +11685,6 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
               <label style={L}>Owner / managing members *</label>
               <input style={bz("managing_members", F)} data-bf="managing_members" value={f.managing_members} onChange={e=>set("managing_members", e.target.value)}
                 placeholder="Full names, e.g. Maria Lopez, Juan Lopez" />
-              <label style={L}>Business license / permit number {f.license_not_required ? <Opt /> : "*"}</label>
-              <input style={bz("biz_license", F)} data-bf="biz_license" value={f.biz_license} onChange={e=>set("biz_license", e.target.value)}
-                placeholder="e.g. food truck permit, TABC, sales tax permit" />
-              <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:8, cursor:"pointer" }}>
-                <input type="checkbox" checked={f.license_not_required}
-                  onChange={e=>set("license_not_required", e.target.checked)}
-                  style={{ marginTop:2, accentColor:C.orange }} />
-                <span style={{ fontSize:11.5, color:C.midGray, lineHeight:1.5 }}>
-                  My service doesn't need a license or permit, and I'm responsible if that's wrong.
-                </span>
-              </label>
             </div>
             <label style={L}>Website or social page <Opt /></label>
             <input style={bz("biz_website", F)} data-bf="biz_website" value={f.biz_website} onChange={e=>set("biz_website", e.target.value)} />
@@ -11679,9 +11708,23 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             <div style={{ border:"1px solid #CFD8F5", background:"#F4F7FF", borderRadius:20, padding:"4px 12px 12px", marginTop:14 }}>
               <p style={{ margin:"8px 0 0", fontSize:12.5, fontWeight:800, color:C.black }}>Checks that earn you a badge <Opt /></p>
               <p style={{ margin:"3px 0 0", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
-                PLUJ checks these by hand with the insurer or the state, then shows hosts a badge. Hosts see the badge, not your numbers.
+                Fill in what you have and PLUJ checks it by hand with the agency or the insurer. Once checked, hosts see a badge on your profile:
+                <b style={{ color:C.black }}> Licensed</b>, <b style={{ color:C.black }}>Insured</b>, and the
+                <b style={{ color:"#1E40FF" }}> ✓ Verified</b> check mark when you have both. Hosts see the badge, not your numbers.
                 Changing a detail means it is checked again.
               </p>
+              <label style={L}>Business license / permit number</label>
+              <input style={bz("biz_license", F)} data-bf="biz_license" value={f.biz_license} onChange={e=>set("biz_license", e.target.value)}
+                placeholder="e.g. city or county business license, food truck permit" />
+              <CheckStatus at={f.license_checked_at} filled={!!f.biz_license.trim()} />
+              <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:8, cursor:"pointer" }}>
+                <input type="checkbox" checked={f.license_not_required}
+                  onChange={e=>set("license_not_required", e.target.checked)}
+                  style={{ marginTop:2, accentColor:C.orange }} />
+                <span style={{ fontSize:11.5, color:C.midGray, lineHeight:1.5 }}>
+                  My service doesn't need a license or permit, and I'm responsible if that's wrong.
+                </span>
+              </label>
               <label style={L}>Insurance company (certificate of insurance)</label>
               <input style={bz("coi_insurer", F)} data-bf="coi_insurer" value={f.coi_insurer} onChange={e=>set("coi_insurer", e.target.value)} placeholder="e.g. State Farm, policy GL-123456" />
               <label style={L}>Certificate expires on</label>
@@ -11794,9 +11837,9 @@ const INFO_CONTENT = {
     ["Who this is for", "A vendor is a business that provides a service at events — a DJ, a caterer, a food truck, a venue, a photographer, rentals. On PLUJ you have one business account and as many listings as services you offer."],
     ["1. Create your account", "Press Log in / Sign up, choose Sign up, and pick Vendor. Enter your name, your business name, a short description of your business (at least 40 characters: what you offer, the events you work and how long you've been doing it), your website or social media if you have one, email, password, phone and date of birth. On the next screen answer the human check, accept PLUJ's terms, tick the box confirming your business information is true and that you're responsible for what you post, and press Create vendor account."],
     ["2. Confirm your email", "Open the newest Confirm your email address email, tap the link, and press Confirm my email on the page that opens. The link works once and expires after 10 minutes. You'll land in your vendor dashboard."],
-    ["3. Add your business details", "Your dashboard shows a short checklist. The first step is Add business details: business name, a short description of your business, business phone, city and ZIP, and the areas you work in. Then your legal information, which is required before you can post any listing: legal business name, business type, EIN, business street address, owners or managing members, and your license or permit number (or tick that your service doesn't need one). Your phone, address, EIN and owners are private — only PLUJ sees them. You can change all of this later under Business profile."],
+    ["3. Add your business details", "Your dashboard shows a short checklist. The first step is Add business details: business name, a short description of your business, business phone, city and ZIP, and the areas you work in. Then your legal information, which is required: legal business name, business type, EIN, business street address, and owners or managing members. Until it's complete you can't post a listing and hosts can't see your profile, even after PLUJ approves you. A license or permit number and insurance are optional: add them and once PLUJ checks them, hosts see Licensed and Insured badges on your profile, and a blue ✓ Verified check mark when you have both. Your phone, address, EIN and owners are private — only PLUJ sees them. You can change all of this later under Business profile."],
     ["4. Create your listings", "A listing is one service hosts can book. A DJ who also rents a photo booth has two listings; a caterer with a taco truck and a dessert truck has two. Go to My listings and press Add listing. For each one set its own name, the category (Rentals can pick as many types as apply, other categories up to 3), a description, a starting price and how long it covers (a 4-hour set, a 24-hour rental, 3 hours of truck service), guest capacity, photos (up to 10, the first is the cover), where you'll travel, and the days and times it's offered. Pricing options can each have their own time, what's included, and anything the host must provide (power, space, parking). Switch on Instant booking for a listing with a fixed price and hosts can book your open dates (3+ days away) on the spot — you're notified straight away. Listings with good photos and a clear description get far more requests."],
-    ["5. Approval", "PLUJ reviews your description, business details and listings, usually within 1–2 business days. We may message you to ask for proof that your business is real, such as a website, social media page or license. Your listings stay hidden until you're approved, then go live automatically. You'll get a notification in your dashboard and the checklist turns green."],
+    ["5. Approval", "PLUJ reviews your description, business details and listings, usually within 1–2 business days. We may message you to ask for proof that your business is real, such as a website, social media page or license. Your listings stay hidden until you're approved and your legal information is complete, then go live automatically. You'll get a notification in your dashboard and the checklist turns green."],
     ["6. Answer booking requests", "When a host sends a request it appears under Requests and in Notifications, and we email you. Open it to see the date, time, guest count, venue and message. Press Accept booking to confirm or Decline if you can't do it. Please answer quickly — hosts often send requests to several vendors and book whoever confirms first."],
     ["7. Keep your calendar honest", "Use Availability to block dates you're already booked or away. Days none of your listings work are shown there as Off automatically, and you can tap a listing to see just its days. In each listing you can also set how many events you take per day, how many hours you need between events, and how much notice you need. PLUJ won't show you to hosts for times you can't do."],
     ["8. Messages", "Use Messages to answer host questions before and after you accept. Conversations stay open until 3 days after the event."],
@@ -15268,7 +15311,7 @@ export default function PlujApp() {
         <div style={{ maxWidth:1240, margin:"0 auto", padding:"16px 28px 30px",
                       display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, fontSize:13.5, color:"#4B5260" }}>
           <span>© 2026 PLUJ, Houston, Texas</span>
-          <span>Every pro checked by hand · #weknowaguy</span>
+          <span>Real pros. Personally vetted. #weknowaguy</span>
         </div>
       </footer>
     </div>

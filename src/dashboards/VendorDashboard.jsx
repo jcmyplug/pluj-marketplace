@@ -617,10 +617,10 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
         <div role="alert" style={{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10,
                                    padding:"11px 13px", marginTop:10 }}>
           <p style={{ margin:0, fontSize:12.5, fontWeight:800, color:"#92400E" }}>
-            ⚖️ Add your legal information before posting a listing
+            ⚖️ Your profile isn't on PLUJ yet
           </p>
           <p style={{ margin:"4px 0 8px", fontSize:11.5, color:"#92400E", lineHeight:1.55 }}>
-            Still missing: {legalMissing.join(", ")}. It's private — only PLUJ sees it.
+            Hosts can't see your profile or listings until you add: {legalMissing.join(", ")}. It's private — only PLUJ sees it.
           </p>
           {onOpenBusiness && (
             <button type="button" onClick={onOpenBusiness} className="btn"
@@ -1467,9 +1467,9 @@ function VendorDashboard({ user, onLogout }) {
 
   /* The three things a new vendor has to do, in order. Business details are
      what PLUJ approves; a listing is what hosts book. */
+  /* Same rule as the database (vendor_missing_items): the licence is optional. */
   const legalDone   = !!(listing?.biz_legal && listing?.biz_type && String(listing?.ein || "").replace(/\D/g, "").length === 9 &&
-                         listing?.managing_members && listing?.biz_address && listing?.biz_state &&
-                         (listing?.biz_license || listing?.license_not_required));
+                         listing?.managing_members && listing?.biz_address && listing?.biz_state);
   const detailsDone = !!(listing?.business_name && listing?.description && listing?.biz_phone &&
                          listing?.biz_city && listing?.biz_zip && listing?.service_areas) && legalDone;
   const hasListing  = (svcCount || 0) > 0;
@@ -1537,20 +1537,20 @@ function VendorDashboard({ user, onLogout }) {
                         padding:"16px 18px", marginBottom:14 }}>
             <p style={{ margin:0, fontSize:15, fontWeight:800 }}>Get your business live on PLUJ</p>
             <p style={{ margin:"3px 0 12px", fontSize:12, color:C.midGray }}>
-              Three steps. Your listings go live as soon as step 3 is done.{" "}
+              Three steps. Your profile and listings go live once all three are done.{" "}
               <span onClick={()=>setShowGuide(true)} style={{ color:C.orange, fontWeight:700, cursor:"pointer" }}>
                 Read the vendor guide
               </span>
             </p>
             {[
               { done: detailsDone, n: 1, title: "Add your business details and legal information",
-                text: "Name, a short description, phone, where you work, and your legal information (legal name, business type, EIN, address, owners, license). Required before you can post a listing.",
+                text: "Name, a short description, phone, where you work, and your legal information (legal business name, business type, EIN, owner / managing members). Your profile isn't shown on PLUJ until this is done. A license number and insurance are optional and earn you badges.",
                 cta: "Add business details", go: () => setEditing(true) },
               { done: hasListing, n: 2, title: "Create your first listing",
                 text: "One listing per service you offer — a DJ set, a taco truck, a venue. Each has its own price, photos and availability.",
                 cta: "Create a listing", go: () => setTab("listings") },
               { done: isApproved, n: 3, title: "PLUJ approves your business",
-                text: isApproved ? "Approved — you're live." :
+                text: isApproved ? (detailsDone ? "Approved — you're live." : "Approved. You go live as soon as step 1 is done.") :
                       detailsDone ? "We're reviewing your details, usually within 1–2 business days. You'll get a notification here." :
                                     "Starts once your business details are in.",
                 cta: null },
