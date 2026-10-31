@@ -866,6 +866,18 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .foot button.lnk { display: block; background: none; border: none; padding: 5px 0; font-size: 14.5px; color: var(--ink-2); cursor: pointer; text-align: left; }
 .foot button.lnk:hover { color: var(--cobalt); }
 .wordmark { padding: 8px 28px 0; max-width: 1240px; margin: 0 auto; }
+/* Footer's last line: copyright left, Instagram centred, tagline right. */
+.foot-base { max-width: 1240px; margin: 0 auto; padding: 16px 28px 30px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px 16px; font-size: 13.5px; color: #4B5260; }
+.foot-base > :first-child { justify-self: start; }
+.foot-base > :last-child { justify-self: end; text-align: right; }
+.foot-ig { justify-self: center; text-align: center; color: #000; font-weight: 600; }
+.foot-ig a { color: var(--cobalt); font-weight: 800; text-decoration: none; }
+.foot-ig a:hover, .foot-ig a:focus-visible { text-decoration: underline; }
+@media (max-width: 760px) {
+  .foot-base { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .foot-base > :first-child, .foot-base > :last-child { justify-self: center; text-align: center; }
+  .foot-ig { order: -1; font-size: 14.5px; }
+}
 .wordmark svg { width: 100% !important; height: auto !important; }
 .foot .tagline { font-size: clamp(14px, 1.6vw, 22px); }
 @media (max-width: 980px) {
@@ -13052,6 +13064,9 @@ const CS_CSS = `
 .cs-caps .dot { margin: 0 0.7em 0 0.4em; }
 .cs .go-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .cs-thanks { margin: 26px 0 0; font-size: 16.5px; font-weight: 500; color: #10132A; }
+.cs-ig { margin: 14px 0 0; font-size: 15px; font-weight: 600; color: #10132A; }
+.cs-ig a { display: inline-block; color: #1E40FF; background: #fff; font-weight: 800; text-decoration: none; padding: 3px 11px; border-radius: 999px; box-shadow: 0 4px 14px -8px rgba(16,19,42,.45); }
+.cs-ig a:hover, .cs-ig a:focus-visible { text-decoration: underline; }
 
 .cs-foot { display: flex; align-items: center; justify-content: center; gap: 6px 14px; flex-wrap: wrap; padding: 6px 20px 20px; }
 .cs-note { padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.72); font-size: 12.5px; color: #2A2F4F; }
@@ -13201,6 +13216,10 @@ export function MaintenanceScreen({ onStaff }) {
       </p>}
       <p className="cs-caps" data-no-translate>#weknowaguy</p>
       <p className="cs-thanks">Thank you for your patience — see you soon.</p>
+      <p className="cs-ig">
+        Follow us on Instagram{" "}
+        <a href="https://www.instagram.com/pluj.us/" target="_blank" rel="noopener noreferrer" data-no-translate>@pluj.us</a>
+      </p>
     </CsShell>
   );
 }
@@ -15458,9 +15477,13 @@ export default function PlujApp() {
         {/* The wordmark, the full width of the page. */}
         <div className="wordmark" aria-hidden="true"><PlujMark variant="word" size={400} color="#000" /></div>
         <p className="tagline" style={{ maxWidth:1240, margin:"10px auto 0", padding:"0 28px", textAlign:"right" }}>we know a guy</p>
-        <div style={{ maxWidth:1240, margin:"0 auto", padding:"16px 28px 30px",
-                      display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, fontSize:13.5, color:"#4B5260" }}>
+        <div className="foot-base">
           <span>© 2026 PLUJ, Houston, Texas</span>
+          <span className="foot-ig">
+            Follow us on Instagram{" "}
+            <a href="https://www.instagram.com/pluj.us/" target="_blank" rel="noopener noreferrer"
+               data-no-translate>@pluj.us</a>
+          </span>
           <span>Real pros. Personally vetted. #weknowaguy</span>
         </div>
       </footer>
