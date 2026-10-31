@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import PlujApp from './PlujMarketplace';
 import { initI18n } from './i18n';
+import { isStaleChunkError, reloadForUpdate } from './staleBuild';
 
 /* ─── ERROR BOUNDARY ──────────────────────────────────────────────────────────
    PlujMarketplace is a single ~12,200-line component tree. Without a boundary,
@@ -140,7 +141,15 @@ class ErrorBoundary extends React.Component {
 /* Async failures never reach componentDidCatch, so they are reported separately.
    Without these, a rejected fetch in an event handler disappears silently. */
 window.addEventListener('unhandledrejection', (e) => {
+  /* A tab from before a deploy asking for a file that no longer exists:
+     reload once for the new version rather than report it (staleBuild.js). */
+  if (isStaleChunkError(e.reason) && reloadForUpdate()) return;
   report(e.reason);
+});
+/* Vite's own signal for the same thing, when a file that a page section
+   depends on fails to preload. */
+window.addEventListener('vite:preloadError', (e) => {
+  if (reloadForUpdate()) e.preventDefault();
 });
 window.addEventListener('error', (e) => {
   if (e.error) report(e.error);

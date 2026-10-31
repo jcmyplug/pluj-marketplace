@@ -1,6 +1,7 @@
 import { getLang, setLang, onLangChange } from "./i18n";
-import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from "react";
+import React, { useState, useMemo, useRef, useEffect, Suspense } from "react";
 import { createPortal } from "react-dom";
+import { lazyWithReload } from "./staleBuild";
 /* ══════════════════════════════════════════════════════════════════════════════
    PLUJ MARKETPLACE
    Before opening this file, replace these two values in the SUPABASE CLIENT
@@ -12298,8 +12299,13 @@ function usePersistentState(key, initial) {
 
    Suspense fallback is deliberately plain. Both are behind a sign-in, on a fast
    path, and a skeleton that flashes for 80ms is worse than a line of text. */
-const AdminPanel      = lazy(() => import("./dashboards/AdminPanel.jsx"));
-const VendorDashboard = lazy(() => import("./dashboards/VendorDashboard.jsx"));
+/* lazyWithReload: a tab opened before a deploy asks for the old file names;
+   it reloads once to get the new version instead of showing an error (see
+   staleBuild.js). The admin panel is a pop-up, so it remembers to reopen. */
+const ADMIN_REOPEN_KEY = "pluj_reopen_admin";
+const AdminPanel      = lazyWithReload(() => import("./dashboards/AdminPanel.jsx"),
+  () => sessionStorage.setItem(ADMIN_REOPEN_KEY, "1"));
+const VendorDashboard = lazyWithReload(() => import("./dashboards/VendorDashboard.jsx"));
 
 function DashboardLoading({ label }) {
   return (
@@ -13219,7 +13225,13 @@ export default function PlujApp() {
   const [accountTab,     setAccountTab]     = useState("requests");
   /* Which conversation a notification asked us to open, if any. */
   const [accountConvId,  setAccountConvId]  = useState(null);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  /* Reopened automatically after a reload for a new version (staleBuild.js). */
+  const [adminPanelOpen, setAdminPanelOpen] = useState(() => {
+    try {
+      if (sessionStorage.getItem(ADMIN_REOPEN_KEY)) { sessionStorage.removeItem(ADMIN_REOPEN_KEY); return true; }
+    } catch { /* storage blocked */ }
+    return false;
+  });
   const [adminPanelTab,  setAdminPanelTab]  = useState("accounts");
 
   /* Finish a return from Stripe once we know who is signed in. */

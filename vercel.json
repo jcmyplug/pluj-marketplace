@@ -93,7 +93,7 @@
       "destination": "/api/sitemap"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|static/).*)",
       "destination": "/index.html"
     }
   ],
