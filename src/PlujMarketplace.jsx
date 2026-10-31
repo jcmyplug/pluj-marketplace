@@ -1257,8 +1257,19 @@ function composeSchedule(days = [], blocks = []) {
    Only parses our own composed format (identified by the " · " separator) —
    legacy free-text schedules return nulls so they never block a booking. */
 export function parseSchedule(s) {
-  if (!s || typeof s !== "string" || !s.includes("·")) return { days: null, blocks: null };
-  const [dayPart = "", blockPart = ""] = s.split("·").map(x => x.trim());
+  if (!s || typeof s !== "string") return { days: null, blocks: null };
+  const str = s.trim();
+  /* Our own format only. Days alone ("Mon, Wed, Fri", "Every day") and time
+     blocks alone ("Evening") are ours too: composeSchedule drops the " · "
+     when one half is empty. Before 31 Oct 2026 those were treated as free
+     text, so a listing with days but no times never blocked its days off. */
+  const DAY = "(Mon|Tue|Wed|Thu|Fri|Sat|Sun)";
+  const BLOCK = "(Morning|Afternoon|Evening|Late night)";
+  const daysOnly   = new RegExp(`^(Every day|${DAY}(,\\s*${DAY})*)$`, "i").test(str);
+  const blocksOnly = new RegExp(`^${BLOCK}(,\\s*${BLOCK})*$`, "i").test(str);
+  if (!str.includes("·") && !daysOnly && !blocksOnly) return { days: null, blocks: null };
+  const [dayPart = "", blockPart = ""] = str.includes("·") ? str.split("·").map(x => x.trim())
+                                       : daysOnly ? [str, ""] : ["", str];
   let days;
   if (/every\s*day/i.test(dayPart)) days = [...AVAIL_DAYS];
   else {
@@ -2396,6 +2407,14 @@ export function subcatMax(category) { return category === "rentals" ? 20 : 3; }
 
 /* Categories where time is part of the offer (a set, a rental period, a
    truck's service window). The editor asks for it first on these. */
+/* Where a time is required: a price for a DJ, a rental or a food truck means
+   little without how long it covers. */
+export const TIME_REQUIRED_CATEGORIES = ["music", "rentals", "food"];
+/* Pricing options and extras per listing. A rental company prices item by
+   item (chairs, tables, tents, linens…), so rentals get more. */
+export function maxListingOptions(category) { return category === "rentals" ? 20 : 6; }
+export function maxListingAddons(category)  { return category === "rentals" ? 20 : 8; }
+
 export const TIMED_CATEGORIES = ["music", "rentals", "food", "av", "logistics", "production", "photo", "staff", "beauty", "transport", "kids", "other"];
 
 /* True when an option is complete enough to show a customer. */
@@ -2556,6 +2575,10 @@ export async function getMyServices(vendorId) {
 }
 
 export async function saveService(vendorId, svc) {
+  /* Signed out underneath (expired sign-in): don't send it as a visitor. */
+  if (!IS_PREVIEW && !sb.getAuthToken()) {
+    return { ok: false, error: "Your sign-in has expired. Log out and log back in, then save this listing again." };
+  }
   const row = {
     vendor_id:    vendorId,
     category:     svc.category || "food",
@@ -4478,10 +4501,32 @@ function PasswordInput({ style = {}, iconColor = "#6B7280",
 const VENDOR_DESC_MIN = 40;
 const VENDOR_DESC_MAX = 1000;
 
+/* ── SIGN-UP PROGRESS, KEPT IN THE BROWSER ────────────────────────────────
+   What someone typed into sign-up is saved here as they go, so closing the
+   window (or the whole browser) by mistake doesn't make them start again.
+   Never saved: passwords, the EIN, the admin setup key or the captcha.
+   Deleted when sign-up succeeds, when they press "Start over", or after 30
+   days. */
+const SIGNUP_DRAFT_KEY = "pluj_signup_draft";
+const SIGNUP_DRAFT_SKIP = ["password", "password2", "ein", "setupKey", "captchaAnswer"];
+function readSignupDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SIGNUP_DRAFT_KEY) || "null");
+    if (!d || typeof d !== "object" || !d.form) return null;
+    if (Date.now() - Number(d.savedAt || 0) > 30 * 86400000) { localStorage.removeItem(SIGNUP_DRAFT_KEY); return null; }
+    return d;
+  } catch { return null; }
+}
+function clearSignupDraft() { try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch { /* storage blocked */ } }
+
 function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user" }) {
-  const [tab,          setTab]         = useState(initialTab === "signup" ? "signup" : "login");
-  const [role,         setRole]        = useState(initialRole === "vendor" ? "vendor" : "user");
-  const [step,         setStep]        = useState(1);
+  /* Read once: a sign-up left half-done reopens where it stopped. */
+  const [draft] = useState(readSignupDraft);
+  const [draftShown, setDraftShown] = useState(!!draft);
+  const [tab,          setTab]         = useState(draft || initialTab === "signup" ? "signup" : "login");
+  const [role,         setRole]        = useState(draft ? (draft.role === "vendor" ? "vendor" : "user")
+                                                        : (initialRole === "vendor" ? "vendor" : "user"));
+  const [step,         setStep]        = useState(draft && Number(draft.step) === 2 ? 2 : 1);
   const [loading,      setLoading]     = useState(false);
   const [err,          setErr]         = useState("");
   const [created,      setCreated]     = useState(null);
@@ -4522,6 +4567,38 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
     category:"food",
     capacity:"", travelMiles:"",
   });
+  /* Restore what was typed last time (never passwords or the EIN). */
+  useEffect(() => {
+    if (!draft) return;
+    setForm(f => {
+      const next = { ...f };
+      Object.keys(draft.form).forEach(k => {
+        if (!SIGNUP_DRAFT_SKIP.includes(k) && k in f) next[k] = draft.form[k];
+      });
+      return next;
+    });
+  }, [draft]);
+  /* Signed up: nothing left to keep. */
+  useEffect(() => { if (created || verifyPhase) clearSignupDraft(); }, [created, verifyPhase]);
+  /* Save as they type, while signing up. */
+  useEffect(() => {
+    if (tab !== "signup" || created || verifyPhase) return;
+    const typed = ["firstName", "lastName", "email", "phone", "business", "bizLegal", "bizDescription"]
+      .some(k => String(form[k] || "").trim());
+    if (!typed) return;
+    const keep = {};
+    Object.keys(form).forEach(k => { if (!SIGNUP_DRAFT_SKIP.includes(k)) keep[k] = form[k]; });
+    try { localStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), role, step, form: keep })); }
+    catch { /* storage full or blocked */ }
+  }, [form, role, step, tab]);
+  function startOver() {
+    clearSignupDraft(); setDraftShown(false); setStep(1); setErr("");
+    setForm(f => {
+      const blank = {};
+      Object.keys(f).forEach(k => { blank[k] = Array.isArray(f[k]) ? [] : ""; });
+      return { ...blank, bizType:"LLC", bizState:"TX", category:"food" };
+    });
+  }
 
   function upd(k, v) {
     setForm(f => {
@@ -5339,7 +5416,9 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
   const isFinalSubmit = tab === "login" || isLastStep;
 
   return (
-    <div className="modal-overlay" onClick={onClose}
+    /* No close on a click outside: a stray click used to throw away a
+       half-filled sign-up. Only the ✕ closes it (and what was typed is kept). */
+    <div className="modal-overlay"
       style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000,
                display:"flex", alignItems:"center", justifyContent:"center", padding:20,
                backdropFilter:"blur(4px)" }}>
@@ -5370,6 +5449,17 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
         {/* Body */}
         <div style={{ padding:"16px 24px 24px", display:"flex", flexDirection:"column",
                       gap:12, overflowY:"auto", flex:1 }}>
+          {draftShown && tab === "signup" && (
+            <div role="status" style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap",
+                                        background:"#EEF2FF", border:"1px solid #C7D2FE", borderRadius:10, padding:"9px 12px" }}>
+              <span style={{ flex:"1 1 220px", fontSize:12, color:"#1E3A8A", lineHeight:1.5 }}>
+                We kept what you typed last time. Passwords aren't saved, so type yours again.
+              </span>
+              <button type="button" onClick={startOver} className="btn"
+                style={{ border:"none", background:"#fff", color:"#1E40FF", borderRadius:99, padding:"6px 12px",
+                         fontSize:12, fontWeight:700, cursor:"pointer" }}>Start over</button>
+            </div>
+          )}
 
           {/* Role selector */}
           {tab === "signup" && step === 1 && (
@@ -6933,13 +7023,21 @@ export function AvailabilityCalendar({ vendorId }) {
      as working every day. */
   const [svcs,    setSvcs]    = useState([]);
   const [focus,   setFocus]   = useState("all");   // "all" or a listing id
+  /* The days the business works (marked at sign-up), used for any listing
+     that hasn't marked its own. */
+  const [bizDays, setBizDays] = useState(null);
   useEffect(() => {
     getVendorAvailability(vendorId).then(a => { setAvail(a); setLoading(false); });
     getMyServices(vendorId).then(list => setSvcs(Array.isArray(list) ? list.filter(x => x.active !== false) : []));
+    if (!IS_PREVIEW) {
+      sb.from("vendor_profiles").select("schedule").eq("id", vendorId).single().get()
+        .then(({ data }) => setBizDays(parseSchedule(data && data.schedule).days || null), () => {});
+    }
   }, [vendorId]);
-  const daysOf = (svc) => { const d = parseEventTypes(svc.avail_days); return d.length ? d : AVAIL_DAYS; };
+  const fallbackDays = bizDays && bizDays.length ? bizDays : AVAIL_DAYS;
+  const daysOf = (svc) => { const d = parseEventTypes(svc.avail_days); return d.length ? d : fallbackDays; };
   const shown = focus === "all" ? svcs : svcs.filter(x => x.id === focus);
-  const workDays = shown.length ? new Set(shown.flatMap(daysOf)) : new Set(AVAIL_DAYS);
+  const workDays = shown.length ? new Set(shown.flatMap(daysOf)) : new Set(fallbackDays);
   /* getDay(): 0 = Sunday; AVAIL_DAYS starts on Monday. */
   const dayKey = (y, m, d) => AVAIL_DAYS[(new Date(y, m, d).getDay() + 6) % 7];
 
@@ -6989,7 +7087,8 @@ export function AvailabilityCalendar({ vendorId }) {
             Working days by listing
           </p>
           {svcs.map((x, i) => {
-            const d = parseEventTypes(x.avail_days);
+            const d = daysOf(x);
+            const own = parseEventTypes(x.avail_days).length > 0;
             const on = focus === x.id;
             return (
               <button key={x.id} type="button" className="btn" onClick={() => setFocus(on ? "all" : x.id)}
@@ -7002,11 +7101,16 @@ export function AvailabilityCalendar({ vendorId }) {
                 </span>
                 <span style={{ display:"flex", gap:3 }}>
                   {AVAIL_DAYS.map(k => {
-                    const w = !d.length || d.includes(k);
+                    const w = d.includes(k);
                     return <span key={k} style={{ width:26, textAlign:"center", fontSize:9.5, fontWeight:800, borderRadius:5, padding:"2px 0",
                                                   background: w ? "#DCFCE7" : "#F3F4F6", color: w ? "#065F46" : "#B0B0B0" }}>{k.slice(0, 2)}</span>;
                   })}
                 </span>
+                {!own && (
+                  <span style={{ flexBasis:"100%", fontSize:10, color:C.midGray }}>
+                    {bizDays && bizDays.length ? "Uses your business working days" : "No days marked: counts as every day"}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -10226,9 +10330,9 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                            background: on ? "#EEF2FF" : "#fff" }}>
                   {pic
                     ? <img src={pic} alt="" style={{ width:42, height:42, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
-                    : <span style={{ width:42, height:42, borderRadius:8, background:"#F3F4F6", flexShrink:0,
-                                     display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
-                        {(CATEGORIES.find(c => c.id === s.category) || {}).icon || "🏪"}
+                    : <span style={{ width:42, height:42, borderRadius:"50%", background:"#ECEFFF", color:C.cobalt, flexShrink:0,
+                                     display:"flex", alignItems:"center", justifyContent:"center" }}>
+                        <Icon name={CAT_ICON[s.category] || "dots"} size={22} stroke={1.5} />
                       </span>}
                   <span style={{ minWidth:0 }}>
                     <span style={{ display:"block", fontSize:10, fontWeight:800, color: on ? C.orange : C.lightGray }}>
@@ -10363,7 +10467,10 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 {(() => {
                   /* The days the vendor marked on THIS listing. A listing with no
                      days marked hasn't said, so it isn't shown as closed. */
-                  const days   = selService ? parseEventTypes(selService.avail_days) : parseEventTypes(vendor.availDays);
+                  const ownDays = selService ? parseEventTypes(selService.avail_days) : parseEventTypes(vendor.availDays);
+                  /* A listing without its own days follows the days the business works. */
+                  const days   = ownDays.length ? ownDays
+                               : (parseSchedule(full?.schedule || vendor.schedule || "").days || []);
                   const blocks = selService ? parseEventTypes(selService.avail_blocks) : parseEventTypes(vendor.availBlocks);
                   if (!days.length) {
                     return <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.7 }}>
@@ -10396,7 +10503,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                 })()}
               </div>
             </div>
-            {disp.travelMiles && (
+            {Number(disp.travelMiles) > 0 && (
               <div style={{ marginTop:14, background:"#EFF6FF", borderRadius:10, padding:"10px 14px", border:"1px solid #BFDBFE" }}>
                 <p style={{ margin:0, fontSize:12, color:"#1D4ED8" }}>
                   <strong>🚗 Travel radius:</strong> Up to <strong>{disp.travelMiles} miles</strong> from base. Events outside this range may have a travel fee.
@@ -11133,11 +11240,17 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
   const [err, setErr]       = useState("");
   const [ok, setOk]         = useState("");
   const [uploading, setUp]  = useState(false);
+  /* Fields a save found missing: outlined in red, and the first is scrolled to. */
+  const [badKeys, setBadKeys] = useState(() => new Set());
+  /* Unsaved edits are kept in this browser (never the EIN) until saved. */
+  const draftKey = "pluj_bizdraft_" + user.id;
+  const loadedRef = useRef(null);
+  const [restored, setRestored] = useState(false);
 
   useEffect(() => {
     (async () => {
       const d = await getMyListing(user.id);
-      setF({
+      const loaded = {
         business_name: d?.business_name || "",
         description:   d?.description   || "",
         biz_phone:     d?.biz_phone     || "",
@@ -11163,12 +11276,42 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
         coi_checked_at:  d?.coi_checked_at  || null,
         dshs_checked_at: d?.dshs_checked_at || null,
         tabc_checked_at: d?.tabc_checked_at || null,
-      });
+      };
+      loadedRef.current = JSON.stringify(loaded);
+      let merged = loaded;
+      try {
+        const dr = JSON.parse(localStorage.getItem(draftKey) || "null");
+        if (dr && dr.f && Date.now() - Number(dr.savedAt || 0) < 30 * 86400000) {
+          merged = { ...loaded };
+          Object.keys(dr.f).forEach(k => { if (k !== "ein" && k in loaded) merged[k] = dr.f[k]; });
+          if (JSON.stringify(merged) !== loadedRef.current) setRestored(true);
+        }
+      } catch { /* storage blocked */ }
+      setF(merged);
       setLoad(false);
     })();
   }, [user.id]);
 
-  function set(k, v) { setF(p => ({ ...p, [k]: v })); setErr(""); setOk(""); }
+  function set(k, v) {
+    setF(p => ({ ...p, [k]: v })); setErr(""); setOk("");
+    setBadKeys(b => { if (!b.has(k)) return b; const n = new Set(b); n.delete(k); return n; });
+  }
+  useEffect(() => {
+    if (!f || loadedRef.current == null) return;
+    const { ein, ...rest } = f;                 // never the EIN
+    try {
+      if (JSON.stringify(f) === loadedRef.current) localStorage.removeItem(draftKey);
+      else localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), f: rest }));
+    } catch { /* storage full or blocked */ }
+  }, [f]);
+  function discardDraft() {
+    try { localStorage.removeItem(draftKey); } catch { /* blocked */ }
+    if (loadedRef.current) setF(JSON.parse(loadedRef.current));
+    setRestored(false); setBadKeys(new Set()); setErr("");
+  }
+  /* Red outline for a field the last save found missing. */
+  const bz = (k, base) => badKeys.has(k)
+    ? { ...base, border:"1.5px solid #DC2626", boxShadow:"0 0 0 3px #FEE2E2", background:"#FFFBFB" } : base;
 
   async function addPhotos(e) {
     const files = Array.from(e.target.files || []);
@@ -11195,26 +11338,39 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
 
   async function save() {
     setErr(""); setOk("");
-    const missing = [];
-    if (!f.business_name.trim()) missing.push("business name");
-    if (!f.description.trim())   missing.push("a short description of your business");
-    if (!f.biz_phone.trim())     missing.push("business phone");
-    if (!f.biz_city.trim())      missing.push("city");
-    if (!f.biz_zip.trim())       missing.push("ZIP code");
-    if (!f.service_areas.trim()) missing.push("at least one service area");
+    const missing = [], keys = [];
+    const need = (cond, key, text) => { if (cond) { missing.push(text); if (!keys.includes(key)) keys.push(key); } };
+    need(!f.business_name.trim(), "business_name", "business name");
+    need(!f.description.trim(), "description", "a short description of your business");
+    need(!f.biz_phone.trim(), "biz_phone", "business phone");
+    need(!f.biz_city.trim(), "biz_city", "city");
+    need(!f.biz_zip.trim(), "biz_zip", "ZIP code");
+    need(!f.service_areas.trim(), "service_areas", "at least one service area");
     /* Legal information: required before any listing can be posted. */
-    if (!f.biz_legal.trim())     missing.push("legal business name");
-    if (!f.biz_type)             missing.push("business type");
-    if (f.ein.replace(/\D/g, "").length !== 9) missing.push("EIN (9 digits)");
-    if (!f.managing_members.trim()) missing.push("owner / managing members");
-    if (!f.biz_address.trim())   missing.push("street address");
-    if (!f.biz_state.trim())     missing.push("state");
-    if (f.biz_zip.trim() && !/^\d{5}(-\d{4})?$/.test(f.biz_zip.trim())) missing.push("a 5-digit ZIP code");
-    if (f.biz_phone.replace(/\D/g, "").length < 10) missing.push("a 10-digit business phone");
-    if (!f.biz_license.trim() && !f.license_not_required) missing.push("licence / permit number (or tick that you don't need one)");
-    if (f.coi_insurer.trim() && !f.coi_expires_on) missing.push("the date your insurance certificate expires");
-    if (!f.coi_insurer.trim() && f.coi_expires_on) missing.push("your insurance company's name");
-    if (missing.length) { setErr("Please add " + missing.join(", ") + "."); return; }
+    need(!f.biz_legal.trim(), "biz_legal", "legal business name");
+    need(!f.biz_type, "biz_type", "business type");
+    need(f.ein.replace(/\D/g, "").length !== 9, "ein", "EIN (9 digits)");
+    need(!f.managing_members.trim(), "managing_members", "owner / managing members");
+    need(!f.biz_address.trim(), "biz_address", "street address");
+    need(!f.biz_state.trim(), "biz_state", "state");
+    need(!!f.biz_zip.trim() && !/^\d{5}(-\d{4})?$/.test(f.biz_zip.trim()), "biz_zip", "a 5-digit ZIP code");
+    need(!!f.biz_phone.trim() && f.biz_phone.replace(/\D/g, "").length < 10, "biz_phone", "a 10-digit business phone");
+    need(!f.biz_license.trim() && !f.license_not_required, "biz_license", "licence / permit number (or tick that you don't need one)");
+    need(!!f.coi_insurer.trim() && !f.coi_expires_on, "coi_expires_on", "the date your insurance certificate expires");
+    need(!f.coi_insurer.trim() && !!f.coi_expires_on, "coi_insurer", "your insurance company's name");
+    if (missing.length) {
+      setErr("Please add " + missing.join(", ") + ".");
+      setBadKeys(new Set(keys));
+      /* Take them to the first missing field instead of leaving the message
+         out of sight at the top. */
+      setTimeout(() => {
+        const el = document.querySelector(`[data-bf="${keys[0]}"]`);
+        if (!el) return;
+        try { el.scrollIntoView({ behavior:"smooth", block:"center" }); } catch { el.scrollIntoView(); }
+        if (el.focus) { try { el.focus({ preventScroll:true }); } catch { /* not focusable */ } }
+      }, 50);
+      return;
+    }
     setSaving(true);
     const yrs = String(f.years_in_biz || "").replace(/[^0-9]/g, "");
     const res = await saveMyListing(user.id, {
@@ -11244,6 +11400,8 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
     setSaving(false);
     if (!res.ok) { setErr(res.error); return; }
     setOk("Business details saved.");
+    try { localStorage.removeItem(draftKey); } catch { /* blocked */ }
+    loadedRef.current = JSON.stringify(f); setRestored(false); setBadKeys(new Set());
     if (onSaved) onSaved();
   }
 
@@ -11253,7 +11411,8 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
   const Opt = () => <span style={{ fontWeight:400, color:C.lightGray }}>(optional)</span>;
 
   return (
-    <div className="modal-overlay" onClick={onClose}
+    /* No close on a click outside (unsaved edits are kept anyway); ✕ closes. */
+    <div className="modal-overlay"
       style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1200,
                display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div onClick={e=>e.stopPropagation()}
@@ -11275,41 +11434,53 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
               goes in each <strong>listing</strong>.
             </p>
 
-            {err && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
-                                  borderRadius:9, padding:"9px 12px", marginTop:12, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
-            {ok  && <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
+            {restored && (
+              <div role="status" style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginTop:12,
+                                          background:"#EEF2FF", border:"1px solid #C7D2FE", borderRadius:10, padding:"9px 12px" }}>
+                <span style={{ flex:"1 1 220px", fontSize:12, color:"#1E3A8A", lineHeight:1.5 }}>
+                  We kept the changes you hadn't saved. Your EIN isn't kept, so type it again if you changed it.
+                </span>
+                <button type="button" onClick={discardDraft} className="btn"
+                  style={{ border:"none", background:"#fff", color:"#1E40FF", borderRadius:99, padding:"6px 12px",
+                           fontSize:12, fontWeight:700, cursor:"pointer" }}>Discard changes</button>
+              </div>
+            )}
+            {ok  && <div role="status" style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
                                   borderRadius:9, padding:"9px 12px", marginTop:12, fontSize:12, fontWeight:600 }}>✓ {ok}</div>}
 
             <label style={L}>Business name * <span style={{ fontWeight:400, color:C.lightGray }}>(what hosts see)</span></label>
-            <input style={F} value={f.business_name} onChange={e=>set("business_name", e.target.value)} />
+            <input style={bz("business_name", F)} data-bf="business_name" value={f.business_name} onChange={e=>set("business_name", e.target.value)} />
 
             <label style={L}>About your business *</label>
             <textarea value={f.description} onChange={e=>set("description", e.target.value)}
               rows={3} maxLength={2000} placeholder="Who you are, what you're known for, what makes you different."
-              style={{ ...F, height:"auto", padding:"10px 12px", resize:"vertical", fontFamily:"inherit" }} />
+              data-bf="description"
+              style={bz("description", { ...F, height:"auto", padding:"10px 12px", resize:"vertical", fontFamily:"inherit" })} />
 
             <label style={L}>Business phone * <span style={{ fontWeight:400, color:C.lightGray }}>(private — only PLUJ sees it)</span></label>
-            <input style={F} type="tel" value={f.biz_phone} onChange={e=>set("biz_phone", e.target.value)} />
+            <input style={bz("biz_phone", F)} data-bf="biz_phone" type="tel" value={f.biz_phone} onChange={e=>set("biz_phone", e.target.value)} />
 
             <label style={L}>Business street address * <span style={{ fontWeight:400, color:C.lightGray }}>(private — only PLUJ sees it)</span></label>
-            <input style={F} value={f.biz_address} onChange={e=>set("biz_address", e.target.value)} />
+            <input style={bz("biz_address", F)} data-bf="biz_address" value={f.biz_address} onChange={e=>set("biz_address", e.target.value)} />
             <div style={{ display:"flex", gap:8 }}>
               <div style={{ flex:2 }}>
                 <label style={L}>City *</label>
-                <input style={F} value={f.biz_city} onChange={e=>set("biz_city", e.target.value)} />
+                <input style={bz("biz_city", F)} data-bf="biz_city" value={f.biz_city} onChange={e=>set("biz_city", e.target.value)} />
               </div>
               <div style={{ flex:"0 0 70px" }}>
                 <label style={L}>State *</label>
-                <input style={F} maxLength={2} value={f.biz_state} onChange={e=>set("biz_state", e.target.value.toUpperCase())} />
+                <input style={bz("biz_state", F)} data-bf="biz_state" maxLength={2} value={f.biz_state} onChange={e=>set("biz_state", e.target.value.toUpperCase())} />
               </div>
               <div style={{ flex:1 }}>
                 <label style={L}>ZIP *</label>
-                <input style={F} inputMode="numeric" maxLength={10} value={f.biz_zip} onChange={e=>set("biz_zip", e.target.value)} />
+                <input style={bz("biz_zip", F)} data-bf="biz_zip" inputMode="numeric" maxLength={10} value={f.biz_zip} onChange={e=>set("biz_zip", e.target.value)} />
               </div>
             </div>
 
             <label style={L}>Where you work * <span style={{ fontWeight:400, color:C.lightGray }}>(tap all that apply)</span></label>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+            <div data-bf="service_areas" tabIndex={-1}
+              style={{ display:"flex", flexWrap:"wrap", gap:6, borderRadius:10,
+                       ...(badKeys.has("service_areas") ? { outline:"2px solid #DC2626", outlineOffset:4 } : {}) }}>
               {TX_CITIES.map(city => {
                 const sel = String(f.service_areas || "").split(",").map(x=>x.trim()).filter(Boolean);
                 const on = sel.includes(city);
@@ -11326,7 +11497,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
             </div>
 
             <label style={L}>Years in business <Opt /></label>
-            <input style={F} inputMode="numeric" maxLength={3} value={f.years_in_biz}
+            <input style={bz("years_in_biz", F)} data-bf="years_in_biz" inputMode="numeric" maxLength={3} value={f.years_in_biz}
               onChange={e=>set("years_in_biz", e.target.value.replace(/[^0-9]/g, ""))} />
 
             {/* Legal information. Required before any listing can be posted
@@ -11340,25 +11511,25 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
                 Private: only PLUJ sees it. Hosts never see your EIN, address or owners.
               </p>
               <label style={L}>Legal business name *</label>
-              <input style={F} value={f.biz_legal} onChange={e=>set("biz_legal", e.target.value)}
+              <input style={bz("biz_legal", F)} data-bf="biz_legal" value={f.biz_legal} onChange={e=>set("biz_legal", e.target.value)}
                 placeholder="As registered with the state or IRS" />
               <label style={L}>Business type *</label>
-              <select style={F} value={f.biz_type} onChange={e=>set("biz_type", e.target.value)}>
+              <select style={bz("biz_type", F)} data-bf="biz_type" value={f.biz_type} onChange={e=>set("biz_type", e.target.value)}>
                 <option value="">Choose…</option>
                 {BIZ_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
               <label style={L}>EIN (Employer Identification Number) *</label>
-              <input style={F} inputMode="numeric" maxLength={10} value={f.ein} placeholder="12-3456789"
+              <input style={bz("ein", F)} data-bf="ein" inputMode="numeric" maxLength={10} value={f.ein} placeholder="12-3456789"
                 onChange={e=>{ const d = e.target.value.replace(/\D/g, "").slice(0, 9);
                                set("ein", d.length > 2 ? d.slice(0, 2) + "-" + d.slice(2) : d); }} />
               <p style={{ margin:"3px 0 0", fontSize:10.5, color:C.midGray, lineHeight:1.5 }}>
                 Sole proprietors without one can get an EIN free from the IRS at irs.gov/ein in a few minutes.
               </p>
               <label style={L}>Owner / managing members *</label>
-              <input style={F} value={f.managing_members} onChange={e=>set("managing_members", e.target.value)}
+              <input style={bz("managing_members", F)} data-bf="managing_members" value={f.managing_members} onChange={e=>set("managing_members", e.target.value)}
                 placeholder="Full names, e.g. Maria Lopez, Juan Lopez" />
               <label style={L}>Business license / permit number {f.license_not_required ? <Opt /> : "*"}</label>
-              <input style={F} value={f.biz_license} onChange={e=>set("biz_license", e.target.value)}
+              <input style={bz("biz_license", F)} data-bf="biz_license" value={f.biz_license} onChange={e=>set("biz_license", e.target.value)}
                 placeholder="e.g. food truck permit, TABC, sales tax permit" />
               <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:8, cursor:"pointer" }}>
                 <input type="checkbox" checked={f.license_not_required}
@@ -11370,7 +11541,7 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
               </label>
             </div>
             <label style={L}>Website or social page <Opt /></label>
-            <input style={F} value={f.biz_website} onChange={e=>set("biz_website", e.target.value)} />
+            <input style={bz("biz_website", F)} data-bf="biz_website" value={f.biz_website} onChange={e=>set("biz_website", e.target.value)} />
 
             {/* Languages and the checks PLUJ does by hand (shown to hosts as badges). */}
             <label style={L}>Languages you speak with clients *</label>
@@ -11395,15 +11566,15 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
                 Changing a detail means it is checked again.
               </p>
               <label style={L}>Insurance company (certificate of insurance)</label>
-              <input style={F} value={f.coi_insurer} onChange={e=>set("coi_insurer", e.target.value)} placeholder="e.g. State Farm, policy GL-123456" />
+              <input style={bz("coi_insurer", F)} data-bf="coi_insurer" value={f.coi_insurer} onChange={e=>set("coi_insurer", e.target.value)} placeholder="e.g. State Farm, policy GL-123456" />
               <label style={L}>Certificate expires on</label>
-              <input style={F} type="date" value={f.coi_expires_on || ""} onChange={e=>set("coi_expires_on", e.target.value)} />
+              <input style={bz("coi_expires_on", F)} data-bf="coi_expires_on" type="date" value={f.coi_expires_on || ""} onChange={e=>set("coi_expires_on", e.target.value)} />
               <CheckStatus at={f.coi_checked_at} filled={!!f.coi_insurer.trim()} />
               <label style={L}>Texas DSHS food permit number <span style={{ fontWeight:400, color:C.lightGray }}>(food trucks and caterers)</span></label>
-              <input style={F} value={f.dshs_permit} onChange={e=>set("dshs_permit", e.target.value)} placeholder="Mobile food unit or food establishment permit" />
+              <input style={bz("dshs_permit", F)} data-bf="dshs_permit" value={f.dshs_permit} onChange={e=>set("dshs_permit", e.target.value)} placeholder="Mobile food unit or food establishment permit" />
               <CheckStatus at={f.dshs_checked_at} filled={!!f.dshs_permit.trim()} />
               <label style={L}>TABC permit number <span style={{ fontWeight:400, color:C.lightGray }}>(if you serve alcohol)</span></label>
-              <input style={F} value={f.tabc_permit} onChange={e=>set("tabc_permit", e.target.value)} placeholder="e.g. caterer's or seller-server certificate" />
+              <input style={bz("tabc_permit", F)} data-bf="tabc_permit" value={f.tabc_permit} onChange={e=>set("tabc_permit", e.target.value)} placeholder="e.g. caterer's or seller-server certificate" />
               <CheckStatus at={f.tabc_checked_at} filled={!!f.tabc_permit.trim()} />
             </div>
 
@@ -11418,6 +11589,12 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
               </p>
             )}
 
+            {err && (
+              <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
+                                         borderRadius:9, padding:"9px 12px", marginTop:16, fontSize:12, fontWeight:600, lineHeight:1.5 }}>
+                ⚠ {err} {badKeys.size ? "The fields are outlined in red above." : ""}
+              </div>
+            )}
             <button onClick={save} disabled={saving || uploading} className="btn"
               style={{ width:"100%", marginTop:18, padding:"12px 0", borderRadius:10, background:C.black,
                        color:"#fff", border:"none", fontSize:14, fontWeight:700,
@@ -13291,7 +13468,8 @@ export default function PlujApp() {
         if (notifOpen)      { setNotifOpen(false);      return; }
         if (adminPanelOpen) { setAdminPanelOpen(false); return; }
         if (vendorPage)     { setVendorPage(null);      return; }
-        if (authModal)      { setAuthModal(false);      return; }
+        /* The sign-up window only closes from its ✕ (see AuthModal). */
+        if (authModal)      return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();

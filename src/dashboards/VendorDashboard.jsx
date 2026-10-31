@@ -56,6 +56,11 @@ import {
   subcatMax,
   fmtHours,
   TIMED_CATEGORIES,
+  TIME_REQUIRED_CATEGORIES,
+  Icon,
+  CAT_ICON,
+  maxListingOptions,
+  maxListingAddons,
   getLegalMissing,
   EVENT_TYPES,
   fetchRecaps,
@@ -338,6 +343,7 @@ function fieldForSaveError(msg) {
   if (/description|describe/.test(m)) return "description";
   if (/photo|image|upload/.test(m)) return "photos";
   if (/\bname\b/.test(m)) return "name";
+  if (/packages|option/.test(m)) return "packages";
   return null;
 }
 
@@ -345,7 +351,12 @@ function fieldForSaveError(msg) {
    …", constraint names) becomes a sentence they can. */
 function friendlySaveError(msg) {
   const m = String(msg || "");
-  if (/permission denied|row-level security|violates row-level/i.test(m)) {
+  /* A vendor whose sign-in has expired reaches the database as a signed-out
+     visitor: say so, rather than showing database wording. */
+  if (/jwt expired|invalid jwt|sign-in has expired|permission denied for table vendor_services|row-level security|violates row-level/i.test(m)) {
+    return "Your sign-in has expired. Log out and log back in, then save this listing again.";
+  }
+  if (/permission denied/i.test(m)) {
     return "We couldn't save this listing because of a problem on our side, not anything you entered. Please try again in a minute; if it keeps happening, contact PLUJ.";
   }
   if (/violates check constraint/i.test(m) && /capacity/i.test(m)) {
@@ -474,6 +485,11 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
   }
 
   async function save() {
+    /* Checked top to bottom, in the order the fields appear, so the first
+       problem is the one the page scrolls to. */
+    if (!String(editing.name || "").trim()) {
+      fail("Give this listing a name — it's the headline customers see.", "name"); return;
+    }
     if (!editing.description.trim()) { fail("Please describe this service.", "description"); return; }
     /* Capacity is two optional numbers. Blank is allowed and meaningful, but a
        value that is there has to make sense, and the pair has to agree — the
@@ -498,8 +514,36 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
       if (!hasPrice) { fail("Instant booking needs a price: add a starting price or a priced option.", "price_value"); return; }
       if (!editing.instant_tick) { fail("Tick the box to accept the instant booking terms, or switch instant booking off.", "instant_book"); return; }
     }
+    const needsTime = TIME_REQUIRED_CATEGORIES.includes(editing.category);
+    if (needsTime && Number(editing.price_value) > 0 && !(Number(editing.duration_hours) > 0)) {
+      fail(editing.category === "rentals"
+        ? "Choose the rental period your starting price covers (for example 24 hours)."
+        : editing.category === "music"
+          ? "Choose how long you play for the starting price (for example 4 hours)."
+          : "Choose how long you serve for the starting price (for example 3 hours).", "duration_hours"); return;
+    }
     if (String(editing.extra_hour_price ?? "").trim() !== "" && !(Number(editing.extra_hour_price) >= 0)) {
       fail("The extra-hour price must be a number, or leave it blank.", "extra_hour_price"); return;
+    }
+    /* Each pricing option, one by one: the error points at that option. */
+    const opts = editing.packages || [];
+    for (let i = 0; i < opts.length; i++) {
+      const p = opts[i];
+      const label = `Option ${i + 1}${String(p.name || "").trim() ? ` (“${String(p.name).trim()}”)` : ""}`;
+      const priceRaw = String(p.price ?? "").trim();
+      if (priceRaw !== "" && !(Number(priceRaw) >= 0)) {
+        fail(`${label}: the price must be a number, or leave it blank to keep the option hidden.`, `pkg_${i}_price`); return;
+      }
+      const priced = Number(priceRaw) > 0;
+      if (priced && !String(p.name || "").trim()) {
+        fail(`Option ${i + 1}: give it a name, like “4 hours” or “Full package”.`, `pkg_${i}_name`); return;
+      }
+      if (priced && needsTime && !(Number(p.hours) > 0)) {
+        fail(`${label}: choose how long it lasts.`, `pkg_${i}_hours`); return;
+      }
+    }
+    if (JSON.stringify(opts).length > 19000) {
+      fail("Your pricing options are too long to save. Shorten some descriptions or notes.", "packages"); return;
     }
     setBusy(true);
     const res = await saveService(vendorId, editing);
@@ -593,8 +637,10 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                                        border:`1px solid ${C.border}`, borderRadius:11, padding:"10px 12px" }}>
                 {pics[0]
                   ? <img src={pics[0]} alt="" style={{ width:42, height:42, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
-                  : <div style={{ width:42, height:42, borderRadius:8, background:"#EEE", flexShrink:0,
-                                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏪</div>}
+                  : <div style={{ width:42, height:42, borderRadius:"50%", background:"#ECEFFF", color:C.cobalt, flexShrink:0,
+                                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <Icon name={CAT_ICON[s.category] || "dots"} size={22} stroke={1.5} />
+                    </div>}
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ margin:0, fontSize:13, fontWeight:700, color:C.black }}>
                     {services.length > 1 && (
@@ -606,7 +652,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                     {s.name || s.service_type || s.subcategory || catLabel(s.category)}
                   </p>
                   <p style={{ margin:"1px 0 0", fontSize:11, color:C.midGray }}>
-                    {[s.service_type, catLabel(s.category)].filter(Boolean).join(" · ")}
+                    {[...new Set([s.service_type, catLabel(s.category)].filter(Boolean))].join(" · ")}
                     {s.price_value != null ? ` · $${Number(s.price_value).toLocaleString()}` : " · Contact for pricing"}
                     {Number(s.duration_hours) > 0 ? ` · ⏱ ${fmtHours(s.duration_hours)}` : ""}
                     {s.instant_book ? " · ⚡ Instant booking" : ""}
@@ -763,7 +809,9 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
           <div style={{ marginTop:12, background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 14px" }}>
             <p style={{ margin:0, fontSize:12.5, fontWeight:800 }}>
               {editing.category === "rentals" ? "⏱ Rental period" : "⏱ Service time"}
-              {TIMED_CATEGORIES.includes(editing.category) ? "" : <span style={{ fontWeight:500, color:C.lightGray }}> (optional)</span>}
+              {TIME_REQUIRED_CATEGORIES.includes(editing.category)
+                ? <span style={{ fontWeight:600, color:C.midGray }}> (required when you set a price)</span>
+                : <span style={{ fontWeight:500, color:C.lightGray }}> (optional)</span>}
             </p>
             <p style={{ margin:"3px 0 9px", fontSize:11, color:C.midGray, lineHeight:1.5 }}>
               {editing.category === "rentals"
@@ -777,9 +825,10 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
             <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
               <div style={{ flex:"1 1 160px" }}>
                 <label style={{ ...L, marginTop:0 }}>Starting price includes</label>
-                <select style={F} value={editing.duration_hours || ""}
+                <select style={bad("duration_hours", F)} value={editing.duration_hours || ""}
+                  ref={el => { fieldRefs.current.duration_hours = el; }} aria-invalid={errField === "duration_hours"}
                   onChange={e => setField("duration_hours", e.target.value)}>
-                  <option value="">Not time-based</option>
+                  <option value="">{TIME_REQUIRED_CATEGORIES.includes(editing.category) ? "Choose…" : "Not time-based"}</option>
                   {[1,1.5,2,2.5,3,4,5,6,7,8,10,12,24,48,72,168].map(h => <option key={h} value={h}>{fmtHours(h)}</option>)}
                 </select>
               </div>
@@ -790,7 +839,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   onChange={e => setField("extra_hour_price", e.target.value)} placeholder="Blank = not offered" />
               </div>
             </div>
-            <FieldError on={errField === "extra_hour_price"} msg={err} />
+            <FieldError on={errField === "extra_hour_price" || errField === "duration_hours"} msg={err} />
           </div>
 
           {/* Off-site availability — key for venues whose sub-services (decor,
@@ -1055,7 +1104,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   included and anything the host must provide. Customers only see an option once it has a price.
                 </p>
               </div>
-              {(editing.packages || []).length < 6 && (
+              {(editing.packages || []).length < maxListingOptions(editing.category) && (
                 <button onClick={() => setEditing(e => ({ ...e,
                     packages: [...(e.packages || []), { name:`Option ${(e.packages||[]).length + 1}`, description:"", price:"", hours:"", requirements:"" }] }))}
                   className="btn"
@@ -1066,6 +1115,11 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
               )}
             </div>
 
+            <p ref={el => { fieldRefs.current.packages = el; }} style={{ margin:"6px 0 0", fontSize:10.5, color:C.lightGray }}>
+              {(editing.packages || []).length}/{maxListingOptions(editing.category)} options
+              {editing.category === "rentals" ? " — rentals can list up to 20, one per item or package." : ""}
+            </p>
+            <FieldError on={errField === "packages"} msg={err} />
             {(editing.packages || []).length === 0 && (
               <p style={{ margin:"8px 0 0", fontSize:11, color:C.lightGray }}>
                 No options yet — the single starting price above is used instead.
@@ -1079,14 +1133,16 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                                       background: priced ? "#F9FAFB" : "#FFFBEB",
                                       border:`1px solid ${priced ? C.border : "#FCD34D"}` }}>
                   <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                    <input value={p.name} placeholder={`Option ${i+1}`}
-                      onChange={e => setEditing(ed => ({ ...ed,
-                        packages: ed.packages.map((x, j) => j===i ? { ...x, name:e.target.value } : x) }))}
-                      style={{ ...F, height:36, flex:1, fontWeight:700 }} />
-                    <input type="number" min="0" value={p.price} placeholder="Price"
-                      onChange={e => setEditing(ed => ({ ...ed,
-                        packages: ed.packages.map((x, j) => j===i ? { ...x, price:e.target.value } : x) }))}
-                      style={{ ...F, height:36, width:100 }} />
+                    <input value={p.name} placeholder={`Option ${i+1}`} maxLength={60}
+                      ref={el => { fieldRefs.current[`pkg_${i}_name`] = el; }} aria-invalid={errField === `pkg_${i}_name`}
+                      onChange={e => { setErr(""); setErrField(null); setEditing(ed => ({ ...ed,
+                        packages: ed.packages.map((x, j) => j===i ? { ...x, name:e.target.value } : x) })); }}
+                      style={{ ...bad(`pkg_${i}_name`, F), height:36, flex:1, fontWeight:700 }} />
+                    <input type="number" min="0" value={p.price ?? ""} placeholder="Price"
+                      ref={el => { fieldRefs.current[`pkg_${i}_price`] = el; }} aria-invalid={errField === `pkg_${i}_price`}
+                      onChange={e => { setErr(""); setErrField(null); setEditing(ed => ({ ...ed,
+                        packages: ed.packages.map((x, j) => j===i ? { ...x, price:e.target.value } : x) })); }}
+                      style={{ ...bad(`pkg_${i}_price`, F), height:36, width:100 }} />
                     <button onClick={() => setEditing(ed => ({ ...ed,
                         packages: ed.packages.filter((_, j) => j !== i) }))}
                       className="btn"
@@ -1096,9 +1152,10 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:6 }}>
                     <span style={{ fontSize:11, fontWeight:700, color:C.midGray, whiteSpace:"nowrap" }}>⏱ Time</span>
                     <select value={p.hours == null ? "" : p.hours}
-                      onChange={e => setEditing(ed => ({ ...ed,
-                        packages: ed.packages.map((x, j) => j===i ? { ...x, hours:e.target.value } : x) }))}
-                      style={{ ...F, height:34, flex:1 }}>
+                      ref={el => { fieldRefs.current[`pkg_${i}_hours`] = el; }} aria-invalid={errField === `pkg_${i}_hours`}
+                      onChange={e => { setErr(""); setErrField(null); setEditing(ed => ({ ...ed,
+                        packages: ed.packages.map((x, j) => j===i ? { ...x, hours:e.target.value } : x) })); }}
+                      style={{ ...bad(`pkg_${i}_hours`, F), height:34, flex:1 }}>
                       <option value="">{TIMED_CATEGORIES.includes(editing.category) ? "Choose how long…" : "Not time-based"}</option>
                       {[1,1.5,2,2.5,3,4,5,6,7,8,10,12,24,48,72,168].map(h => <option key={h} value={h}>{fmtHours(h)}</option>)}
                     </select>
@@ -1106,7 +1163,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   <label style={{ display:"block", fontSize:10.5, fontWeight:700, color:C.midGray, margin:"7px 0 3px" }}>
                     What's included
                   </label>
-                  <textarea value={p.description} rows={2}
+                  <textarea value={p.description} rows={2} maxLength={400}
                     placeholder="e.g. DJ, sound system for 150 guests, 2 wireless mics, basic lighting"
                     onChange={e => setEditing(ed => ({ ...ed,
                       packages: ed.packages.map((x, j) => j===i ? { ...x, description:e.target.value } : x) }))}
@@ -1114,12 +1171,13 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   <label style={{ display:"block", fontSize:10.5, fontWeight:700, color:"#92400E", margin:"7px 0 3px" }}>
                     Requirements / notes for the host <span style={{ fontWeight:500, color:C.lightGray }}>(optional)</span>
                   </label>
-                  <textarea value={p.requirements || ""} rows={2}
+                  <textarea value={p.requirements || ""} rows={2} maxLength={300}
                     placeholder="e.g. Needs a standard outlet within 50 ft, a 10×10 ft flat area, and parking for a 20 ft truck"
                     onChange={e => setEditing(ed => ({ ...ed,
                       packages: ed.packages.map((x, j) => j===i ? { ...x, requirements:e.target.value } : x) }))}
                     style={{ ...F, height:"auto", padding:"8px 10px", resize:"vertical", fontFamily:"inherit", fontSize:12,
                              background:"#FFFBEB", borderColor:"#FCD34D" }} />
+                  <FieldError on={String(errField || "").startsWith(`pkg_${i}_`)} msg={err} />
                   {!priced && (
                     <p style={{ margin:"6px 0 0", fontSize:10.5, color:"#B45309", fontWeight:600 }}>
                       ⚠ Hidden from customers — add a price to show this option.
@@ -1139,7 +1197,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   Extras customers can add on top — e.g. "Fog machine +$100". Not separate listings.
                 </p>
               </div>
-              {(editing.addons || []).length < 8 && (
+              {(editing.addons || []).length < maxListingAddons(editing.category) && (
                 <button type="button" onClick={() => setEditing(e => ({ ...e,
                     addons: [...(e.addons || []), { name:"", price:"" }] }))}
                   className="btn"
