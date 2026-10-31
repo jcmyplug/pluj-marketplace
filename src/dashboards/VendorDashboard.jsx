@@ -527,6 +527,14 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
     }
     /* Each pricing option, one by one: the error points at that option. */
     const opts = editing.packages || [];
+    const maxOpts = maxListingOptions(editing.category);
+    if (opts.length > maxOpts) {
+      fail(`This kind of listing can have up to ${maxOpts} pricing options. Remove ${opts.length - maxOpts} to save.`, "packages"); return;
+    }
+    const maxExtras = maxListingAddons(editing.category);
+    if ((editing.addons || []).length > maxExtras) {
+      fail(`This kind of listing can have up to ${maxExtras} add-ons. Remove ${(editing.addons || []).length - maxExtras} to save.`, "packages"); return;
+    }
     for (let i = 0; i < opts.length; i++) {
       const p = opts[i];
       const label = `Option ${i + 1}${String(p.name || "").trim() ? ` (“${String(p.name).trim()}”)` : ""}`;

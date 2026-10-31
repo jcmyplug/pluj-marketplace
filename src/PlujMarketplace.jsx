@@ -4533,6 +4533,17 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
   const [captcha,      setCaptcha]     = useState(() => genCaptcha());
   const [tsToken,      setTsToken]     = useState("");   /* Turnstile, when enabled */
   const [tosAccepted,  setTosAccepted] = useState(false);
+  /* The terms have to be scrolled through, to the end, before they can be
+     accepted (hosts and vendors alike). */
+  const [termsScrolled, setTermsScrolled] = useState(false);
+  const [termsPct,      setTermsPct]      = useState(0);
+  const termsRef = useRef(null);
+  function onTermsScroll(e) {
+    const el = e.currentTarget;
+    const seen = (el.scrollTop + el.clientHeight) / Math.max(1, el.scrollHeight);
+    setTermsPct(p => Math.max(p, Math.min(100, Math.round(seen * 100))));
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 16) setTermsScrolled(true);
+  }
   /* The responsibility box on step 2. Vendors confirm their information is
      true and they're responsible for their posts; hosts confirm they'll check
      vendors themselves before booking. Recorded by handle_new_user as
@@ -4702,6 +4713,11 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
         if (!tsToken) { setErr("Please complete the human check above."); return false; }
       } else if (parseInt(form.captchaAnswer) !== captcha.answer) {
         setErr(`Verification failed — answer: ${form.captchaAnswer || "(blank)"}`); return false;
+      }
+      if (!termsScrolled) {
+        setErr("Please scroll through PLUJ's terms to the end before accepting.");
+        try { termsRef.current && termsRef.current.scrollIntoView({ behavior:"smooth", block:"center" }); } catch { /* old browser */ }
+        return false;
       }
       if (!tosAccepted) { setErr("Please accept PLUJ's terms to continue."); return false; }
       if (!respAccepted) {
@@ -5312,8 +5328,49 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
         </div>
         {legalView && <InfoPageModal page={legalView} onClose={()=>setLegalView(null)} />}
 
-        {/* One-click acceptance. The documents stay one tap away for anyone who
-            wants to read them, but nothing blocks accepting. */}
+        {/* The terms themselves, in a box that has to be scrolled to the end
+            before "I accept" unlocks. All three documents are in it, because
+            the box below accepts all three. */}
+        <div>
+          <p style={{ margin:"0 0 6px", fontSize:12.5, fontWeight:800, color:C.black }}>
+            Read PLUJ's terms{" "}
+            <span style={{ fontWeight:500, color:C.midGray }}>— scroll to the end to accept</span>
+          </p>
+          <div ref={termsRef} tabIndex={0} role="document" onScroll={onTermsScroll}
+            aria-label="PLUJ's Terms of Service, Privacy Policy and Marketplace Rules"
+            style={{ height:230, overflowY:"auto", overscrollBehavior:"contain", border:`1.5px solid ${termsScrolled ? "#86EFAC" : C.border}`,
+                     borderRadius:12, padding:"12px 14px", background:"#FAFBFF", textAlign:"left" }}>
+            {[["Terms", "Terms of Service"], ["Privacy", "Privacy Policy"], ["Marketplace rules", "Marketplace Rules"]].map(([doc, title]) => (
+              <section key={doc} style={{ marginBottom:14 }}>
+                <h3 style={{ margin:"0 0 6px", fontSize:14, fontWeight:800, color:C.black }}>{title}</h3>
+                {(LEGAL_SUMMARY[doc] || []).length > 0 && (
+                  <ul style={{ margin:"0 0 10px", padding:"8px 10px 4px 26px", background:"#EEF2FF", borderRadius:10 }}>
+                    {LEGAL_SUMMARY[doc].map(t => <li key={t} style={{ fontSize:12, lineHeight:1.55, color:"#1F2547", margin:"0 0 5px" }}>{t}</li>)}
+                  </ul>
+                )}
+                {(INFO_CONTENT[doc] || []).map(([h, body]) => (
+                  <div key={h} style={{ marginBottom:9 }}>
+                    <p style={{ margin:"0 0 2px", fontSize:12, fontWeight:800, color:C.black }}>{h}</p>
+                    <p style={{ margin:0, fontSize:12, lineHeight:1.6, color:"#3F4560" }}>{body}</p>
+                  </div>
+                ))}
+              </section>
+            ))}
+            <p style={{ margin:"4px 0 2px", fontSize:11.5, color:C.midGray, textAlign:"center", fontWeight:700 }}>
+              — End of PLUJ's terms —
+            </p>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:6 }}>
+            <div aria-hidden="true" style={{ flex:1, height:5, borderRadius:99, background:"#E5E7EB", overflow:"hidden" }}>
+              <div style={{ width:`${termsScrolled ? 100 : termsPct}%`, height:"100%", borderRadius:99,
+                            background: termsScrolled ? C.green : C.orange, transition:"width 160ms ease-out" }} />
+            </div>
+            <span role="status" style={{ fontSize:11, fontWeight:700, color: termsScrolled ? "#065F46" : C.midGray, whiteSpace:"nowrap" }}>
+              {termsScrolled ? "✓ You reached the end" : `${termsPct}% read`}
+            </span>
+          </div>
+        </div>
+
         {(() => {
           const LinkTo = ({ doc, label }) => (
             <span onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); openLegal(doc); }}
@@ -5324,9 +5381,18 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
           );
           return (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              <button type="button" onClick={()=>setTosAccepted(a => !a)}
+              <button type="button" aria-disabled={!termsScrolled}
+                onClick={() => {
+                  if (!termsScrolled) {
+                    setErr("Scroll to the end of the terms above to accept.");
+                    try { termsRef.current && termsRef.current.scrollIntoView({ behavior:"smooth", block:"center" }); } catch { /* old browser */ }
+                    return;
+                  }
+                  setErr(""); setTosAccepted(a => !a);
+                }}
                 style={{ display:"flex", alignItems:"flex-start", gap:11, width:"100%", textAlign:"left",
-                         cursor:"pointer", padding:"14px 15px", borderRadius:12,
+                         cursor: termsScrolled ? "pointer" : "not-allowed", padding:"14px 15px", borderRadius:12,
+                         opacity: termsScrolled ? 1 : 0.6,
                          border:`1.5px solid ${tosAccepted ? C.orange : C.border}`,
                          background: tosAccepted ? "#EEF2FF" : "#fff" }}>
                 <span style={{ width:20, height:20, borderRadius:6, flexShrink:0, marginTop:1,
@@ -5340,6 +5406,11 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
                   <span style={{ display:"block", fontSize:13, fontWeight:800, color:C.black, marginBottom:3 }}>
                     I accept all of PLUJ's terms
                   </span>
+                  {!termsScrolled && (
+                    <span style={{ display:"block", fontSize:11.5, fontWeight:700, color:"#B45309", marginBottom:3 }}>
+                      🔒 Scroll to the end of the terms above to accept.
+                    </span>
+                  )}
                   <span style={{ display:"block", fontSize:11.5, color:C.midGray, lineHeight:1.6 }}>
                     This covers the <LinkTo doc="Terms" label="Terms of Service" />,{" "}
                     <LinkTo doc="Privacy" label="Privacy Policy" /> and{" "}
@@ -5431,7 +5502,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
                       alignItems:"center", flexShrink:0 }}>
           <div style={{ display:"flex", gap:6, background:"#F3F4F6", borderRadius:99, padding:4 }}>
             {["login","signup"].map(t => (
-              <button key={t} onClick={()=>{setTab(t);setErr("");setStep(1);setTosAccepted(false);setRespAccepted(false);setLegalRead({ Terms:false, Privacy:false, "Marketplace rules":false });setCaptcha(genCaptcha());setRlState({blocked:false,attemptsLeft:5});}} className="btn"
+              <button key={t} onClick={()=>{setTab(t);setErr("");setStep(1);setTosAccepted(false);setTermsScrolled(false);setTermsPct(0);setRespAccepted(false);setLegalRead({ Terms:false, Privacy:false, "Marketplace rules":false });setCaptcha(genCaptcha());setRlState({blocked:false,attemptsLeft:5});}} className="btn"
                 style={{ padding:"7px 18px", borderRadius:99, fontSize:13, fontWeight:600, border:"none",
                          background: tab===t ? "#fff" : "transparent",
                          color: tab===t ? C.black : C.midGray,
