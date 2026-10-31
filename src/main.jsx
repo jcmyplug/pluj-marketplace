@@ -146,11 +146,11 @@ window.addEventListener('unhandledrejection', (e) => {
   if (isStaleChunkError(e.reason) && reloadForUpdate()) return;
   report(e.reason);
 });
-/* Vite's own signal for the same thing, when a file that a page section
-   depends on fails to preload. */
-window.addEventListener('vite:preloadError', (e) => {
-  if (reloadForUpdate()) e.preventDefault();
-});
+/* No 'vite:preloadError' listener on purpose. Vite fires it for the same
+   failure, and calling preventDefault() there makes the import resolve with
+   nothing instead of failing, so lazyWithReload never sees the error and the
+   page crashes into the error screen (and reports it) instead of reloading.
+   Left alone, the error reaches lazyWithReload, or the handler above. */
 window.addEventListener('error', (e) => {
   if (e.error) report(e.error);
 });

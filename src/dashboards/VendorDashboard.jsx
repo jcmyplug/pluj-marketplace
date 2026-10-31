@@ -377,6 +377,12 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
   const [uploading,setUploading]= useState(false);
   const fieldRefs  = useRef({});
   const formErrRef = useRef(null);
+  const okRef      = useRef(null);
+  /* "Service saved." appears at the top of the list; Save was at the bottom
+     of a long form, so bring the message into view. */
+  useEffect(() => {
+    if (ok && okRef.current) { try { okRef.current.scrollIntoView({ behavior:"smooth", block:"center" }); } catch { /* old browser */ } }
+  }, [ok]);
   /* Legal information still missing (null = unknown). No listing can be
      posted until it is complete; the database refuses it as well. */
   const [legalMissing, setLegalMissing] = useState(null);
@@ -387,8 +393,11 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
   /* Show an error where the vendor is looking: highlight the field it is
      about and scroll to it (or to the message next to Save), instead of only
      printing it at the top of the page, out of sight. */
-  function fail(message, field = null) {
-    setErr(friendlySaveError(message)); setErrField(field);
+  /* Only the server's wording is translated by friendlySaveError: our own
+     messages quote the vendor's option names, and a name like "Networking
+     mixer" must not turn "choose how long it lasts" into a connection error. */
+  function fail(message, field = null, fromServer = false) {
+    setErr(fromServer ? friendlySaveError(message) : message); setErrField(field);
     setTimeout(() => {
       const el = (field && fieldRefs.current[field]) || formErrRef.current;
       if (!el) return;
@@ -477,7 +486,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
     const added = [];
     for (const file of files) {
       const { url, error } = await uploadVendorPhoto(vendorId, file, session?.access_token);
-      if (error) { fail(error, "photos"); break; }
+      if (error) { fail(error, "photos", true); break; }
       if (url) added.push(url);
     }
     if (added.length) setEditing(p => ({ ...p, photos: [...p.photos, ...added] }));
@@ -508,12 +517,6 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
     if (capMin !== null && capMax !== null && capMin > capMax) {
       fail(`Your minimum (${capMin}) is larger than your maximum (${capMax}). Swap them, or clear one.`, "capacity_min"); return;
     }
-    if (editing.instant_book) {
-      const hasPrice = Number(editing.price_value) > 0
-        || (editing.packages || []).some(p => Number(p.price) > 0);
-      if (!hasPrice) { fail("Instant booking needs a price: add a starting price or a priced option.", "price_value"); return; }
-      if (!editing.instant_tick) { fail("Tick the box to accept the instant booking terms, or switch instant booking off.", "instant_book"); return; }
-    }
     const needsTime = TIME_REQUIRED_CATEGORIES.includes(editing.category);
     if (needsTime && Number(editing.price_value) > 0 && !(Number(editing.duration_hours) > 0)) {
       fail(editing.category === "rentals"
@@ -524,6 +527,13 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
     }
     if (String(editing.extra_hour_price ?? "").trim() !== "" && !(Number(editing.extra_hour_price) >= 0)) {
       fail("The extra-hour price must be a number, or leave it blank.", "extra_hour_price"); return;
+    }
+    /* Instant booking sits below the hours on the page, above the options. */
+    if (editing.instant_book) {
+      const hasPrice = Number(editing.price_value) > 0
+        || (editing.packages || []).some(p => Number(p.price) > 0);
+      if (!hasPrice) { fail("Instant booking needs a price: add a starting price or a priced option.", "price_value"); return; }
+      if (!editing.instant_tick) { fail("Tick the box to accept the instant booking terms, or switch instant booking off.", "instant_book"); return; }
     }
     /* Each pricing option, one by one: the error points at that option. */
     const opts = editing.packages || [];
@@ -559,9 +569,9 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
     if (!res.ok) {
       if (/legal information/i.test(res.error || "")) {
         setLegalNudge(true); getLegalMissing(vendorId).then(setLegalMissing);
-        fail(res.error, null); return;
+        fail(res.error, null, true); return;
       }
-      fail(res.error, fieldForSaveError(res.error)); return;
+      fail(res.error, fieldForSaveError(res.error), true); return;
     }
     setOk("Service saved."); setEditing(null); load();
     setTimeout(() => setOk(""), 2500);
@@ -624,7 +634,7 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
 
       {err && !editing && <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", color:"#B91C1C",
                             borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>⚠ {err}</div>}
-      {ok  && <div style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
+      {ok  && <div ref={okRef} role="status" style={{ background:C.greenSoft, border:`1px solid ${C.green}55`, color:"#065F46",
                             borderRadius:9, padding:"9px 12px", marginTop:10, fontSize:12, fontWeight:600 }}>✓ {ok}</div>}
 
       {/* Existing services */}
@@ -1151,8 +1161,8 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                       onChange={e => { setErr(""); setErrField(null); setEditing(ed => ({ ...ed,
                         packages: ed.packages.map((x, j) => j===i ? { ...x, price:e.target.value } : x) })); }}
                       style={{ ...bad(`pkg_${i}_price`, F), height:36, width:100 }} />
-                    <button onClick={() => setEditing(ed => ({ ...ed,
-                        packages: ed.packages.filter((_, j) => j !== i) }))}
+                    <button onClick={() => { if (String(errField || "").startsWith("pkg_") || errField === "packages") { setErr(""); setErrField(null); }
+                        setEditing(ed => ({ ...ed, packages: ed.packages.filter((_, j) => j !== i) })); }}
                       className="btn"
                       style={{ padding:"6px 9px", borderRadius:8, border:"1px solid #FCA5A5",
                                background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}>✕</button>
@@ -1226,8 +1236,8 @@ function ServicesManager({ vendorId, onOpenBusiness, legalKey }) {
                   onChange={e => setEditing(ed => ({ ...ed,
                     addons: ed.addons.map((x, j) => j===i ? { ...x, price:e.target.value } : x) }))}
                   style={{ ...F, height:36, width:90 }} />
-                <button onClick={() => setEditing(ed => ({ ...ed,
-                    addons: ed.addons.filter((_, j) => j !== i) }))}
+                <button onClick={() => { if (errField === "packages") { setErr(""); setErrField(null); }
+                    setEditing(ed => ({ ...ed, addons: ed.addons.filter((_, j) => j !== i) })); }}
                   className="btn"
                   style={{ padding:"6px 9px", borderRadius:8, border:"1px solid #FCA5A5",
                            background:"#FEF2F2", color:"#B91C1C", fontSize:11, fontWeight:700 }}>✕</button>

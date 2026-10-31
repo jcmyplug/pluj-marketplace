@@ -97,7 +97,14 @@ export function translate(s) {
       let out = t.out;
       t.order.forEach((n, i) => {
         const v = m[i + 1];
-        const tv = dict.exact[v.replace(/\s+/g, " ").trim()];
+        let tv = dict.exact[v.replace(/\s+/g, " ").trim()];
+        /* A list the code joined with commas ("business name, city"):
+           translate each item it knows. */
+        if (tv == null && /,\s/.test(v)) {
+          const parts = v.split(/,\s*/);
+          const done = parts.map(x => dict.exact[x.trim()] ?? x);
+          if (done.some((x, j) => x !== parts[j])) tv = done.join(", ");
+        }
         out = out.split("{" + n + "}").join(tv != null ? tv : v);
       });
       return lead + translateDates(out) + trail;

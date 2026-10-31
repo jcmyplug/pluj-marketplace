@@ -1280,6 +1280,21 @@ export function parseSchedule(s) {
   return { days, blocks: foundBlocks.length ? foundBlocks : null };
 }
 
+/* The schedule a listing is booked by. Each half (days, hours) is the
+   listing's own when it marked one, otherwise the business's, so a listing
+   that set its hours but not its days follows the days the business works,
+   which is also what its profile shows. Free-text schedules (older accounts)
+   are kept as they are. */
+export function listingSchedule(own, business) {
+  if (!own) return business || "";
+  const a = parseSchedule(own);
+  if (!a.days && !a.blocks) return own;
+  const b = parseSchedule(business || "");
+  const days = a.days || b.days || [];
+  const blocks = a.blocks || b.blocks || [];
+  return composeSchedule(days, blocks) || own;
+}
+
 /* Every hour block a booking actually touches, not just the one it starts in.
    A vendor who works evenings only cannot take 8pm–1am: that runs through
    Evening AND Late night, and they only cover the first. Checking the start
@@ -2818,7 +2833,7 @@ function dbServiceToCard(s, v) {
     addons:      parseAddons(s.addons),
     availDays:   s.avail_days || null,
     availBlocks: s.avail_blocks || null,
-    schedule:    s.schedule || v.schedule || "",
+    schedule:    listingSchedule(s.schedule, v.schedule),
     maxPerDay:   s.max_per_day == null ? 1 : Number(s.max_per_day),
     gapHours:    s.gap_hours == null ? null : Number(s.gap_hours),
     minNoticeHours: s.min_notice_hours == null ? 0 : Number(s.min_notice_hours),
@@ -4508,7 +4523,7 @@ const VENDOR_DESC_MAX = 1000;
    Deleted when sign-up succeeds, when they press "Start over", or after 30
    days. */
 const SIGNUP_DRAFT_KEY = "pluj_signup_draft";
-const SIGNUP_DRAFT_SKIP = ["password", "password2", "ein", "setupKey", "captchaAnswer"];
+const SIGNUP_DRAFT_SKIP = ["password", "password2", "ein", "setupKey", "captchaAnswer", "dob"];
 function readSignupDraft() {
   try {
     const d = JSON.parse(localStorage.getItem(SIGNUP_DRAFT_KEY) || "null");
@@ -4519,14 +4534,17 @@ function readSignupDraft() {
 }
 function clearSignupDraft() { try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch { /* storage blocked */ } }
 
-function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user" }) {
-  /* Read once: a sign-up left half-done reopens where it stopped. */
+function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
+  /* Read once: a sign-up left half-done reopens with what was typed. */
   const [draft] = useState(readSignupDraft);
   const [draftShown, setDraftShown] = useState(!!draft);
   const [tab,          setTab]         = useState(draft || initialTab === "signup" ? "signup" : "login");
-  const [role,         setRole]        = useState(draft ? (draft.role === "vendor" ? "vendor" : "user")
-                                                        : (initialRole === "vendor" ? "vendor" : "user"));
-  const [step,         setStep]        = useState(draft && Number(draft.step) === 2 ? 2 : 1);
+  /* A button that asks for a role ("Become a vendor") wins over the draft's. */
+  const [role,         setRole]        = useState(initialRole ? (initialRole === "vendor" ? "vendor" : "user")
+                                                        : (draft && draft.role === "vendor" ? "vendor" : "user"));
+  /* Always step 1: the password and date of birth aren't kept, and they're on
+     step 1, so a draft reopened on step 2 could never be submitted. */
+  const [step,         setStep]        = useState(1);
   const [loading,      setLoading]     = useState(false);
   const [err,          setErr]         = useState("");
   const [created,      setCreated]     = useState(null);
@@ -4702,6 +4720,12 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
       return true;
     }
     if (step === 2) {
+      /* Belt and braces: never send a sign-up without the password. */
+      if (!form.password || !form.dob) {
+        setStep(1);
+        setErr(!form.password ? "Please type your password again." : "Please enter your date of birth.");
+        return false;
+      }
       /* The photo requirement moved to the dashboard along with the upload.
          Demanding a photo here would be unsatisfiable: there is no picker any
          more, because there is no session to upload with until the vendor has
@@ -4808,6 +4832,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
           }
         }
 
+        clearSignupDraft();   /* has an account: a half-done sign-up no longer applies */
         onAuth(u); onClose();
         return;
       }
@@ -5524,7 +5549,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole = "user"
             <div role="status" style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap",
                                         background:"#EEF2FF", border:"1px solid #C7D2FE", borderRadius:10, padding:"9px 12px" }}>
               <span style={{ flex:"1 1 220px", fontSize:12, color:"#1E3A8A", lineHeight:1.5 }}>
-                We kept what you typed last time. Passwords aren't saved, so type yours again.
+                We kept what you typed last time. Your password and date of birth aren't saved, so type them again.
               </span>
               <button type="button" onClick={startOver} className="btn"
                 style={{ border:"none", background:"#fff", color:"#1E40FF", borderRadius:99, padding:"6px 12px",
@@ -10542,7 +10567,10 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
                   /* A listing without its own days follows the days the business works. */
                   const days   = ownDays.length ? ownDays
                                : (parseSchedule(full?.schedule || vendor.schedule || "").days || []);
-                  const blocks = selService ? parseEventTypes(selService.avail_blocks) : parseEventTypes(vendor.availBlocks);
+                  const ownBlocks = selService ? parseEventTypes(selService.avail_blocks) : parseEventTypes(vendor.availBlocks);
+                  /* Same for hours: none marked on the listing means the business's. */
+                  const blocks = ownBlocks.length ? ownBlocks
+                               : (parseSchedule(full?.schedule || vendor.schedule || "").blocks || []);
                   if (!days.length) {
                     return <p style={{ margin:0, fontSize:13, color:C.black, lineHeight:1.7 }}>
                       {(selService && selService.schedule) || vendor.schedule || "Ask the vendor"}
@@ -11352,11 +11380,21 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
       let merged = loaded;
       try {
         const dr = JSON.parse(localStorage.getItem(draftKey) || "null");
-        if (dr && dr.f && Date.now() - Number(dr.savedAt || 0) < 30 * 86400000) {
+        const fresh = dr && Date.now() - Number(dr.savedAt || 0) < 30 * 86400000;
+        const keep = k => k !== "ein" && !/_checked_at$/.test(k) && k in loaded;   // never the EIN or PLUJ's check dates
+        if (fresh && dr.edits) {
           merged = { ...loaded };
-          Object.keys(dr.f).forEach(k => { if (k !== "ein" && k in loaded) merged[k] = dr.f[k]; });
-          if (JSON.stringify(merged) !== loadedRef.current) setRestored(true);
+          /* Only the fields they changed, and only where nothing has changed
+             since on the server (another device, or PLUJ), so a newer save
+             is never undone by an old draft. */
+          Object.entries(dr.edits).forEach(([k, e]) => {
+            if (keep(k) && e && JSON.stringify(loaded[k]) === JSON.stringify(e.from)) merged[k] = e.to;
+          });
+        } else if (fresh && dr.f) {           /* drafts saved before 31 Oct 2026 kept the whole form */
+          merged = { ...loaded };
+          Object.keys(dr.f).forEach(k => { if (keep(k)) merged[k] = dr.f[k]; });
         }
+        if (JSON.stringify(merged) !== loadedRef.current) setRestored(true);
       } catch { /* storage blocked */ }
       setF(merged);
       setLoad(false);
@@ -11369,10 +11407,17 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
   }
   useEffect(() => {
     if (!f || loadedRef.current == null) return;
-    const { ein, ...rest } = f;                 // never the EIN
+    /* Only what they changed, with the value it replaced. Never the EIN, and
+       never the dates PLUJ checked their documents. */
+    const base = JSON.parse(loadedRef.current);
+    const edits = {};
+    Object.keys(f).forEach(k => {
+      if (k === "ein" || /_checked_at$/.test(k)) return;
+      if (JSON.stringify(f[k]) !== JSON.stringify(base[k])) edits[k] = { from: base[k], to: f[k] };
+    });
     try {
-      if (JSON.stringify(f) === loadedRef.current) localStorage.removeItem(draftKey);
-      else localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), f: rest }));
+      if (!Object.keys(edits).length) localStorage.removeItem(draftKey);
+      else localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), edits }));
     } catch { /* storage full or blocked */ }
   }, [f]);
   function discardDraft() {
@@ -11435,7 +11480,8 @@ export function VendorListingEditor({ user, onClose, onSaved }) {
       /* Take them to the first missing field instead of leaving the message
          out of sight at the top. */
       setTimeout(() => {
-        const el = document.querySelector(`[data-bf="${keys[0]}"]`);
+        /* The first one on the page, not the first one checked. */
+        const el = [...document.querySelectorAll("[data-bf]")].find(x => keys.includes(x.getAttribute("data-bf")));
         if (!el) return;
         try { el.scrollIntoView({ behavior:"smooth", block:"center" }); } catch { el.scrollIntoView(); }
         if (el.focus) { try { el.focus({ preventScroll:true }); } catch { /* not focusable */ } }
@@ -13327,6 +13373,9 @@ export function WaitlistAdmin() {
 export default function PlujApp() {
   /* Auth */
   const [user,      setUser]      = useState(null);
+  /* Signed in, however it happened (log-in, email link, saved session): a
+     half-done sign-up kept in this browser no longer applies. */
+  useEffect(() => { if (user) clearSignupDraft(); }, [user]);
   /* Prices are shown all-in for whoever is looking (see allIn). Set during
      render, before any card renders, so every price on screen agrees. */
   setPriceViewer(user);
