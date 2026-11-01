@@ -22,10 +22,19 @@ export default defineConfig({
   workers: process.env.CI ? 2 : 4,
   reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   use: {
-    ...devices["Desktop Chrome"],
     baseURL: external || "http://localhost:4173",
     trace: "retain-on-failure",
   },
+  /* Every check runs three times: a computer, an iPhone (WebKit, the engine
+     inside Safari on every iPhone: touch, 3x screen, mobile viewport) and an
+     Android phone (mobile Chrome). Emulation, not a real phone (item 37), but
+     the same engines real phones use. Tests that need a particular screen
+     size still set it themselves. */
+  projects: [
+    { name: "computer",       use: { ...devices["Desktop Chrome"] } },
+    { name: "iphone-safari",  use: { ...devices["iPhone 14"] } },
+    { name: "android-chrome", use: { ...devices["Pixel 7"] } },
+  ],
   webServer: external ? undefined : {
     command: "npx vite preview --port 4173 --strictPort",
     url: "http://localhost:4173",

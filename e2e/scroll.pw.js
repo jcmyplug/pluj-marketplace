@@ -31,13 +31,20 @@ test.describe("opening pages", () => {
     expect(Math.abs(back.y - before.y)).toBeLessThan(120);
   });
 
-  test("Build my event in the header, pressed from the bottom of the home page, opens at the top", async ({ page }) => {
+  test("Build my event, pressed from the bottom of the home page, opens at the top", async ({ page }) => {
     await mockBackend(page, { services: listings(24) });
     await page.goto("/");
     await settle(page);
     await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
     await page.waitForTimeout(400);
-    await page.locator("button:visible", { hasText: /^Build my event$/ }).first().click();
+    /* The header button on a computer. On a phone the header folds away, so a
+       person taps the "Build it step by step" card instead, from wherever it
+       sits on the page; either way /build must open at its top. */
+    const exact = page.locator("button:visible", { hasText: /^Build my event$/i }).first();
+    const btn = (await exact.count()) ? exact : page.locator("button:visible", { hasText: /Build my event/i }).first();
+    await btn.scrollIntoViewIfNeeded();
+    expect((await where(page)).y).toBeGreaterThan(0);
+    await btn.click();
     await expect.poll(async () => (await where(page)).path).toBe("/build");
     await page.waitForTimeout(600);
     expect((await where(page)).y).toBeLessThan(5);

@@ -6,6 +6,8 @@
    never pass or fail because of the network, and never writes anything. */
 
 export const VID = "11111111-1111-1111-1111-111111111111";
+/* What the fake Turnstile hands back; requests to Supabase Auth must carry it. */
+export const TS_TOKEN = "pw-fake-turnstile-token";
 export const VID2 = "33333333-3333-3333-3333-333333333333";
 
 /* A vendor PLUJ has checked: licence and insurance, so it earns the
@@ -40,11 +42,26 @@ export function listings(n, vendor = VERIFIED, extra = {}) {
 
 /* Replace the backend. Returns counters the test can assert on. */
 export async function mockBackend(page, { services = listings(6), vendors = [VERIFIED, PLAIN] } = {}) {
-  const calls = { signup: 0 };
+  const calls = { signup: 0, auth: [] };
 
   /* Lowest priority (registered first): anything not on this machine is cut. */
   await page.route((url) => !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url.toString()),
                    (route) => route.abort());
+
+  /* Cloudflare Turnstile, faked: renders nothing, hands back a fixed token a
+     moment later, and records that it was asked. Lets the checks cover the
+     human-check path without reaching Cloudflare. */
+  await page.route("https://challenges.cloudflare.com/turnstile/**", (route) => route.fulfill({
+    status: 200, contentType: "application/javascript",
+    body: `window.__tsRendered = 0; window.__tsResets = 0; var __tsCb = null;
+      window.turnstile = {
+        render: function (el, opts) { window.__tsRendered++; __tsCb = opts.callback;
+                                      setTimeout(function () { __tsCb("${TS_TOKEN}"); }, 150); return "w" + window.__tsRendered; },
+        /* Like the real managed widget: after a reset it quietly solves again. */
+        reset:  function () { window.__tsResets++; setTimeout(function () { if (__tsCb) __tsCb("${TS_TOKEN}"); }, 150); },
+        remove: function () {},
+      };`,
+  }));
 
   await page.route("**/rest/v1/**", (route) => {
     const req = route.request();
@@ -64,6 +81,11 @@ export async function mockBackend(page, { services = listings(6), vendors = [VER
   });
 
   await page.route("**/auth/v1/**", (route) => {
+    const req = route.request();
+    let body = null;
+    try { body = req.postDataJSON(); } catch { /* not JSON */ }
+    calls.auth.push({ path: new URL(req.url()).pathname.replace("/auth/v1", "") + new URL(req.url()).search, body });
+    if (req.url().includes("/recover")) return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
     if (route.request().url().includes("/signup")) {
       calls.signup++;
       const user = { id: "u1", email: "new@example.com", identities: [{ id: "i1" }] };

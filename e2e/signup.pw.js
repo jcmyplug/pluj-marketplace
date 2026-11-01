@@ -2,7 +2,7 @@
    scrolling through the terms. Checked for a host on a computer in English and
    a vendor on a phone in Spanish. */
 import { test, expect } from "playwright/test";
-import { mockBackend, spanish, PHONE } from "./mock.js";
+import { mockBackend, spanish, PHONE, TS_TOKEN } from "./mock.js";
 
 const T = {
   en: { login: /Log in/, signup: /^(Sign up)$/, vendor: /Vendor/, cont: /Continue/, answer: "Your answer",
@@ -78,6 +78,11 @@ for (const { role, lang, viewport } of [
     await create.scrollIntoViewIfNeeded();
     await create.click();
     await expect.poll(() => calls.signup).toBe(1);
+    /* With Turnstile on, the sign-up carries the human-check token. */
+    if (await page.evaluate(() => (window.__tsRendered || 0) > 0)) {
+      const sent = calls.auth.find((c) => c.path.startsWith("/signup"));
+      expect(sent.body.gotrue_meta_security).toEqual({ captcha_token: TS_TOKEN });
+    }
     /* The half-finished sign-up kept in the browser is gone once it worked. */
     await expect.poll(() => page.evaluate(() => localStorage.getItem("pluj_signup_draft"))).toBeNull();
   });
@@ -89,4 +94,33 @@ test("the terms say what a badge does and does not mean", async ({ page }) => {
   await page.locator("footer button", { hasText: /^Terms$/ }).first().click();
   await expect(page.getByText(/A badge records what we saw on the day we checked/).first()).toBeVisible();
   await expect(page.locator("body")).not.toContainText("a licence or insurance verification");
+});
+
+/* Supabase's CAPTCHA covers log-in and password reset too, so both must carry
+   the token, or turning CAPTCHA on would lock everyone out (31 Oct). */
+test("log in and forgot password carry the human-check token", async ({ page }) => {
+  const calls = await mockBackend(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /log in/i }).first().click();
+  const turnstileOn = await page.waitForFunction(() => (window.__tsRendered || 0) > 0, null, { timeout: 4000 })
+    .then(() => true, () => false);
+  test.skip(!turnstileOn, "this build has no Turnstile site key");
+  await page.locator('input[type="email"]').first().fill("someone@example.com");
+  await page.locator('input[autocomplete="current-password"], input[type="password"]').first().fill("Secret-Pass-123");
+  await page.waitForTimeout(400);   /* the fake hands its token over after 150 ms */
+
+  await page.getByRole("button", { name: "Forgot password?" }).click();
+  await expect.poll(() => calls.auth.filter((c) => c.path.startsWith("/recover")).length).toBe(1);
+  expect(calls.auth.find((c) => c.path.startsWith("/recover")).body.gotrue_meta_security)
+    .toEqual({ captcha_token: TS_TOKEN });
+  /* A token works once: the widget is reset for the next attempt. */
+  await expect.poll(() => page.evaluate(() => window.__tsResets)).toBeGreaterThan(0);
+
+  await page.waitForTimeout(400);
+  await page.locator("button", { hasText: /^Log in$/ }).last().click();
+  await expect.poll(() => calls.auth.filter((c) => c.path.startsWith("/token")).length).toBe(1);
+  expect(calls.auth.find((c) => c.path.startsWith("/token")).body.gotrue_meta_security)
+    .toEqual({ captcha_token: TS_TOKEN });
+  /* The mock refuses the password, and the page says so. */
+  await expect(page.getByText(/Incorrect email or password/).first()).toBeVisible();
 });

@@ -22,7 +22,7 @@ redeploy. **Everyone can read these**, by design.
 | `REACT_APP_SUPABASE_URL` | The Supabase project URL | Falls back to the URL written in the code (`btmqghudfakpbbplrqhf`), so the site still works |
 | `REACT_APP_SUPABASE_ANON_KEY` | Supabase's public "anon" key. Safe to publish: row-level security decides what it can see | Falls back to the key written in the code |
 | `REACT_APP_GOOGLE_MAPS_KEY` | Optional Google Places key for address autocomplete. Must be restricted to pluj.us in Google Cloud, because it is visible | Address lookup uses the free geocoder (Photon / OpenStreetMap). Works; slightly less precise |
-| `REACT_APP_TURNSTILE_SITE_KEY` | Cloudflare Turnstile **site** key (public half of the CAPTCHA) | Sign-up shows the arithmetic question instead. **Not set yet** — item 17 |
+| `REACT_APP_TURNSTILE_SITE_KEY` | Optional override for the Cloudflare Turnstile **site** key (public half of the CAPTCHA). The real one is written in the code since 31 Oct (widget "PLUJ" in Cloudflare) | The key in the code is used. Set it to `1x00000000000000000000AA` (Cloudflare's always-pass test key) for local development |
 
 ## B. Vercel, server side only (secret)
 
@@ -81,9 +81,11 @@ a page needs them.
 
 ## Settings that are not variables
 
-- **Supabase Auth → Attack Protection → CAPTCHA**: the Turnstile **secret** key
-  goes here (item 17). Turn it on only after the site key (group A) is live, or
-  every sign-up is refused.
+- **Supabase Auth → Attack Protection → CAPTCHA**: provider Turnstile, with the
+  **secret** key of the Cloudflare widget "PLUJ" (Cloudflare → Turnstile → PLUJ →
+  Settings shows it again). The site sends a token on sign-up, log-in and
+  "Forgot password?" since 31 Oct; with this switch on, Supabase refuses any of
+  those without a valid token. To roll back: switch it off here.
 - **Supabase Auth → Password security → leaked-password check**: needs the Pro
   plan (item 13; parked with the other paid items).
 - **Resend → Domains**: pluj.us with SPF, DKIM and DMARC.

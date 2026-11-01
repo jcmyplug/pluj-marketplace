@@ -1638,17 +1638,22 @@ const SUPABASE_ANON = process.env.REACT_APP_SUPABASE_ANON_KEY
   || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bXFnaHVkZmFrcGJicGxycWhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNjA1NTgsImV4cCI6MjA5NDczNjU1OH0.t3GgjjKy--BPMJ7Z5wPWB1UamG71F6FGzR_N2cfJpWw";
 
 /* ── Cloudflare Turnstile ────────────────────────────────────────────────────
-   Empty until REACT_APP_TURNSTILE_SITE_KEY is set in Vercel, and everything
-   below is written so that emptiness is a working state, not a broken one:
-   no key means no widget, no token, and the existing arithmetic question
-   carries on exactly as before.
+   The SITE key below is public by design: it names the widget (Cloudflare
+   widget "PLUJ", hostnames pluj.us, www.pluj.us and vercel.app for preview
+   builds) and authorises nothing, so it lives in the code rather than in
+   Vercel. REACT_APP_TURNSTILE_SITE_KEY still overrides it, e.g. Cloudflare's
+   always-pass test key 1x00000000000000000000AA on localhost. The SECRET key
+   never comes near this bundle: it is pasted into Supabase Auth, which checks
+   every token server-side.
 
-   That ordering is deliberate. A widget rendered without a key shows a broken
-   box, and a token sent before Supabase has the secret is ignored — but turning
-   on Supabase's CAPTCHA protection while the app sends no token rejects EVERY
-   signup. So: this code ships first and changes nothing, then you add the site
-   key here and the secret key in Supabase. Neither step alone can break signup. */
-const TURNSTILE_SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY || "";
+   Order matters. A token sent before Supabase has the secret is ignored, so
+   shipping this key first changes nothing for anyone; turning on Supabase's
+   CAPTCHA protection while the app sent no token would refuse every sign-up,
+   log-in and password reset. Hence: this key live first (31 Oct 2026), then
+   the secret in Supabase. Log-in and "Forgot password?" carry the token too,
+   because Supabase's CAPTCHA covers them as well as sign-up. Setting this to
+   "" brings back the arithmetic question everywhere. */
+const TURNSTILE_SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAAFup99LNcP2iBhm2";
 
 /* Detect if running in Claude artifact sandbox (no external fetch allowed) */
 const IS_PREVIEW = (() => {
@@ -1803,12 +1808,17 @@ export const sb = (() => {
     } catch(e) { return { data: null, error: e }; }
   }
 
-  async function signIn(email, password) {
+  /* Supabase's CAPTCHA protection covers log-in and password reset as well
+     as sign-up, so all three carry the Turnstile token. Without that, turning
+     it on in Supabase would lock every existing account out. */
+  async function signIn(email, password, captchaToken = null) {
     if (IS_PREVIEW) return previewSignIn(email, password);
     try {
+      const body = { email, password };
+      if (captchaToken) body.gotrue_meta_security = { captcha_token: captchaToken };
       const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
         method: "POST", headers,
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(body),
       });
       const d = await res.json();
       return { data: d, error: d.error || null };
@@ -1839,12 +1849,14 @@ export const sb = (() => {
   /* Password recovery — sends Supabase's recovery email. The link returns to
      the site with #access_token=...&type=recovery in the URL hash, which the
      app detects on boot (see recovery handling in PlujApp). */
-  async function recover(email, redirectTo) {
+  async function recover(email, redirectTo, captchaToken = null) {
     if (IS_PREVIEW) return { data: null, error: { message: "Password reset isn't available in preview mode." } };
     try {
+      const body = { email, gotrue_meta_security: captchaToken ? { captcha_token: captchaToken } : {} };
+      if (redirectTo) body.redirect_to = redirectTo;
       const res = await fetch(SUPABASE_URL + "/auth/v1/recover", {
         method: "POST", headers,
-        body: JSON.stringify(redirectTo ? { email, gotrue_meta_security: {}, redirect_to: redirectTo } : { email }),
+        body: JSON.stringify(body),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) return { data: null, error: d.error || d || { message: "Could not send reset email." } };
@@ -4758,15 +4770,26 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
     reader.readAsDataURL(file);
   }
 
+  /* A Turnstile token works once. After any log-in, reset or sign-up attempt
+     the widget is reset so it fetches a fresh one (usually invisibly). */
+  function spendTurnstile() {
+    if (!TURNSTILE_SITE_KEY) return;
+    setTsToken("");
+    try { window.turnstile && window.turnstile.reset(); } catch { /* not mounted */ }
+  }
+  const turnstileMissing = () => !!TURNSTILE_SITE_KEY && !tsToken;
+
   /* ── Forgot password — send Supabase recovery email ── */
   async function handleForgot() {
     setErr(""); setForgotMsg("");
     if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       setErr("Enter your email above first, then tap “Forgot password?”."); return;
     }
+    if (turnstileMissing()) { setErr("Please complete the human check above, then tap “Forgot password?” again."); return; }
     setLoading(true);
     const redirectTo = (typeof window !== "undefined" ? window.location.origin : "");
-    const { error } = await sb.recover(form.email, redirectTo);
+    const { error } = await sb.recover(form.email, redirectTo, tsToken || null);
+    spendTurnstile();
     setLoading(false);
     if (error) { setErr(error.message || "Could not send reset email."); return; }
     setForgotMsg("If an account exists for that email, a reset link is on its way. Check your inbox (and spam).");
@@ -4786,7 +4809,12 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
           setErr(`Too many failed attempts. Try again in ${rl.resetIn} minute${rl.resetIn===1?"":"s"}.`);
           setLoading(false); return;
         }
-        const { data, error } = await sb.signIn(form.email, form.password);
+        if (turnstileMissing()) {
+          setErr("Please complete the human check above, then press Log in again.");
+          setLoading(false); return;
+        }
+        const { data, error } = await sb.signIn(form.email, form.password, tsToken || null);
+        spendTurnstile();
         if (error || !data?.access_token) {
           await recordAttempt(form.email, false);
           const updated = await getRateLimit(form.email);
@@ -5215,6 +5243,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
         )}
         {inp("Email address", "email", "email", true)}
         {inp("Password", "password", "password", true)}
+        <Turnstile onToken={setTsToken} />
         {forgotMsg && (
           <p style={{ margin:0, fontSize:11, color:C.green, fontWeight:600 }}>{forgotMsg}</p>
         )}
@@ -5517,7 +5546,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
                       alignItems:"center", flexShrink:0 }}>
           <div style={{ display:"flex", gap:6, background:"#F3F4F6", borderRadius:99, padding:4 }}>
             {["login","signup"].map(t => (
-              <button key={t} onClick={()=>{setTab(t);setErr("");setStep(1);setTosAccepted(false);setTermsScrolled(false);setTermsPct(0);setRespAccepted(false);setLegalRead({ Terms:false, Privacy:false, "Marketplace rules":false });setCaptcha(genCaptcha());setRlState({blocked:false,attemptsLeft:5});}} className="btn"
+              <button key={t} onClick={()=>{setTab(t);setErr("");setStep(1);setTsToken("");setTosAccepted(false);setTermsScrolled(false);setTermsPct(0);setRespAccepted(false);setLegalRead({ Terms:false, Privacy:false, "Marketplace rules":false });setCaptcha(genCaptcha());setRlState({blocked:false,attemptsLeft:5});}} className="btn"
                 style={{ padding:"7px 18px", borderRadius:99, fontSize:13, fontWeight:600, border:"none",
                          background: tab===t ? "#fff" : "transparent",
                          color: tab===t ? C.black : C.midGray,

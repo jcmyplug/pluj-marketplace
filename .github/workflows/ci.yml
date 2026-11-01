@@ -116,8 +116,10 @@ jobs:
       - name: Install Playwright and Chromium
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.0
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
 
+      # Three runs of every check: computer, iPhone (WebKit, Safari's engine)
+      # and Android (mobile Chrome). See playwright.config.js.
       - name: Browser checks
         run: npx playwright test
 
