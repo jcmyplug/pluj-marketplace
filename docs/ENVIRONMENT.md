@@ -101,14 +101,26 @@ a page needs them.
   Claude-User, Perplexity-User) and bulk SEO scrapers are asked to stay out.
   Link previews (facebookexternalhit, Twitterbot) are not blocked. Only polite
   crawlers obey this file; the firewall below is what enforces it.
-- **Recommended, not yet on (needs you in the dashboard):**
-  - *Vercel → pluj-marketplace → Firewall → Bot Management*: turn on **Bot
-    Protection** (challenges automated browsers) and the **AI Bots** rule set
-    (blocks known AI crawlers). Both are free on every plan.
-  - *Supabase → Authentication → Sessions*: **Inactivity timeout** 7 days, so
-    a sign-in left unused for a week has to pass Turnstile again. (Pro plan.)
-  - *Supabase → Authentication → Emails → Templates*: the bilingual sign-up
-    and password templates in `AUTH-EMAIL-TEMPLATES.md`.
+- **Vercel → pluj-marketplace → Firewall** (checked 1 Nov 2026):
+  - Custom rules: *Rate limit the mail endpoints* (429), *Deny requests with no
+    User-Agent*, and *PLUJ uptime probe passes* (Bypass, only when the request
+    carries header `x-pluj-probe` with the value kept in Supabase Vault as
+    `UPTIME_PROBE_TOKEN`; `uptime_probe()` sends it). Hobby allows 3 custom
+    rules; all 3 are used.
+  - Bot Management: **Bot Protection = Challenge** (non-browser traffic is
+    challenged; browsers and verified bots such as Googlebot pass) and **AI
+    Bots on, AI Crawlers = Deny, AI Assistants = Deny**. On since 1 Nov, 12:25 pm.
+    Tested from outside: a script and a fake GPTBot were challenged, the probe
+    with its header got through, the probe's user agent without the header was
+    challenged.
+  - To roll back: set Bot Protection to Log or Off on the same page. If the
+    probe value is ever changed in Vault, change the rule too.
+- **Supabase → Authentication → Sessions**: inactivity timeout **168 hours**
+  (7 days) since 1 Nov; single session per user off; time-box 0.
+- **Supabase → Authentication → Emails → Templates**: *Confirm sign up* and
+  *Reset password* are bilingual since 1 Nov (`AUTH-EMAIL-TEMPLATES.md`). They
+  read `user_metadata.lang`, which sign-up sets and the trigger
+  `trg_sync_lang_to_auth` keeps equal to `profiles.lang`.
 - **Database tables that are settings** (admin-editable, not secret):
   `action_caps` (per-account limits, see FUNCTIONAL-REQUIREMENTS 3c),
   `email_phrases` and `email_patterns` (Spanish for emails).

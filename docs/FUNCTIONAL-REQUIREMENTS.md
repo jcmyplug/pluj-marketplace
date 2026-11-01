@@ -86,7 +86,11 @@ night by `sql/tests/selftest.sql`.
    analytics rows are capped per browser session (200 an hour) and overall
    (3,000 per 10 minutes). Every 10 minutes the database records any account
    that reached a limit and emails the alert address (once per account per
-   hour). Admins are exempt. **[DB][test]** *(31 Oct.)*
+   hour). Admins are exempt. **[DB][test]** *(31 Oct.)* At the edge (Vercel,
+   since 1 Nov): Bot Protection challenges non-browser traffic, AI crawlers and
+   AI assistants are denied, requests without a user agent are denied, and the
+   email routes are rate-limited. An unused sign-in ends after 7 days and has
+   to pass Turnstile again.
 
 ### Vendors being shown
 
@@ -194,9 +198,9 @@ night by `sql/tests/selftest.sql`.
     with names, durations and dates in `email_patterns`, months in
     `email_localize()`; every host and pro email was rendered in Spanish on
     31 Oct with no English left. In-app notifications written by the
-    database have Spanish templates in `src/i18n-es.json`. Still English:
-    Supabase's own sign-up and password emails until the bilingual template
-    in `AUTH-EMAIL-TEMPLATES.md` is pasted into the dashboard.
+    database have Spanish templates in `src/i18n-es.json`. Supabase's own
+    sign-up and password emails are bilingual since 1 Nov
+    (`AUTH-EMAIL-TEMPLATES.md`), following the same saved language.
 
 ### Money
 

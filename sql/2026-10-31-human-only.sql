@@ -260,3 +260,31 @@ alter table public.app_events add constraint app_events_known_event check (event
   'page_view','search_performed','search_empty','category_selected','listing_viewed','vendor_saved',
   'booking_started','booking_submitted','booking_abandoned','signup_started','signup_completed',
   'vendor_listing_saved','message_sent','language_changed','vendor_listing_switched','waitlist_joined']));
+
+/* ── 7. 1 Nov: Vercel firewall and Supabase emails ───────────────────────
+   Vercel Bot Protection (Challenge) and AI Bots (Deny) were switched on in the
+   dashboard. They challenge anything that is not a browser, our own uptime
+   probe included, so the probe now sends a private header the firewall's
+   Bypass rule matches (migration uptime_probe_private_header; the value lives
+   in Vault as UPTIME_PROBE_TOKEN, never in this file).
+
+   Supabase's sign-up and password emails choose their language from
+   user_metadata.lang. Migration sync_profile_lang_to_auth_metadata keeps it
+   equal to profiles.lang (which the site updates on every language switch)
+   and copied the saved language onto the six existing accounts:
+
+     create or replace function public.sync_lang_to_auth() returns trigger
+       language plpgsql security definer set search_path = public, pg_temp as $fn$
+     begin
+       if tg_op = 'INSERT' or new.lang is distinct from old.lang then
+         update auth.users
+            set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('lang', new.lang)
+          where id = new.id and (raw_user_meta_data->>'lang') is distinct from new.lang;
+       end if;
+       return new;
+     end $fn$;
+     revoke all on function public.sync_lang_to_auth() from public, anon, authenticated;
+     create or replace trigger trg_sync_lang_to_auth
+       after insert or update of lang on public.profiles
+       for each row execute function public.sync_lang_to_auth();
+*/
