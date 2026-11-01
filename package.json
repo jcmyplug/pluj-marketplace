@@ -19,7 +19,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "engines": {
     "node": "22.x"

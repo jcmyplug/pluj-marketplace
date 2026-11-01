@@ -74,3 +74,32 @@ jobs:
         run: npm run build
         env:
           CI: true
+
+      # Browser checks (checklist item 30, added 31 Oct 2026). The production
+      # build from the step above, served by `vite preview`, opened in a real
+      # Chromium with the backend faked (e2e/mock.js), so nothing here reaches
+      # Supabase or sends an email. Covers what broke or was built in October:
+      # the footer, Spanish, one icon style, phone width, badges, the terms
+      # gate on sign-up, and the page never jumping to the bottom.
+      #
+      # Playwright is installed with --no-save rather than listed in
+      # package.json: the same pinned version every run, while package.json and
+      # the lockfile stay the small tree Vercel installs. To upgrade, change
+      # the version here; nothing else refers to it.
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.0
+          npx playwright install --with-deps chromium
+
+      - name: Browser checks
+        run: npx playwright test
+
+      # On failure, keep the trace (a step-by-step recording with screenshots)
+      # so the broken check can be replayed instead of guessed at.
+      - name: Keep the failure recordings
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-check-traces
+          path: test-results/
+          retention-days: 7
