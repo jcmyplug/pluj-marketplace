@@ -1691,18 +1691,73 @@ export const sb = (() => {
      authenticated request 401s from then on and the app silently half-works
      until the user logs out and back in. Exchange the refresh token for a new
      pair, update the saved session, and let the caller retry. Guarded so a
-     burst of parallel 401s triggers one refresh rather than twenty. */
-  function refreshAuth() {
-    if (!_refreshToken) return Promise.resolve(false);
+     burst of parallel 401s triggers one refresh rather than twenty.
+
+     TWO TABS, ONE SESSION (fixed 31 Oct 2026). Every tab shares the session
+     saved in localStorage, and Supabase rotates the refresh token each time it
+     is used. When tab A refreshed, tab B's copy in memory was spent; B's own
+     refresh then failed, and B went on sending its dead token with every
+     request for hours — even the public catalogue answered 401, so a signed-in
+     person saw an empty or half-working site. The logs showed exactly that.
+     Now a tab first takes the pair another tab already saved, and only when
+     the session truly cannot be renewed does it drop the token (requests go
+     out as a visitor, so browsing keeps working) and tell the app, which says
+     "log in again" instead of failing silently. */
+  function readSaved() {
+    try { const raw = localStorage.getItem("pluj_session"); return raw ? JSON.parse(raw) : null; }
+    catch { return null; }
+  }
+  function jwtClaims(t) {
+    try { return JSON.parse(atob(String(t).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); }
+    catch { return null; }
+  }
+  function usable(t) {
+    const c = jwtClaims(t);
+    return !!(c && c.exp && c.exp * 1000 > Date.now() + 30000);
+  }
+  function adoptSaved() {
+    const saved = readSaved();
+    if (saved && saved.access_token && saved.access_token !== _authToken && usable(saved.access_token)) {
+      _authToken = saved.access_token;
+      if (saved.refresh_token) _refreshToken = saved.refresh_token;
+      return true;
+    }
+    return false;
+  }
+  function sessionEnded(reason) {
+    const dead = _authToken;
+    _authToken = null; _refreshToken = null;
+    /* A saved session holding the same dead token is no use to any tab. */
+    try { const saved = readSaved(); if (saved && saved.access_token === dead) localStorage.removeItem("pluj_session"); }
+    catch { /* storage unavailable */ }
+    try { window.dispatchEvent(new CustomEvent("pluj:session", { detail: { ended: true, reason } })); }
+    catch { /* very old browser */ }
+  }
+  /* `used` is the token the failed request carried. If the session has moved
+     on since it was sent (renewed by a parallel request or another tab, or
+     ended), the answer is simply "retry with what we have now" — renewing
+     again would spend the new refresh token for nothing and, since each one
+     works once, end a perfectly good session. */
+  function refreshAuth(used) {
+    if (used !== undefined && used !== _authToken) return Promise.resolve(true);
+    if (!_authToken && !_refreshToken) return Promise.resolve(false);   /* a visitor: nothing to renew */
     if (_refreshing) return _refreshing;
     _refreshing = (async () => {
       try {
+        if (adoptSaved()) return true;                     /* another tab already renewed it */
+        const saved = readSaved();
+        if (saved && saved.refresh_token) _refreshToken = saved.refresh_token;
+        if (!_refreshToken) { sessionEnded("expired"); return true; }
         const r = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON },
           body: JSON.stringify({ refresh_token: _refreshToken }),
         });
-        if (!r.ok) { _refreshToken = null; return false; }
+        if (!r.ok) {
+          if (adoptSaved()) return true;                   /* lost the race to another tab: take its pair */
+          sessionEnded("expired");
+          return true;                                     /* retry once as a visitor */
+        }
         const d = await r.json().catch(() => null);
         if (!d || !d.access_token) return false;
         _authToken = d.access_token;
@@ -1718,13 +1773,33 @@ export const sb = (() => {
         } catch { /* storage unavailable */ }
         return true;
       } catch {
-        return false;
+        return false;                                      /* offline: keep the session, try again later */
       } finally {
         _refreshing = null;
       }
     })();
     return _refreshing;
   }
+
+  /* Keep tabs in step. Another tab renewing the session hands this one the new
+     pair; another tab logging out ends this one too; another account logging
+     in elsewhere is reported so the app can reload who is signed in. */
+  try {
+    window.addEventListener("storage", (e) => {
+      if (e.key !== "pluj_session") return;
+      let next = null;
+      try { next = e.newValue ? JSON.parse(e.newValue) : null; } catch { next = null; }
+      if (!next || !next.access_token) { if (_authToken) sessionEnded("signed-out-elsewhere"); return; }
+      const was = jwtClaims(_authToken), now = jwtClaims(next.access_token);
+      _authToken = next.access_token;
+      if (next.refresh_token) _refreshToken = next.refresh_token;
+      if (!was || !now || was.sub !== now.sub) {
+        try { window.dispatchEvent(new CustomEvent("pluj:session", { detail: { ended: false, reason: "switched" } })); }
+        catch { /* very old browser */ }
+      }
+    });
+  } catch { /* no window (tests) */ }
+
   /* Exposed so our own /api routes can authenticate the caller. Those
      endpoints verify this JWT and read the recipient out of the database
      rather than trusting anything in the request body. */
@@ -1757,10 +1832,11 @@ export const sb = (() => {
                    "Prefer": opts.prefer || "return=representation" },
         body: body ? JSON.stringify(body) : undefined,
       });
+      const used = _authToken;
       let res = await send();
       /* Token expired mid-session: refresh once and retry, rather than
          surfacing a 401 the caller has no way to recover from. */
-      if (res.status === 401 && await refreshAuth()) res = await send();
+      if (res.status === 401 && await refreshAuth(used)) res = await send();
       const data = await res.json().catch(() => null);
       if (!res.ok) { console.error("[Supabase]", path, data); return { data: null, error: data }; }
       return { data, error: null };
@@ -1935,12 +2011,11 @@ export const sb = (() => {
         return rest("PATCH", `/${table}${q}`, row);
       },
 
+      /* Through rest() like everything else, so an expired sign-in is renewed
+         and a refusal comes back as an error. It used to call fetch directly:
+         no renewal, and a 401 or 403 body handed back as if it were data. */
       async upsert(row) {
-        return fetch(SUPABASE_URL + "/rest/v1/" + table, {
-          method: "POST",
-          headers: { ...headers, "Authorization": userAuth(), "Prefer": "resolution=merge-duplicates,return=representation" },
-          body: JSON.stringify(row),
-        }).then(r => r.json()).then(d => ({ data: d, error: null })).catch(e => ({ data: null, error: e }));
+        return rest("POST", "/" + table, row, { prefer: "resolution=merge-duplicates,return=representation" });
       },
 
       async delete() {
@@ -1962,15 +2037,17 @@ export const sb = (() => {
         headers: { ...headers, "Authorization": userAuth() },
         body: JSON.stringify(args),
       });
+      const used = _authToken;
       let res = await send();
-      if (res.status === 401 && await refreshAuth()) res = await send();
+      if (res.status === 401 && await refreshAuth(used)) res = await send();
       const data = await res.json().catch(() => null);
       if (!res.ok) { console.error("[Supabase rpc]", fn, data); return { data: null, error: data }; }
       return { data, error: null };
     } catch (e) { return { data: null, error: e }; }
   }
 
-  return { rest, rpc, signUp, signIn, signOut, getUser, from, channel, setAuth, getAuthToken, recover, updateUserPassword, verifyTokenHash };
+  return { rest, rpc, signUp, signIn, signOut, getUser, from, channel, setAuth, getAuthToken, recover, updateUserPassword, verifyTokenHash,
+           refresh: refreshAuth };
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -2330,7 +2407,13 @@ async function getCurrentUser() {
   }
 
   try {
-    const { data: authUser } = await sb.getUser(session.access_token);
+    let { data: authUser } = await sb.getUser(session.access_token);
+    /* The saved access token lasts an hour. Coming back later used to look
+       like being logged out, though the refresh token could have renewed it:
+       renew once, then ask again. */
+    if (!authUser?.id && await sb.refresh(session.access_token) && sb.getAuthToken()) {
+      ({ data: authUser } = await sb.getUser(sb.getAuthToken()));
+    }
     if (!authUser?.id) return null;
     const { data: profile } = await sb.from("profiles").select("*").eq("id", authUser.id).single().get();
     if (!profile) return null;
@@ -3862,15 +3945,13 @@ async function getRateLimit(email) {
       if (d.lockedUntil) { await _pDel(key); return { blocked: false, attempts: 0, attemptsLeft: RATE_CFG.maxAttempts }; }
       return { blocked: false, attempts: d.attempts, attemptsLeft: RATE_CFG.maxAttempts - d.attempts };
     }
-    /* Production: Supabase */
-    const { data } = await sb.from("rate_limits").select("*").eq("identifier", key).single().get();
-    if (!data) return { blocked: false, attempts: 0, attemptsLeft: RATE_CFG.maxAttempts };
-    if (data.locked_until && new Date(data.locked_until) > new Date()) {
-      const resetIn = Math.ceil((new Date(data.locked_until) - Date.now()) / 60000);
-      return { blocked: true, attempts: data.attempts, resetIn, attemptsLeft: 0 };
-    }
-    return { blocked: false, attempts: data.attempts || 0,
-             attemptsLeft: RATE_CFG.maxAttempts - (data.attempts || 0) };
+    /* Production: nothing to read. Since 23 Sep the rate_limits table has no
+       grants to the website at all (a counter the counted party can reset is
+       not a limit), so this lookup could only ever fail — with a refused
+       request and a console error on every keystroke in the email box, seen
+       in the logs on 31 Oct. Log-in attempts are limited where they cannot be
+       skipped: Supabase Auth's own rate limits, and Turnstile on the form. */
+    return { blocked: false, attempts: 0, attemptsLeft: RATE_CFG.maxAttempts };
   } catch { return { blocked: false, attempts: 0, attemptsLeft: RATE_CFG.maxAttempts }; }
 }
 
@@ -3886,17 +3967,8 @@ async function recordAttempt(email, success) {
         lastAttempt: Date.now() });
       return;
     }
-    /* Production: Supabase */
-    if (success) {
-      await sb.from("rate_limits").eq("identifier", key).delete();
-      return;
-    }
-    const { data: existing } = await sb.from("rate_limits").select("attempts").eq("identifier", key).single().get();
-    const attempts = (existing?.attempts || 0) + 1;
-    const locked_until = attempts >= RATE_CFG.maxAttempts
-      ? new Date(Date.now() + RATE_CFG.lockMs).toISOString() : null;
-    await sb.from("rate_limits").upsert({ identifier: key, attempts, locked_until,
-      last_attempt_at: new Date().toISOString() });
+    /* Production: nothing to write, for the reason given in getRateLimit. */
+    return;
   } catch(e) { console.error("[recordAttempt]", e); }
 }
 
@@ -13584,6 +13656,32 @@ export function WaitlistAdmin() {
 export default function PlujApp() {
   /* Auth */
   const [user,      setUser]      = useState(null);
+  const userRef = useRef(null);
+  userRef.current = user;
+  /* The sign-in ended underneath the page — it expired and could not be
+     renewed, or the person logged out in another tab — or a different account
+     signed in elsewhere (sb raises "pluj:session"). Before 31 Oct the page kept
+     showing them as signed in while every request failed. */
+  const [sessionNote, setSessionNote] = useState("");
+  useEffect(() => {
+    const onSession = (e) => {
+      const d = (e && e.detail) || {};
+      if (d.ended) {
+        if (userRef.current) {
+          setSessionNote(d.reason === "signed-out-elsewhere"
+            ? "You logged out in another tab."
+            : "Your sign-in expired. Log in again to see your bookings and messages.");
+        }
+        setUser(null);
+        setMyBookings([]);
+      } else {
+        getCurrentUser().then((u) => setUser(u || null)).catch(() => {});
+      }
+    };
+    window.addEventListener("pluj:session", onSession);
+    return () => window.removeEventListener("pluj:session", onSession);
+  }, []);
+  useEffect(() => { if (user) setSessionNote(""); }, [user]);
   /* Signed in, however it happened (log-in, email link, saved session): a
      half-done sign-up kept in this browser no longer applies. */
   useEffect(() => { if (user) clearSignupDraft(); }, [user]);
@@ -15472,6 +15570,24 @@ export default function PlujApp() {
               </section>
             </>
           )}
+        </div>
+      )}
+
+      {sessionNote && (
+        <div role="status" className="session-note"
+             style={{ position:"fixed", left:"50%", bottom:20, transform:"translateX(-50%)", zIndex:1400,
+                      width:"min(560px, calc(100% - 32px))", display:"flex", alignItems:"center", gap:12,
+                      background:"#111827", color:"#fff", borderRadius:14, padding:"12px 14px",
+                      boxShadow:"0 10px 30px rgba(17,24,39,.25)", fontSize:14, lineHeight:1.4 }}>
+          <Ico n="lock" />
+          <span style={{ flex:1 }}>{sessionNote}</span>
+          <button type="button" className="btn" onClick={() => { setSessionNote(""); setAuthModal(true); }}
+                  style={{ background:"#fff", color:"#111827", border:"none", borderRadius:10, padding:"8px 12px",
+                           fontWeight:800, fontSize:13, cursor:"pointer" }}>Log in</button>
+          <button type="button" aria-label="Close" onClick={() => setSessionNote("")}
+                  style={{ background:"transparent", color:"#fff", border:"none", cursor:"pointer", padding:4 }}>
+            <Ico n="x" />
+          </button>
         </div>
       )}
 
