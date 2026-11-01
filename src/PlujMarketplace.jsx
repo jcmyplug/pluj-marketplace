@@ -1896,8 +1896,13 @@ export const sb = (() => {
         method: "POST", headers,
         body: JSON.stringify(body),
       });
-      const d = await res.json();
-      return { data: d, error: d.error || null };
+      const d = await res.json().catch(() => ({}));
+      /* GoTrue errors look like { code, error_code, msg } (or the OAuth-style
+         { error, error_description }); keep the status and the code so the
+         form can tell a wrong password from a failed human check or a pause. */
+      if (!res.ok) return { data: d, error: { status: res.status, code: d.error_code || d.error || null,
+                                              message: d.msg || d.error_description || d.message || "Log-in failed." } };
+      return { data: d, error: null };
     } catch(e) { return { data: null, error: e }; }
   }
 
@@ -4887,6 +4892,14 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
         }
         const { data, error } = await sb.signIn(form.email, form.password, tsToken || null);
         spendTurnstile();
+        if (error && (error.status === 429 || error.code === "over_request_rate_limit")) {
+          setErr("Too many tries in a row. Wait a few minutes, then try again.");
+          setLoading(false); return;
+        }
+        if (error && /captcha/i.test(String(error.code || "") + " " + String(error.message || ""))) {
+          setErr("The human check didn't go through. Wait a moment for it to refresh, then press Log in again.");
+          setLoading(false); return;
+        }
         if (error || !data?.access_token) {
           await recordAttempt(form.email, false);
           const updated = await getRateLimit(form.email);
@@ -5719,7 +5732,10 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
 
           <p style={{ fontSize:11, color:C.lightGray, textAlign:"center", lineHeight:1.6, margin:0 }}>
             {tab === "login"
-              ? "5 failed attempts trigger a 15-minute lockout."
+              /* Was "5 failed attempts trigger a 15-minute lockout." — a promise the
+                 browser-side counter never kept (see getRateLimit). Supabase Auth
+                 limits repeated attempts itself, and Turnstile stops scripts. */
+              ? "Too many tries in a row and log-in pauses for a while, to keep accounts safe."
               : role === "vendor"
               ? "Every vendor application is reviewed before their listings go live."
               : "We'll email you a link to confirm your address."}

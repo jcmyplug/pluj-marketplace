@@ -124,3 +124,23 @@ test("log in and forgot password carry the human-check token", async ({ page }) 
   /* The mock refuses the password, and the page says so. */
   await expect(page.getByText(/Incorrect email or password/).first()).toBeVisible();
 });
+
+/* When Supabase refuses a log-in for a reason other than the password, the
+   form says so, instead of "Incorrect email or password". */
+for (const [label, status, body, expected] of [
+  ["a failed human check", 400, { code: 400, error_code: "captcha_failed", msg: "captcha protection: request disallowed (invalid-input-response)" }, /human check didn't go through/],
+  ["too many tries", 429, { code: 429, error_code: "over_request_rate_limit", msg: "Request rate limit reached" }, /Too many tries in a row/],
+]) {
+  test(`log-in refused for ${label}: the form says why`, async ({ page }) => {
+    await mockBackend(page);
+    await page.route("**/auth/v1/token**", (route) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) }));
+    await page.goto("/");
+    await page.getByRole("button", { name: /log in/i }).first().click();
+    await page.locator('input[type="email"]').first().fill("someone@example.com");
+    await page.locator('input[autocomplete="current-password"], input[type="password"]').first().fill("Secret-Pass-123");
+    await page.waitForTimeout(500);
+    await page.locator("button", { hasText: /^Log in$/ }).last().click();
+    await expect(page.getByText(expected).first()).toBeVisible();
+    await expect(page.getByText(/Incorrect email or password/)).toHaveCount(0);
+  });
+}
