@@ -7,8 +7,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = join(__dirname, "..", "..");
+const root = fileURLToPath(new URL("../..", import.meta.url));
 const read = (p) => readFileSync(join(root, p), "utf8");
 
 describe("analytics events", () => {
