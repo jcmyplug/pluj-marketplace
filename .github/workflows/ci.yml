@@ -75,17 +75,44 @@ jobs:
         env:
           CI: true
 
-      # Browser checks (checklist item 30, added 31 Oct 2026). The production
-      # build from the step above, served by `vite preview`, opened in a real
-      # Chromium with the backend faked (e2e/mock.js), so nothing here reaches
-      # Supabase or sends an email. Covers what broke or was built in October:
-      # the footer, Spanish, one icon style, phone width, badges, the terms
-      # gate on sign-up, and the page never jumping to the bottom.
-      #
-      # Playwright is installed with --no-save rather than listed in
-      # package.json: the same pinned version every run, while package.json and
-      # the lockfile stay the small tree Vercel installs. To upgrade, change
-      # the version here; nothing else refers to it.
+  # Browser checks (checklist item 30, added 31 Oct 2026). Its own job so it
+  # runs alongside lint-and-build instead of after it; a push is good to
+  # deploy only when both are green.
+  #
+  # The production build, served by `vite preview`, opened in a real Chromium
+  # with the backend faked (e2e/mock.js), so nothing here reaches Supabase or
+  # sends an email. Covers what broke or was built in October: the footer,
+  # Spanish, one icon style, phone width, badges, the terms gate on sign-up,
+  # and the page never jumping to the bottom.
+  browser-checks:
+    name: Browser checks
+    # Pinned, not ubuntu-latest: on 1 Nov 2026 ubuntu-latest became 26.04,
+    # which Playwright 1.56 cannot install Chromium's system libraries on.
+    # Move both together when upgrading Playwright.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+        env:
+          CI: true
+
+      # Installed with --no-save rather than listed in package.json: the same
+      # pinned version every run, while package.json and the lockfile stay the
+      # small tree Vercel installs. To upgrade, change the version here (and
+      # check runs-on above); nothing else refers to it.
       - name: Install Playwright and Chromium
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.0
