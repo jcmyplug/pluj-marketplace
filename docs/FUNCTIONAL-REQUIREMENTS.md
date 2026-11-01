@@ -64,8 +64,9 @@ night by `sql/tests/selftest.sql`.
 3. **A half-finished sign-up is kept in the browser and offered back**, without
    the password, date of birth or EIN, and always reopens on step 1.
 3a. **Sign-up, log-in and "Forgot password?" carry a Cloudflare Turnstile token**
-   (widget "PLUJ"). Once the secret key is in Supabase Auth, Supabase refuses
-   any of the three without a valid token, however it is called. *(31 Oct.)*
+   (widget "PLUJ"). Supabase Auth refuses any of the three without a valid
+   token, however it is called; switched on and checked from the live site
+   31 Oct, 8:50 pm. Most visitors pass without seeing a puzzle.
 3b. **A sign-in that can no longer be renewed ends cleanly**: the page drops it,
    keeps working as a visitor, and says "log in again". Tabs share renewals, so
    one tab renewing never logs another out, and coming back after an hour

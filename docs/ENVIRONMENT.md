@@ -83,9 +83,9 @@ a page needs them.
 
 - **Supabase Auth → Attack Protection → CAPTCHA**: provider Turnstile, with the
   **secret** key of the Cloudflare widget "PLUJ" (Cloudflare → Turnstile → PLUJ →
-  Settings shows it again). The site sends a token on sign-up, log-in and
-  "Forgot password?" since 31 Oct; with this switch on, Supabase refuses any of
-  those without a valid token. To roll back: switch it off here.
+  Settings shows it again). ON since 31 Oct 2026, 8:49 pm: the site sends a
+  token on sign-up, log-in and "Forgot password?", and Supabase refuses any of
+  those without a valid one. To roll back: switch it off here.
 - **Supabase Auth → Password security → leaked-password check**: needs the Pro
   plan (item 13; parked with the other paid items).
 - **Resend → Domains**: pluj.us with SPF, DKIM and DMARC.
