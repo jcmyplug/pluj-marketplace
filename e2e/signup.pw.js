@@ -168,7 +168,11 @@ test("sign-up with a breached password: the form says why, plainly", async ({ pa
   await page.locator("button", { hasText: /Continue/ }).last().click();
   const box = page.locator('[role="document"]');
   await box.evaluate((el) => { el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event("scroll")); });
-  await page.locator("button[aria-disabled]").first().click();
+  const accept = page.locator("button[aria-disabled]").first();
+  await expect(accept).toHaveAttribute("aria-disabled", "false");
+  /* Tap the checkbox itself: on a narrow iPhone screen the middle of the row is
+     the "Terms of Service" link, which opens the terms instead. */
+  await accept.locator("> span").first().click();
   const resp = page.locator("button", { hasText: /check vendors/i }).first();
   if (await resp.count()) { await resp.scrollIntoViewIfNeeded(); await resp.click(); }
   await page.waitForTimeout(400);   /* the fake Turnstile hands over its token */
