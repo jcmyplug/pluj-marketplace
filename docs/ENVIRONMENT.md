@@ -86,6 +86,12 @@ a page needs them.
   Settings shows it again). ON since 31 Oct 2026, 8:49 pm: the site sends a
   token on sign-up, log-in and "Forgot password?", and Supabase refuses any of
   those without a valid one. To roll back: switch it off here.
-- **Supabase Auth → Password security → leaked-password check**: needs the Pro
-  plan (item 13; parked with the other paid items).
+- **Supabase Auth → Sign In / Providers → Email → Prevent use of leaked
+  passwords**: ON since 31 Oct 2026 (Supabase Pro). Sign-up and password
+  changes refuse passwords found in known data breaches (HaveIBeenPwned); the
+  site shows a plain message. Also set there: minimum 12 characters, with
+  lowercase, uppercase, a number and a symbol.
+- **Supabase plan**: Pro since 31 Oct 2026. Daily database backups, 7 kept
+  (docs/BACKUPS-AND-RESTORE.md). The usage meters in `service_limits` use the
+  Pro limits (database 8 GB, files 100 GB). The spend cap is left as it was.
 - **Resend → Domains**: pluj.us with SPF, DKIM and DMARC.
