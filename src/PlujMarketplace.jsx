@@ -1981,7 +1981,11 @@ export const sb = (() => {
         body: JSON.stringify({ password: newPassword }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) return { data: null, error: d.error || d || { message: "Could not update password." } };
+      /* GoTrue errors are { code, error_code, msg }: there is no .message, so
+         the callers used to fall back to "the reset link may have expired"
+         for every refusal, a weak password included. Keep the real reason. */
+      if (!res.ok) return { data: null, error: { status: res.status, code: d.error_code || d.error || null,
+                                                 message: d.msg || d.error_description || d.message || "Could not update password." } };
       return { data: d, error: null };
     } catch(e) { return { data: null, error: e }; }
   }
@@ -3936,6 +3940,17 @@ function genCaptcha() {
 /* ── Rate limiting (protects login + signup against brute-force & bots) ───── */
 const RATE_CFG = Object.freeze({ maxAttempts: 5, lockMs: 15 * 60 * 1000, warnAt: 3 });
 
+/* Supabase refuses a password that appears in a known data breach (its
+   leaked-password check, on since 31 Oct 2026 with the Pro plan) and replies
+   in its own technical words. Say it plainly, on sign-up and password reset. */
+function passwordRefusal(err) {
+  const code = String((err && err.code) || ""), msg = String((err && err.message) || "");
+  if (code === "weak_password" || /known to be weak|pwned|easy to guess/i.test(msg)) {
+    return "That password has shown up in a data breach on another site, so it isn't safe to use. Please choose a different one.";
+  }
+  return null;
+}
+
 /* ── Rate limiting — preview uses window.storage, production uses Supabase ── */
 async function getRateLimit(email) {
   try {
@@ -5028,7 +5043,7 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
       }
 
       if (signUpError || !authData?.user) {
-        setErr(signUpError?.message || "Signup failed. Please try again.");
+        setErr(passwordRefusal(signUpError) || signUpError?.message || "Signup failed. Please try again.");
         /* A Turnstile token is single-use. Whatever the failure was, the old
            token is spent, so reset the widget rather than leaving the customer
            pressing a button that can no longer succeed. */
@@ -11502,7 +11517,7 @@ function ResetPasswordScreen({ token, onDone }) {
     setLoading(true);
     const { error } = await sb.updateUserPassword(token, pw);
     setLoading(false);
-    if (error) { setErr(error.message || "Could not update password. The reset link may have expired — request a new one."); return; }
+    if (error) { setErr(passwordRefusal(error) || error.message || "Could not update password. The reset link may have expired — request a new one."); return; }
     setDone(true);
   }
 
@@ -12967,7 +12982,7 @@ export function EmailLinkScreen({ link, onSession, onFinish, onRequestNew }) {
       /* The token is only spent here, on a human pressing Save — never on load. */
       const session = await getSession();
       const { error } = await sb.updateUserPassword(session.access_token, pw);
-      if (error) throw new Error(error.message || "Could not save the new password.");
+      if (error) throw new Error(passwordRefusal(error) || error.message || "Could not save the new password.");
       const u = await onSession(session);
       setWho(u); setStage("done");
     } catch (e) {

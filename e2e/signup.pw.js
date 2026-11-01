@@ -144,3 +144,37 @@ for (const [label, status, body, expected] of [
     await expect(page.getByText(/Incorrect email or password/)).toHaveCount(0);
   });
 }
+
+/* Supabase's leaked-password check (Pro, on since 31 Oct): a password found in
+   a data breach is refused, and the form says so in plain words instead of
+   Supabase's technical message. */
+test("sign-up with a breached password: the form says why, plainly", async ({ page }) => {
+  await mockBackend(page);
+  await page.route("**/auth/v1/signup**", (route) => route.fulfill({ status: 422, contentType: "application/json",
+    body: JSON.stringify({ code: 422, error_code: "weak_password", weak_password: { reasons: ["pwned"] },
+                           msg: "Password is known to be weak and easy to guess, please choose a different one." }) }));
+  await page.goto("/");
+  await page.locator("button", { hasText: /Log in/ }).first().click();
+  await page.locator("button", { hasText: /^(Sign up)$/ }).first().click();
+  const fill = async (sel, v) => { const l = page.locator(sel).first(); await l.scrollIntoViewIfNeeded(); await l.fill(v); };
+  await fill('input[placeholder^="First name"]', "Ana");
+  await fill('input[placeholder^="Last name"]', "García");
+  await fill('input[type="email"]', "new@example.com");
+  const pws = page.locator('input[autocomplete="new-password"]');
+  await pws.nth(0).fill("Password123!!");
+  await pws.nth(1).fill("Password123!!");
+  await fill('input[type="tel"]', "7135550100");
+  await fill("#signup-dob", "1990-05-05");
+  await page.locator("button", { hasText: /Continue/ }).last().click();
+  const box = page.locator('[role="document"]');
+  await box.evaluate((el) => { el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event("scroll")); });
+  await page.locator("button[aria-disabled]").first().click();
+  const resp = page.locator("button", { hasText: /check vendors/i }).first();
+  if (await resp.count()) { await resp.scrollIntoViewIfNeeded(); await resp.click(); }
+  await page.waitForTimeout(400);   /* the fake Turnstile hands over its token */
+  const create = page.locator("button", { hasText: /Create account/ }).last();
+  await create.scrollIntoViewIfNeeded();
+  await create.click();
+  await expect(page.getByText(/shown up in a data breach on another site/).first()).toBeVisible();
+  await expect(page.getByText(/known to be weak/)).toHaveCount(0);
+});
