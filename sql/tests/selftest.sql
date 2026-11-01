@@ -252,6 +252,51 @@ begin
     acc := acc || jsonb_build_array(jsonb_build_array('alerting', 'the same error again stays silent',
       coalesce(public.record_error('selftest_fp_' || bid, 'Self test')->>'alert', 'null'), 'false'));
 
+    /* ══ 8b. Real people only: an account cannot act faster than a person ═══
+          (31 Oct). The limit is lowered to zero here, inside the rolled-back
+          block, so the refusal can be seen without creating 25 requests. */
+    update public.action_caps set short_max = 0 where tbl = 'booking_requests';
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_stranger, 'role', 'authenticated')::text, true);
+    begin
+      insert into public.booking_requests (id, user_id, vendor_id, event_date, status)
+      values ('selftest-cap-' || gen_random_uuid()::text, v_stranger, v_pub, current_date + 40, 'pending');
+      g := 'ALLOWED';
+    exception when sqlstate 'PT429' then g := 'refused (429)';
+              when others then g := 'error: ' || sqlerrm; end;
+    acc := acc || jsonb_build_array(jsonb_build_array('real people only', 'an account over its booking limit is refused', g, 'refused (429)'));
+    perform set_config('role', me, true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.action_caps set short_max = 25 where tbl = 'booking_requests';
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_stranger, 'role', 'authenticated')::text, true);
+    begin
+      insert into public.booking_requests (id, user_id, vendor_id, event_date, status)
+      values ('selftest-cap-' || gen_random_uuid()::text, v_stranger, v_pub, current_date + 41, 'pending');
+      g := 'works';
+    exception when sqlstate 'PT429' then g := 'REFUSED';
+              when others then g := 'error: ' || sqlerrm; end;
+    acc := acc || jsonb_build_array(jsonb_build_array('real people only', 'a host under the limit can still book', g, 'works'));
+    perform set_config('role', me, true);
+    perform set_config('request.jwt.claims', '', true);
+    acc := acc || jsonb_build_array(jsonb_build_array('real people only', 'tables with a per-account limit',
+      (select coalesce(string_agg(c.relname::text, ',' order by c.relname::text), 'none')
+         from pg_trigger t join pg_class c on c.oid = t.tgrelid
+        where c.relnamespace = 'public'::regnamespace and t.tgname = 'trg_action_cap' and t.tgenabled <> 'D'),
+      'booking_requests,conversations,event_recaps,favorites,inquiries,messages,reviews,vendor_photos,vendor_services'));
+    acc := acc || jsonb_build_array(jsonb_build_array('real people only', 'repeated-message and analytics guards are on',
+      (select count(*)::text from pg_trigger t
+        where t.tgname in ('trg_message_repeat', 'trg_cap_app_events') and t.tgenabled <> 'D'), '2'));
+
+    /* ══ 8c. Scheduled jobs: the most recent run of each one succeeded ═════
+          (31 Oct: the nightly clean-up had failed for days unnoticed). */
+    acc := acc || jsonb_build_array(jsonb_build_array('scheduled jobs', 'jobs whose last run failed',
+      (select coalesce(string_agg(j.jobname, ',' order by j.jobname), 'none')
+         from cron.job j
+         join lateral (select d.status from cron.job_run_details d where d.jobid = j.jobid
+                        order by d.start_time desc limit 1) last on true
+        where j.active and last.status = 'failed'), 'none'));
+
     /* ══ 9. Structure: facts read straight from the catalogue ══════════════ */
     acc := acc || jsonb_build_array(jsonb_build_array('structure', 'vendor_public has no licence/EIN/owners/phone columns',
       (select coalesce(string_agg(column_name, ',' order by column_name), 'none') from information_schema.columns

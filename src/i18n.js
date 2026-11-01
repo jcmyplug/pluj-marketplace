@@ -15,8 +15,10 @@
    - exact matches first (whitespace collapsed), keeping leading and trailing
      spaces so "by " + name still reads right;
    - then templates: strings built with ${…} in the source, written as {0}, {1}
-     in the dictionary;
-   - dates like "Oct 16, 2026" get Spanish month names;
+     in the dictionary; {#0} matches a number only; a placeholder glued to a
+     word ("photo{1}") may be empty, for the singular; a value inside a
+     template is itself looked up (exact, then templates);
+   - dates like "Oct 16, 2026" and "Sat, Oct 18" get Spanish month names;
    - nothing inside [data-no-translate], inputs, textareas, scripts or styles
      (people's names, messages and reviews stay as they were written);
    - <option> elements without a value keep their English text as the value,
@@ -40,6 +42,7 @@ const MONTHS_LONG = { January:"enero", February:"febrero", March:"marzo", April:
                       October:"octubre", November:"noviembre", December:"diciembre" };
 const DAYS_LONG = { Monday:"lunes", Tuesday:"martes", Wednesday:"miércoles", Thursday:"jueves",
                     Friday:"viernes", Saturday:"sábado", Sunday:"domingo" };
+const DAYS_SHORT = { Mon:"lun", Tue:"mar", Wed:"mié", Thu:"jue", Fri:"vie", Sat:"sáb", Sun:"dom" };
 
 export function getLang() { return lang; }
 export function onLangChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -59,18 +62,41 @@ async function loadDict() {
   if (dict) return dict;
   const mod = await import("./i18n-es.json");
   const raw = mod.default || mod;
+  /* Placeholders: {0} is any text; {#0} is a number only ("{#0} hours" must
+     not turn "Business hours" into "Business horas"); a placeholder glued to a
+     word ("photo{1}") may be empty, so the singular "1 photo uploaded" matches
+     the same entry as "3 photos uploaded". The Spanish side always uses {0}. */
   const templates = Object.entries(raw.templates || {}).map(([en, es]) => {
-    const parts = en.split(/(\{\d+\})/);
+    const parts = en.split(/(\{#?\d+\})/);
     const order = [];
-    const src = parts.map(p => {
-      const m = /^\{(\d+)\}$/.exec(p);
-      if (m) { order.push(Number(m[1])); return "(.+?)"; }
+    const src = parts.map((p, i) => {
+      const m = /^\{(#?)(\d+)\}$/.exec(p);
+      if (m) {
+        order.push(Number(m[2]));
+        if (m[1]) return "(\\d[\\d.,]*)";
+        return /[A-Za-z]$/.test(parts[i - 1] || "") ? "(.*?)" : "(.+?)";
+      }
       return p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }).join("");
     return { re: new RegExp("^" + src + "$"), order, out: es };
   });
-  dict = { exact: raw.exact || {}, templates };
+  const lower = {};
+  for (const [en, es] of Object.entries(raw.exact || {})) {
+    const k = en.toLowerCase();
+    if (!(k in lower)) lower[k] = es;
+  }
+  dict = { exact: raw.exact || {}, templates, lower };
   return dict;
+}
+
+/* A value the code put inside a sentence ("photographers" in "Find
+   photographers near you"): the same word in the dictionary, matched without
+   case, keeps the sentence's lower case. */
+function lowerHit(v) {
+  if (!v || v !== v.toLowerCase()) return null;
+  const es = dict.lower[v];
+  if (es == null) return null;
+  return /^\p{Lu}\p{Ll}/u.test(es) ? es[0].toLowerCase() + es.slice(1) : es;
 }
 
 function translateDates(s) {
@@ -79,25 +105,36 @@ function translateDates(s) {
   out = out.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)( \d{1,2})?(,? \d{4})?\b/g,
     (_, m, d, y) => d ? `${d.trim()} de ${MONTHS_LONG[m]}${y ? " de " + y.replace(/[, ]/g, "") : ""}` : `${MONTHS_LONG[m]}${y ? " de " + y.replace(/[, ]/g, "") : ""}`);
   out = out.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/g, d => DAYS_LONG[d]);
+  /* A date without a year ("Sat, Oct 18"): "sáb, 18 oct". */
+  out = out.replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.? (\d{1,2})\b(?!,? \d{4})(?!:)/g,
+    (_, m, d) => `${d} ${MONTHS[m]}`);
+  out = out.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun), (?=\d{1,2} (ene|feb|mar|abr|may|jun|jul|ago|sept|oct|nov|dic)\b)/g,
+    (_, d) => DAYS_SHORT[d] + ", ");
+  /* "01 nov at 06:00 PM" (from the database's reminders): "01 nov a las 06:00 PM". */
+  out = out.replace(/\b(\d{1,2} (?:ene|feb|mar|abr|may|jun|jul|ago|sept|oct|nov|dic)) at (\d{1,2}:\d{2} ?[AP]M)\b/g, "$1 a las $2");
   return out;
 }
 
-/* English → Spanish for one string, or null when there's nothing to change. */
-export function translate(s) {
-  if (!dict || lang !== "es" || s == null) return null;
-  const str = String(s);
-  const key = str.replace(/\s+/g, " ").trim();
-  if (!key || !/[A-Za-z]/.test(key)) return null;
-  const lead = str.match(/^\s*/)[0], trail = str.match(/\s*$/)[0];
+/* One whitespace-collapsed string → Spanish, or null. `depth` stops a value
+   inside a template from recursing forever (each step is strictly shorter). */
+function lookup(key, depth) {
   const hit = dict.exact[key];
-  if (hit != null) return lead + hit + trail;
+  if (hit != null) return hit;
   for (const t of dict.templates) {
     const m = t.re.exec(key);
     if (m) {
       let out = t.out;
       t.order.forEach((n, i) => {
         const v = m[i + 1];
-        let tv = dict.exact[v.replace(/\s+/g, " ").trim()];
+        const vk = v.replace(/\s+/g, " ").trim();
+        /* An empty plural ending: drop the placeholder and the space before
+           it, so "pagos {0}?" with nothing in it reads "pagos?". */
+        if (!vk) { out = out.replace(new RegExp("\\s?\\{" + n + "\\}", "g"), ""); return; }
+        let tv = dict.exact[vk];
+        /* A phrase the code built and then put in a sentence ("48 hours" in
+           "needs at least 48 hours notice"). */
+        if (tv == null && depth < 3 && vk.length < key.length && /[A-Za-z]/.test(vk)) tv = lookup(vk, depth + 1);
+        if (tv == null) tv = lowerHit(vk);
         /* A list the code joined with commas ("business name, city"):
            translate each item it knows. */
         if (tv == null && /,\s/.test(v)) {
@@ -107,23 +144,34 @@ export function translate(s) {
         }
         out = out.split("{" + n + "}").join(tv != null ? tv : v);
       });
-      return lead + translateDates(out) + trail;
+      return translateDates(out);
     }
   }
   /* Labels joined in code ("Food & Drinks · Food Trucks"): piece by piece. */
   if (key.includes(" · ")) {
     const parts = key.split(" · ");
     const done = parts.map(p => dict.exact[p.trim()] ?? translateDates(p));
-    if (done.some((v, i) => v !== parts[i])) return lead + done.join(" · ") + trail;
+    if (done.some((v, i) => v !== parts[i])) return done.join(" · ");
   }
   /* A list the code joined with commas ("legal business name, EIN (9 digits)"),
      when every item is a known phrase. */
   if (key.includes(", ")) {
     const parts = key.split(", ");
-    if (parts.every(x => dict.exact[x.trim()] != null)) return lead + parts.map(x => dict.exact[x.trim()]).join(", ") + trail;
+    if (parts.every(x => dict.exact[x.trim()] != null)) return parts.map(x => dict.exact[x.trim()]).join(", ");
   }
   const dated = translateDates(key);
-  if (dated !== key) return lead + dated + trail;
+  return dated !== key ? dated : null;
+}
+
+/* English → Spanish for one string, or null when there's nothing to change. */
+export function translate(s) {
+  if (!dict || lang !== "es" || s == null) return null;
+  const str = String(s);
+  const key = str.replace(/\s+/g, " ").trim();
+  if (!key || !/[A-Za-z]/.test(key)) return null;
+  const lead = str.match(/^\s*/)[0], trail = str.match(/\s*$/)[0];
+  const found = lookup(key, 0);
+  if (found != null) return lead + found + trail;
   /* Multi-line messages (alerts, notices): translate line by line. */
   if (key !== str.trim() && /\n/.test(str)) {
     const lines = str.split("\n").map(l => translate(l) ?? l);
@@ -136,9 +184,12 @@ export function translate(s) {
 /* For JS strings the app builds itself (alerts, document.title). */
 export function tr(s) { const t = translate(s); return t == null ? s : t; }
 
-function skip(el) {
+/* attrsOnly: a <textarea>'s own placeholder/title is translated, never what
+   is typed in it (31 Oct: the pro's "Describe your business" hint was English). */
+function skip(el, attrsOnly = false) {
   for (let e = el; e && e.nodeType === 1; e = e.parentNode) {
     const tag = e.tagName;
+    if (tag === "TEXTAREA" && attrsOnly && e === el) continue;
     if (tag === "SCRIPT" || tag === "STYLE" || tag === "TEXTAREA" || tag === "CODE" || tag === "PRE") return true;
     if (e.isContentEditable) return true;
     if (e.hasAttribute && e.hasAttribute("data-no-translate")) return true;
@@ -180,13 +231,13 @@ function walk(root) {
   if (!root) return;
   if (root.nodeType === 3) { if (!skip(root.parentNode)) doText(root); return; }
   if (root.nodeType !== 1 && root.nodeType !== 9 && root.nodeType !== 11) return;
-  if (root.nodeType === 1 && skip(root)) return;
+  if (root.nodeType === 1 && skip(root)) { if (!skip(root, true)) doAttrs(root); return; }
   if (root.nodeType === 1) doAttrs(root);
   const w = document.createTreeWalker(root, 1 | 4);   // elements | text
   let n;
   while ((n = w.nextNode())) {
     if (n.nodeType === 1) {
-      if (skip(n)) continue;
+      if (skip(n)) { if (!skip(n, true)) doAttrs(n); continue; }
       doAttrs(n);
     } else if (!skip(n.parentNode)) {
       doText(n);
@@ -217,7 +268,7 @@ function startObserver() {
     if (lang !== "es") return;
     for (const m of muts) {
       if (m.type === "characterData") { if (!skip(m.target.parentNode)) doText(m.target); }
-      else if (m.type === "attributes") { if (!skip(m.target)) doAttrs(m.target); }
+      else if (m.type === "attributes") { if (!skip(m.target, true)) doAttrs(m.target); }
       else m.addedNodes.forEach(walk);
     }
   });

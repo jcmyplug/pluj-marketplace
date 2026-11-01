@@ -26,6 +26,15 @@ for (const { role, lang, viewport } of [
     await page.locator("button", { hasText: t.signup }).first().click();
     if (role === "vendor") await page.locator("button", { hasText: t.vendor }).first().click();
 
+    /* Every box says what goes in it in the page's language, required ones
+       with their star, text boxes included (31 Oct: these were English). */
+    if (lang === "es") {
+      for (const ph of ["Nombre *", "Apellido *", "Correo electrónico *", "Contraseña *", "Número de teléfono *"])
+        await expect(page.locator(`input[placeholder="${ph}"]`).first()).toBeAttached();
+      if (role === "vendor") await expect(page.locator("#signup-biz-desc")).toHaveAttribute("placeholder", /^Lo que ofreces/);
+      expect(await page.evaluate(() => [...document.querySelectorAll("input[placeholder], textarea[placeholder]")]
+        .map((e) => e.placeholder).filter((p) => /\b(name|address|password|phone|What you offer)\b/.test(p)))).toEqual([]);
+    }
     const fill = async (sel, v) => { const l = page.locator(sel).first(); await l.scrollIntoViewIfNeeded(); await l.fill(v); };
     await fill('input[placeholder^="First name"], input[placeholder^="Nombre"]', "Ana");
     await fill('input[placeholder^="Last name"], input[placeholder^="Apellido"]', "García");
@@ -46,6 +55,10 @@ for (const { role, lang, viewport } of [
     /* The terms in the box are the current ones, badge wording included. */
     await expect(box).toContainText(lang === "es" ? "Una insignia refleja lo que vimos el día que revisamos"
                                                   : "A badge records what we saw on the day we checked");
+    /* Real people only (31 Oct): in the terms, and in what the person confirms. */
+    await expect(box).toContainText(lang === "es" ? "Solo personas reales" : "Real people only");
+    await expect(page.getByText(lang === "es" ? /Soy una persona real y usaré esta cuenta personalmente/
+                                              : /I'm a real person and will use this account myself/).first()).toBeVisible();
     const accept = page.locator("button[aria-disabled]").first();
     await expect(accept).toHaveAttribute("aria-disabled", "true");
 
@@ -87,6 +100,23 @@ for (const { role, lang, viewport } of [
     await expect.poll(() => page.evaluate(() => localStorage.getItem("pluj_signup_draft"))).toBeNull();
   });
 }
+
+test("the terms and rules say accounts are run by real people, not bots or AI agents (EN and ES)", async ({ page }) => {
+  await mockBackend(page);
+  await page.goto("/");
+  await page.locator("footer button", { hasText: /^Terms$/ }).first().click();
+  await expect(page.getByText(/AI agents may not create accounts, log in/).first()).toBeVisible();
+  await expect(page.getByText(/Every account belongs to one real person/).first()).toBeVisible();
+
+  const es = await page.context().newPage();
+  await spanish(es);
+  await mockBackend(es);
+  await es.goto("/");
+  await es.locator("footer button", { hasText: /^Términos$/ }).first().click();
+  await expect(es.getByText(/Solo personas reales/).first()).toBeVisible();
+  await expect(es.getByText(/agentes de inteligencia artificial \(IA\) no pueden crear cuentas/).first()).toBeVisible();
+  await expect(es.getByText(/AI agents/)).toHaveCount(0);
+});
 
 test("the terms say what a badge does and does not mean", async ({ page }) => {
   await mockBackend(page);

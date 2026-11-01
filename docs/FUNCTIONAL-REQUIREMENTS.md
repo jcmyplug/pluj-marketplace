@@ -72,6 +72,21 @@ night by `sql/tests/selftest.sql`.
    one tab renewing never logs another out, and coming back after an hour
    renews the saved sign-in instead of looking logged out. *(31 Oct, found in
    the live logs.)*
+3c. **Real people only.** Every account is opened and used by the person it
+   belongs to; bots, scripts, scrapers and AI agents may not use PLUJ (Terms,
+   "Real people only"; the sign-up confirmation says "I'm a real person and
+   will use this account myself"). Behind Turnstile, the database limits how
+   much one account can create: booking requests 25 an hour / 60 a day, new
+   conversations 20 / 60, messages 40 in 10 minutes / 500 a day, inquiries
+   15 / 40, reviews 20 / 40, listings 20 / 60, photos 60 / 150, saved vendors
+   60 / 300, event recaps 10 / 20 (table `action_caps`; an admin can change a
+   number without a code change). Over a limit the API answers 429 and the
+   page says so in plain words. The same message of 40+ characters sent to
+   more than 5 conversations in an hour is refused as spam. Anonymous
+   analytics rows are capped per browser session (200 an hour) and overall
+   (3,000 per 10 minutes). Every 10 minutes the database records any account
+   that reached a limit and emails the alert address (once per account per
+   hour). Admins are exempt. **[DB][test]** *(31 Oct.)*
 
 ### Vendors being shown
 
@@ -173,7 +188,15 @@ night by `sql/tests/selftest.sql`.
     presses Send, at most `waitlist_daily_cap` a day, each with an unsubscribe
     link and a postal address. Public since 31 Oct 2026.
 30. **Spanish everywhere.** Every page, email and message has a Spanish
-    version; a visitor's language choice is remembered.
+    version; a visitor's language choice is remembered, and the language
+    someone signs up in is saved on their profile so PLUJ's emails are in it
+    from the first one. Emails: fixed phrases in `email_phrases`, sentences
+    with names, durations and dates in `email_patterns`, months in
+    `email_localize()`; every host and pro email was rendered in Spanish on
+    31 Oct with no English left. In-app notifications written by the
+    database have Spanish templates in `src/i18n-es.json`. Still English:
+    Supabase's own sign-up and password emails until the bilingual template
+    in `AUTH-EMAIL-TEMPLATES.md` is pasted into the dashboard.
 
 ### Money
 
@@ -218,9 +241,10 @@ Naming these stops them being re-proposed as oversights:
 Most of section 3 lives in the **database** — check constraints, RLS policies
 and triggers. A rule enforced only in JavaScript is a suggestion.
 
-- `sql/tests/selftest.sql` — 70 checks of who can see and change what, run
-  every night at 05:41 Houston time; failures email the alert address. Run by
-  hand after touching the database:
+- `sql/tests/selftest.sql` — 75 checks of who can see and change what (and,
+  since 31 Oct, that an account over its limit is refused and that every
+  scheduled job's last run succeeded), run every night at 05:41 Houston time;
+  failures email the alert address. Run by hand after touching the database:
   `select * from public.selftest_run() where not pass;`
 - `src/__tests__/` — the booking rules in the browser (vitest), on every push.
 - `e2e/` — the site in a real browser with a fake backend (Playwright), on

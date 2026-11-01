@@ -4959,6 +4959,10 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
       const geo = getGeoSignal();
       const meta = {
         role,
+        /* The language they are using now: handle_new_user saves it on the
+           profile (so PLUJ's emails start in it) and Supabase's confirmation
+           email template reads it as {{ .Data.lang }}. */
+        lang: getLang() === "es" ? "es" : "en",
         /* The form has always demanded a date of birth and checked it for 18+,
            and then thrown it away: it was never put in meta, and the database
            trigger inserted a hardcoded null. Every existing profile has dob
@@ -5560,7 +5564,8 @@ function AuthModal({ onClose, onAuth, initialTab = "login", initialRole }) {
                     <LinkTo doc="Privacy" label="Privacy Policy" /> and{" "}
                     <LinkTo doc="Marketplace rules" label="Marketplace Rules" />. I confirm my
                     information is accurate{role === "vendor" ? ", and I understand my business must be verified before listing services" : ""}.
-                    If I don't follow these terms, PLUJ may suspend, block or remove my account.
+                    I'm a real person and will use this account myself. If I don't follow these terms, PLUJ may
+                    suspend, block or remove my account.
                   </span>
                 </span>
               </button>
@@ -8712,11 +8717,14 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
         <div style={{ background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:13,
                       padding:"14px 16px", marginBottom:16 }}>
           <p style={{ margin:0, fontSize:13, fontWeight:800, color:"#B91C1C" }}>
-            {stale.length === 1 ? "One selection no longer fits" : `${stale.length} selections no longer fit`} your event
+            {/* Whole sentences, one text node each, so the Spanish can be a
+                whole sentence too (fragments came out as "…elegiste it"). */}
+            {stale.length === 1 ? "One selection no longer fits your event" : `${stale.length} selections no longer fit your event`}
           </p>
           <p style={{ margin:"4px 0 8px", fontSize:12, color:"#7F1D1D", lineHeight:1.6 }}>
-            Your date, city or guest count changed after you picked {stale.length === 1 ? "it" : "them"}.
-            Sending {stale.length === 1 ? "this request" : "these requests"} would almost certainly come back declined.
+            {stale.length === 1
+              ? "Your date, city or guest count changed after you picked it. Sending this request would almost certainly come back declined."
+              : "Your date, city or guest count changed after you picked them. Sending these requests would almost certainly come back declined."}
           </p>
           {stale.map(v => (
             <div key={v.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -12044,6 +12052,7 @@ const LEGAL_SUMMARY = {
     "The price you see is the price you pay. PLUJ's fee is already inside it.",
     "Your money waits in the pro's locked Stripe balance and is paid out in parts. The last part goes only after the event, when you approve it or 3 days later.",
     "If a pro cancels, you get every dollar back and PLUJ finds you a replacement.",
+    "Every account belongs to one real person, who uses it themselves. No bots, scripts or AI agents.",
     "If something goes wrong, press Report a problem before the last part is paid out, and the rest is frozen while we look into it.",
     "Disagreements go to individual arbitration in Texas, unless you opt out within 30 days. Claims of sexual assault or sexual harassment can always go to court.",
   ],
@@ -12066,6 +12075,7 @@ const LEGAL_SUMMARY = {
     "Keep your bookings, or cancel early and honestly.",
     "Treat everyone with respect. No harassment, threats or discrimination.",
     "Hold the licenses, permits and insurance your service needs.",
+    "Run your own account yourself. No bots, scripts or AI agents.",
   ],
 };
 
@@ -12123,6 +12133,7 @@ const INFO_CONTENT = {
     ["Agreement", "By creating an account or using PLUJ you agree to these Terms of Service, our Privacy Policy, and our Marketplace Rules. If you do not agree, do not use the platform."],
     ["Eligibility", "You must be at least 18 years old and able to enter into a binding contract. You must provide accurate information about yourself and, if you are a vendor, about your business."],
     ["Your account", "You are responsible for activity on your account and for keeping your password secure. Do not share your account or impersonate anyone else."],
+    ["Real people only", "Every account must be opened and used by the real person it belongs to; for a vendor, that is the business owner or someone who works for the business. Bots, scripts, scrapers, automated tools and AI agents may not create accounts, log in, browse or book for someone, send messages or inquiries, make, accept or decline bookings, post listings or reviews, or copy content, photos or contact details from PLUJ. Ordinary help such as a screen reader, voice control, spell-check or translation is fine, but you must read and send every message and booking yourself. We use automated checks to tell people from bots, we limit how much one account can do in a short time, and we may ask you to show you are a person again. We may suspend or remove an account that breaks this rule, with or without notice."],
     ["Bookings", "PLUJ is a marketplace. Requests sent through PLUJ are not confirmed until the vendor approves them. Contracts for services are between the customer and the vendor."],
     ["Enforcement — suspension and removal", "If you do not follow these Terms, the Marketplace Rules, or applicable law, we may limit, suspend, block, or permanently remove your account and any listings, with or without notice. This includes fraud or misrepresentation, fake or misleading listings or reviews, harassment or discrimination, unsafe or illegal activity, repeated failure to honor confirmed bookings, or attempts to take payment or users off-platform to avoid our rules."],
     ["What PLUJ is", "PLUJ connects you with local vendors and makes booking them simpler and faster. We are a venue for finding and booking independent vendors. We are not an event planner, a caterer, a venue operator, a staffing agency, an equipment supplier, or a party to any booking. We do not provide, perform, supervise, direct, inspect or control any service listed on the platform. Every contract for services is formed directly between the customer and the vendor."],
@@ -12197,6 +12208,7 @@ const INFO_CONTENT = {
     ["Communicate respectfully", "No harassment, hate speech, threats, or discrimination of any kind."],
     ["Keep it legal and safe", "You must hold the licenses, permits and insurance required for the services you provide, and comply with all applicable laws."],
     ["No manipulation", "No fake reviews, fake accounts, or schemes to inflate ratings or bypass platform rules."],
+    ["Real people, not bots", "Hosts and pros are real people who run their own accounts. No bots, scripts, scrapers or AI agents acting for you, and no copying listings, photos or contact details off PLUJ."],
     ["No scams or fraud", "Never take a deposit or payment for a service you don't intend to or can't deliver, impersonate another person or business, post fake listings, or pressure hosts to pay in ways meant to get around PLUJ's rules. Suspected fraud leads to immediate removal and may be reported to law enforcement."],
     ["Hosts: check before you book", "Read each vendor's reviews and listing, ask questions in Messages, and get the price, deposit and cancellation terms in writing before you pay. PLUJ reviews vendor applications but can't guarantee any vendor, and booking a vendor is your decision."],
     ["Consequences", "Breaking these rules can result in a warning, listing removal, suspension, or permanent removal from PLUJ. Serious violations may be reported to the relevant authorities."],

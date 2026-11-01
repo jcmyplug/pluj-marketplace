@@ -411,7 +411,7 @@ function VendorReview({ vendorId, onDecided }) {
       )}
       {status === "approved" && (
         <p style={{ margin:"12px 0 0", fontSize:11.5, color:C.green, fontWeight:700 }}>
-          ✓ Approved{v.verified_at ? ` on ${fmtDate(v.verified_at)}` : ""}
+          {v.verified_at ? `✓ Approved on ${fmtDate(v.verified_at)}` : "✓ Approved"}
         </p>
       )}
 
@@ -1063,7 +1063,7 @@ function AdminPanel({ user, onClose, initialTab }) {
                 <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>
                   Vendor Applications
                   <span style={{ marginLeft:8, fontSize:11, fontWeight:400, color:C.midGray }}>
-                    {vendorApps.length} total · {pendingCount} pending
+                    {`${vendorApps.length} total · ${pendingCount} pending`}
                   </span>
                 </h3>
                 <button onClick={()=>getVendorApps().then(setVendorApps)} className="btn"

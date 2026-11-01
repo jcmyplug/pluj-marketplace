@@ -95,3 +95,20 @@ a page needs them.
   (docs/BACKUPS-AND-RESTORE.md). The usage meters in `service_limits` use the
   Pro limits (database 8 GB, files 100 GB). The spend cap is left as it was.
 - **Resend → Domains**: pluj.us with SPF, DKIM and DMARC.
+- **`public/robots.txt`**: search engines (Google, Bing, Apple) may index the
+  public pages; AI crawlers (GPTBot, ClaudeBot, Google-Extended, PerplexityBot,
+  Bytespider and others), AI agents acting for a person (ChatGPT-User,
+  Claude-User, Perplexity-User) and bulk SEO scrapers are asked to stay out.
+  Link previews (facebookexternalhit, Twitterbot) are not blocked. Only polite
+  crawlers obey this file; the firewall below is what enforces it.
+- **Recommended, not yet on (needs you in the dashboard):**
+  - *Vercel → pluj-marketplace → Firewall → Bot Management*: turn on **Bot
+    Protection** (challenges automated browsers) and the **AI Bots** rule set
+    (blocks known AI crawlers). Both are free on every plan.
+  - *Supabase → Authentication → Sessions*: **Inactivity timeout** 7 days, so
+    a sign-in left unused for a week has to pass Turnstile again. (Pro plan.)
+  - *Supabase → Authentication → Emails → Templates*: the bilingual sign-up
+    and password templates in `AUTH-EMAIL-TEMPLATES.md`.
+- **Database tables that are settings** (admin-editable, not secret):
+  `action_caps` (per-account limits, see FUNCTIONAL-REQUIREMENTS 3c),
+  `email_phrases` and `email_patterns` (Spanish for emails).
