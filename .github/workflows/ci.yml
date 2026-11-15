@@ -32,6 +32,15 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      # Security item 18 (15 Nov 2026). What ships to visitors (react,
+      # react-dom) must have no known high or critical vulnerability: the build
+      # fails until it is patched. The build tools never reach a visitor, so a
+      # finding there is a warning to act on, not a blocked deploy.
+      - name: Known vulnerabilities in what ships (fails on high or critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Known vulnerabilities in the build tools (warning only)
+        run: npm audit --audit-level=high || echo "::warning::npm audit found high or critical issues in development tools; see the log above"
+
       # Rules live in eslint.config.mjs. ESLint 9 changed the default config
       # format and ESLint 10 removed the old one, so the eslintConfig block in
       # package.json is no longer read by anything.
@@ -74,6 +83,20 @@ jobs:
         run: npm run build
         env:
           CI: true
+
+      # Security items 7 and 17: nothing secret and no debugging aids in what
+      # visitors download. Source maps would publish the original code with
+      # comments; a key-shaped string would mean a secret was baked in at build
+      # time (only the public Supabase anon key and Turnstile site key belong).
+      - name: Nothing secret or debug-only in the build
+        run: |
+          set -e
+          if ls build/static/*.map >/dev/null 2>&1; then echo "::error::source maps found in build/"; exit 1; fi
+          if grep -R -l -E "sk_(live|test)_[A-Za-z0-9]{10,}|rk_(live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{10,}|re_[A-Za-z0-9]{8,}_[A-Za-z0-9]{8,}|service_role" build/; then
+            echo "::error::a secret-looking string is in the build"; exit 1; fi
+          if grep -o -E "<script[^>]*>" build/index.html | grep -v -E "src=|application/ld\+json"; then
+            echo "::error::inline script in build/index.html: the Content Security Policy will block it"; exit 1; fi
+          echo "build is clean"
 
   # Browser checks (checklist item 30, added 31 Oct 2026). Its own job so it
   # runs alongside lint-and-build instead of after it; a push is good to

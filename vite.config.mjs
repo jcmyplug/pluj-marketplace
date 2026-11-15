@@ -1,5 +1,26 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
+
+/* The security headers Vercel sends on every page (vercel.json), applied to
+   `vite preview` too, so the browser checks in CI run under the same Content
+   Security Policy as the live site (security item 12, 15 Nov 2026). A policy
+   that blocks something the app needs then fails CI instead of production.
+   Two are left out because they only make sense on https: HSTS, and the
+   upgrade-insecure-requests directive, which would rewrite the local
+   http://localhost asset URLs to https and break the preview. */
+function siteHeaders() {
+  const cfg = JSON.parse(readFileSync(new URL("./vercel.json", import.meta.url), "utf8"));
+  const rule = (cfg.headers || []).find((h) => h.source === "/(.*)");
+  const out = {};
+  for (const h of (rule ? rule.headers : [])) {
+    if (h.key === "Strict-Transport-Security") continue;
+    out[h.key] = h.key === "Content-Security-Policy"
+      ? h.value.replace(/;\s*upgrade-insecure-requests/, "")
+      : h.value;
+  }
+  return out;
+}
 
 /* ─── VITE CONFIG ───────────────────────────────────────────────────────────
    Replaces Create React App, which the React team deprecated in February 2025
@@ -107,6 +128,6 @@ export default defineConfig(function (config) {
       },
     },
     server: { port: 3000 },
-    preview: { port: 3000 },
+    preview: { port: 3000, headers: siteHeaders() },
   };
 });

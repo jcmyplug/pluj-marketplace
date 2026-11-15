@@ -1,4 +1,5 @@
 import { rateLimit } from "./_rate-limit.js";
+import { checkOrigin } from "./_origin.js";
 
 /* PLUJ - address verification.  Repo location: api/verify-address.js
 
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
      it bound one serverless instance for as long as that instance happened to
      live. Vercel runs many. The shared counter below is the real one; the
      in-process one can stay as a cheap first line that costs no round trip. */
+  if (!checkOrigin(req, res)) return;
   if (!(await rateLimit(req, res, { route: "verify-address", max: 60, windowSeconds: 300 }))) return;
 
   if (req.method !== "POST") {

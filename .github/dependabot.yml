@@ -1,0 +1,30 @@
+# Security item 18 (15 Nov 2026): keep dependencies patched.
+# Dependabot opens a pull request when a package or a GitHub Action has a new
+# version. CI (lint, tests, build, npm audit, browser checks) runs on it, so a
+# green pull request is safe to merge. Grouped so it is one pull request a
+# week, not one per package.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
+    groups:
+      production:
+        dependency-type: "production"
+      build-tools:
+        dependency-type: "development"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "America/Chicago"
+    groups:
+      actions:
+        patterns: ["*"]

@@ -36,10 +36,15 @@ const STRIPE_API = "https://api.stripe.com/v1";
 const STRIPE_VERSION = "2024-06-20";
 
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
+/* Only the live site may call these functions from a browser (security item
+   16, 15 Nov 2026; was "*"). pluj.us redirects to www.pluj.us, so every real
+   page has this one origin. Stripe and the scheduler are not browsers and
+   never look at these headers. */
 export const CORS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": SITE,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 export function json(body: unknown, status = 200): Response {

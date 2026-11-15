@@ -1,4 +1,5 @@
 import { rateLimit } from "./_rate-limit.js";
+import { checkOrigin } from "./_origin.js";
 
 /* PLUJ - error reporting and alerting.  Repo location: api/log-error.js
 
@@ -48,6 +49,32 @@ import crypto from "node:crypto";
 const NL = String.fromCharCode(10);
 
 /* Escape the five characters that can break out of HTML text or an attribute. */
+/* Secrets and personal data that must never reach the error table, the logs
+   or an alert email. Order matters: whole JWTs first, then key=value pairs,
+   then bare key-shaped strings and email addresses. */
+const SECRET_PARAMS = /([?&#](?:t|token|token_hash|code|access_token|refresh_token|provider_token|apikey|api_key|key|secret|password|sig|signature)=)[^&#\s"'<>]*/gi;
+export function scrub(s) {
+  return String(s || "")
+    .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, "[jwt]")
+    .replace(SECRET_PARAMS, "$1[redacted]")
+    .replace(/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{8,}\b/g, "[stripe-key]")
+    .replace(/\bwhsec_[A-Za-z0-9]{8,}\b/g, "[webhook-secret]")
+    .replace(/\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{8,}\b/g, "[resend-key]")
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/-]{12,}=*/gi, "$1 [redacted]")
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]");
+}
+/* A page address keeps only origin and path: query strings and fragments are
+   where tokens live (/unsubscribe?t=…, /auth/confirm?token_hash=…, #access_token=…). */
+export function scrubUrl(u) {
+  const s = String(u || "");
+  try {
+    const p = new URL(s);
+    return scrub(p.origin + p.pathname);
+  } catch {
+    return scrub(s.split(/[?#]/)[0]);
+  }
+}
+
 function esc(s) {
   let out = "";
   for (const ch of String(s === null || s === undefined ? "" : s)) {
@@ -89,6 +116,7 @@ export default async function handler(req, res) {
   /* Unauthenticated by design: errors happen to signed-out visitors and to
      people whose session has just broken. 60 reports per 5 minutes per IP is
      far above what a real browser produces and far below a flood. */
+  if (!checkOrigin(req, res)) return;
   if (!(await rateLimit(req, res, { route: "log-error", max: 60, windowSeconds: 300 }))) return;
 
   if (req.method !== "POST") {
@@ -101,9 +129,13 @@ export default async function handler(req, res) {
   if (rateLimited(ip)) return res.status(429).json({ ok: false });
 
   const body = req.body || {};
-  const message = String(body.message || "").slice(0, 500).trim();
-  const stack   = String(body.stack   || "").slice(0, 4000);
-  const url     = String(body.url     || "").slice(0, 500);
+  /* Scrubbed BEFORE anything is stored or emailed (security item 9, 15 Nov
+     2026): error text and page addresses can carry one-time links, session
+     tokens, keys and email addresses, and both the error_events table and the
+     alert email outlive the moment. */
+  const message = scrub(String(body.message || "").slice(0, 500)).trim();
+  const stack   = scrub(String(body.stack   || "").slice(0, 4000));
+  const url     = scrubUrl(String(body.url  || "").slice(0, 500));
   const kind    = body.kind === "server" ? "server" : "client";
   const agent   = String(req.headers["user-agent"] || "").slice(0, 300);
 

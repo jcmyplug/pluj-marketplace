@@ -1,0 +1,57 @@
+name: Claude security review
+
+# Security item 19 (15 Nov 2026). Anthropic's Claude Code security reviewer
+# (github.com/anthropics/claude-code-security-review) reads every pull request
+# and comments on likely vulnerabilities: injection, auth and permission
+# mistakes, exposed secrets, XSS, unsafe uploads and so on.
+#
+# It needs one secret, CLAUDE_API_KEY (Repository settings -> Secrets and
+# variables -> Actions -> New repository secret), from console.anthropic.com.
+# Until that secret exists the job explains how to add it and stops without
+# failing anything.
+#
+# Anthropic notes the action is not hardened against prompt injection, so it
+# only runs on pull requests from branches of this repository, never on pull
+# requests from forks (anyone can fork a public repository).
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: security-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security-review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Is the API key set?
+        id: key
+        env:
+          KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice::Claude security review skipped: add the CLAUDE_API_KEY repository secret to switch it on."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.key.outputs.present == 'true'
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        if: steps.key.outputs.present == 'true'
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          exclude-directories: "node_modules,build,test-results,playwright-report"
