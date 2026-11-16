@@ -135,8 +135,14 @@ test("the sign-in is kept in a cookie: localStorage holds who is signed in, neve
     return route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"Not signed in"}' });
   });
 
-  /* Someone signed in before the change: the old session moves into the cookie. */
+  /* Someone signed in before the change: the old session moves into the cookie.
+     A leftover from before the PLUJ rename ("plug_session") must go too. */
   await saveSession(page, old, "r1");
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("seeded-plug")) return;
+    localStorage.setItem("plug_session", JSON.stringify({ access_token: "eyJold.token.here", refresh_token: "old" }));
+    sessionStorage.setItem("seeded-plug", "1");
+  });
   await page.goto("/");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("pluj_session") || "")).toContain('"mode":"cookie"');
   expect(ops[0]).toEqual({ op: "keep", header: "1", sentToken: true });

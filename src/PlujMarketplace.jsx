@@ -1661,6 +1661,16 @@ const TURNSTILE_SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAA
    the browser console. console.warn and console.error still do. */
 const devLog = process.env.NODE_ENV === "production" ? () => {} : (...a) => console.log(...a);
 
+/* Leftovers from before the PLUJ rename (October 2026): the old code kept its
+   sign-in, tokens included, under "plug_session", plus a few other "plug_"
+   keys. Nothing reads them any more; remove them so no old token sits in this
+   browser's storage (found 16 Nov 2026 while checking security item 6). */
+try {
+  if (typeof localStorage !== "undefined") {
+    Object.keys(localStorage).filter((k) => k.startsWith("plug_")).forEach((k) => localStorage.removeItem(k));
+  }
+} catch { /* storage unavailable */ }
+
 const IS_PREVIEW = (() => {
   try {
     const origin = window.location.origin || "";
