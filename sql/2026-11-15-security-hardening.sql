@@ -673,3 +673,25 @@ revoke execute on function public.guard_message_write() from public, anon, authe
 revoke execute on function public.guard_photo_urls() from public, anon, authenticated;
 revoke execute on function public.guard_review_insert() from public, anon, authenticated;
 revoke execute on function public.guard_vendor_profile_insert() from public, anon, authenticated;
+
+-- ── Insert times ─────────────────────────────────────────────────────────────
+-- The per-account action caps count rows by created_at. A browser that wrote
+-- an old created_at on its own inserts would never be counted. On every
+-- capped table the insert time is now the database's clock (bookings,
+-- reviews and messages already get it from their own guards above).
+create or replace function public.stamp_created_now()
+returns trigger language plpgsql security definer
+set search_path = public, pg_temp as $$
+begin
+  if public.is_privileged_context() then return new; end if;
+  new.created_at := now();
+  return new;
+end $$;
+revoke execute on function public.stamp_created_now() from public, anon, authenticated;
+
+create or replace trigger trg_aa_stamp_created before insert on public.conversations   for each row execute function public.stamp_created_now();
+create or replace trigger trg_aa_stamp_created before insert on public.event_recaps    for each row execute function public.stamp_created_now();
+create or replace trigger trg_aa_stamp_created before insert on public.favorites       for each row execute function public.stamp_created_now();
+create or replace trigger trg_aa_stamp_created before insert on public.inquiries       for each row execute function public.stamp_created_now();
+create or replace trigger trg_aa_stamp_created before insert on public.vendor_photos   for each row execute function public.stamp_created_now();
+create or replace trigger trg_aa_stamp_created before insert on public.vendor_services for each row execute function public.stamp_created_now();

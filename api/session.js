@@ -38,7 +38,7 @@ const SB_URL  = process.env.SUPABASE_URL      || process.env.REACT_APP_SUPABASE_
 const SB_ANON = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 const COOKIE = "__Host-pluj_rt";
-const MAX_AGE = 7 * 24 * 3600;           // matches the 7-day session limit set in Supabase Auth (1 Nov 2026)
+const MAX_AGE = 7 * 24 * 3600;           // matches the 7-day inactivity timeout in Supabase Auth (1 Nov 2026); renewed on every use
 const SITES = new Set(["https://www.pluj.us", "https://pluj.us"]);
 
 function siteOrigin(req) {

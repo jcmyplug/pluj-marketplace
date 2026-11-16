@@ -26,13 +26,13 @@ redeploy. **Everyone can read these**, by design.
 
 ## B. Vercel, server side only (secret)
 
-Same Vercel screen; read only by the functions in `api/` (log-error,
-send-verification, send-booking-notification, verify-address, sitemap). Never
-reach the browser.
+Same Vercel screen; read only by the functions in `api/` (log-error, session,
+verify-address, sitemap). Never reach the browser. (send-verification and
+send-booking-notification were deleted on 15 Nov 2026; nothing called them.)
 
 | Name | What it is | If it is missing |
 |---|---|---|
-| `RESEND_API_KEY` | Resend key used by the `api/` email routes (verification codes, booking notifications, error alerts). **Secret** | Those emails are not sent; errors are still recorded |
+| `RESEND_API_KEY` | Resend key used by `api/log-error` for error alerts. **Secret** | Alerts are not emailed; errors are still recorded |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Same values as group A, for the server functions | They fall back to the `REACT_APP_` versions |
 | `RESEND_FROM` | Optional sender, e.g. `PLUJ Marketplace <noreply@pluj.us>` | Uses that default |
 | `ALERT_EMAIL` | Optional: where error alerts from `api/log-error` go | `info@pluj.us` |
@@ -43,8 +43,9 @@ is unused and can be removed.
 
 ## C. Supabase Edge Function secrets (secret)
 
-Supabase → Edge Functions → Secrets. Read by `payments`, `payments-scheduler`
-and `stripe-webhook`.
+Supabase → Edge Functions → Secrets. Read by `payments`, `payments-scheduler`,
+`stripe-webhook` and `scan-uploads` (which needs only the two Supabase
+provides).
 
 | Name | What it is | Notes |
 |---|---|---|
@@ -62,6 +63,15 @@ website. Only names are listed here; values are never written down.
 | `RESEND_API_KEY` | `drain_email_outbox()` (every minute): booking emails, reminders, alerts, waitlist emails | Separate copy from group B. Rotate both together |
 | `PAYMENTS_CRON_SECRET` | The `payments-scheduler` cron job → edge function | Generated automatically on 7 Oct; nothing to set |
 | `STRIPE_WEBHOOK_SECRET` | Payment functions | Not present yet; added at Stripe switch-on |
+| `UPLOAD_SCAN_SECRET` | The `scan-uploads` cron job → edge function (checked by `uploads_to_scan()`) | Generated inside the database on 15 Nov; nothing to set |
+
+## D2. GitHub, repository secrets (secret)
+
+GitHub → jcmyplug/pluj-marketplace → Settings → Secrets and variables → Actions.
+
+| Name | Used by | If it is missing |
+|---|---|---|
+| `CLAUDE_API_KEY` | `.github/workflows/security-review.yml`: Anthropic's security review comments on every pull request | The job says how to add it and stops; nothing fails |
 
 ## E. Settings in the database (`platform_settings`, not secret)
 
@@ -116,7 +126,18 @@ a page needs them.
   - To roll back: set Bot Protection to Log or Off on the same page. If the
     probe value is ever changed in Vault, change the rule too.
 - **Supabase → Authentication → Sessions**: inactivity timeout **168 hours**
-  (7 days) since 1 Nov; single session per user off; time-box 0.
+  (7 days) since 1 Nov; single session per user off; time-box 0. Since 15 Nov
+  the refresh token lives in an HttpOnly cookie set by `api/session.js`
+  (`__Host-pluj_rt`, Secure, SameSite=Strict, 7 days, renewed on use);
+  localStorage `pluj_session` holds only `{ mode: "cookie", user }`.
+- **Security hardening, 15 Nov 2026** (security items 1–19): database fixes in
+  `sql/2026-11-15-security-hardening.sql` (replayed by
+  `sql/tests/2026-11-15-attack-tests.sql`), upload scan every 10 minutes
+  (`sql/2026-11-15-upload-scan.sql`, `supabase/functions/scan-uploads`),
+  Content-Security-Policy without inline scripts (`vercel.json`, also applied
+  to `vite preview` so CI tests under it), Origin checks on every `api/`
+  route, CI checks for known vulnerabilities, source maps and secrets in the
+  build, weekly Dependabot pull requests (`.github/dependabot.yml`).
 - **Supabase → Authentication → Emails → Templates**: *Confirm sign up* and
   *Reset password* are bilingual since 1 Nov (`AUTH-EMAIL-TEMPLATES.md`). They
   read `user_metadata.lang`, which sign-up sets and the trigger
