@@ -7,12 +7,17 @@
    a stranger calling this URL gets 403 and learns nothing.
 
    WHAT IT CHECKS
-   For each file in vendor-photos it has not seen yet, it reads the first 2 KB
-   and keeps the file only if
-     - the bytes start like a real JPEG, PNG or WebP picture, and
-     - there is no web-page or script code in them (<script, <html, <svg,
-       <iframe, <?php, javascript:).
-   Anything else is deleted from storage and the admins get a notification.
+   For each file in vendor-photos it has not seen yet, it reads the first
+   bytes and keeps the file only if they start like a real JPEG, PNG or WebP
+   picture. Anything else is deleted from storage and the admins get a
+   notification.
+
+   15 Nov 2026: the first version also looked for web-page text (<script,
+   <svg, ...) inside the first 2 KB. Real pictures can carry such text in
+   their metadata (design tools write it), and on its first run that check
+   deleted a genuine PNG profile photo. It was removed the same day. It added
+   little anyway: storage serves these files as images, and a browser does
+   not run code inside an image.
 
    HONEST LIMITS
    This is a file-type check, not an antivirus. It stops the realistic abuse
@@ -25,8 +30,6 @@
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const BUCKET = "vendor-photos";
-
-const SCRIPTY = [/<script/i, /<html/i, /<svg/i, /<iframe/i, /<\?php/i, /javascript:/i];
 
 function sniff(b: Uint8Array): string | null {
   if (b.length >= 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return "image/jpeg";
@@ -68,19 +71,16 @@ Deno.serve(async (req) => {
   for (const it of items) {
     try {
       const r = await fetch(`${SB_URL}/storage/v1/object/authenticated/${BUCKET}/${objectPath(it.name)}`, {
-        headers: { ...auth, Range: "bytes=0-2047" },
+        headers: { ...auth, Range: "bytes=0-15" },
       });
       if (r.status === 404 || r.status === 400) {
         await rpc("record_upload_scan", { p_secret: secret, p_id: it.id, p_name: it.name, p_verdict: "error", p_reason: "missing" });
         continue;
       }
       if (!r.ok) { skipped++; continue; }                  /* try again next run */
-      const head = new Uint8Array(await r.arrayBuffer()).slice(0, 2048);
+      const head = new Uint8Array(await r.arrayBuffer()).slice(0, 16);
       const type = sniff(head);
-      const text = new TextDecoder("latin1").decode(head);
-      const why = !type ? "not a JPEG, PNG or WebP picture"
-                : SCRIPTY.some((re) => re.test(text)) ? "contains web page or script code"
-                : null;
+      const why = type ? null : "not a JPEG, PNG or WebP picture";
       if (why) {
         const d = await fetch(`${SB_URL}/storage/v1/object/${BUCKET}`, {
           method: "DELETE",

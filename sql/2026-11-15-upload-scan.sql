@@ -3,9 +3,9 @@
 -- The website checks and redraws every photo before upload, but someone can
 -- skip the website and talk to Supabase Storage directly. Every 10 minutes
 -- the scan-uploads edge function (supabase/functions/scan-uploads) reads the
--- first 2 KB of each new file in vendor-photos and deletes any that is not a
--- real JPEG, PNG or WebP picture or that carries web-page or script code. The
--- admins get a notification naming the account.
+-- first bytes of each new file in vendor-photos and deletes any that is not a
+-- real JPEG, PNG or WebP picture. The admins get a notification naming the
+-- account.
 --
 -- The cron job and the edge function share a secret that is generated here,
 -- inside the database, and kept in Vault. Nobody types or sees it.
