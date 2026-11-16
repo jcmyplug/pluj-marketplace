@@ -125,6 +125,11 @@ a page needs them.
     challenged.
   - To roll back: set Bot Protection to Log or Off on the same page. If the
     probe value is ever changed in Vault, change the rule too.
+- **Supabase → Authentication → Rate Limits**: token refreshes **1800 per 5
+  minutes** since 16 Nov (was 150). Refreshes now go through `api/session.js`,
+  so they arrive from Vercel's servers instead of each visitor's address and
+  share one limit. The other limits are Supabase's defaults (30 sign-ups or
+  log-ins and 30 code checks per 5 minutes per IP, 100 emails an hour).
 - **Supabase → Authentication → Sessions**: inactivity timeout **168 hours**
   (7 days) since 1 Nov; single session per user off; time-box 0. Since 15 Nov
   the refresh token lives in an HttpOnly cookie set by `api/session.js`
