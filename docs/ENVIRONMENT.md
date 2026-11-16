@@ -71,7 +71,7 @@ GitHub → jcmyplug/pluj-marketplace → Settings → Secrets and variables → 
 
 | Name | Used by | If it is missing |
 |---|---|---|
-| `CLAUDE_API_KEY` | `.github/workflows/security-review.yml`: Anthropic's security review comments on every pull request | The job says how to add it and stops; nothing fails |
+| `CLAUDE_API_KEY` | `.github/workflows/security-review.yml`: Anthropic's security review comments on every pull request. Added 16 Nov 2026; the key (console.anthropic.com, "pluj-github-security-review") expires 16 Nov 2027, so make a new one a week before | Missing: the job says how to add it and stops. Out of credit: the job fails with that message |
 
 ## E. Settings in the database (`platform_settings`, not secret)
 
