@@ -110,3 +110,44 @@ test("two tabs: when one renews the sign-in, the other uses the new one instead 
   expect(log.filter((l) => l.path === "refresh" && l.token === "r1").length).toBe(1);  /* nor reused the spent one */
   await expect(b.locator(".session-note")).toHaveCount(0);                             /* and was not logged out */
 });
+
+/* Security item 6 (15 Nov 2026): the refresh token lives in an HttpOnly
+   cookie set by /api/session, never in localStorage. Here /api/session is
+   faked; the real one is api/session.js. */
+test("the sign-in is kept in a cookie: localStorage holds who is signed in, never a token", async ({ page }) => {
+  const old = jwt("u1", now() + 3600), t2 = jwt("u1", now() + 3601), t3 = jwt("u1", now() + 3602);
+  const alive = new Set([old]);
+  const log = [], ops = [];
+  await mockBackend(page);
+  await fakeAuth(page, { alive, refreshes: new Map(), log });
+  await page.route("**/api/session", (route) => {
+    const req = route.request();
+    const body = req.postDataJSON() || {};
+    ops.push({ op: body.op, header: req.headers()["x-pluj-session"] || null, sentToken: "refresh_token" in body });
+    const give = (t) => {
+      alive.add(t);
+      return route.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ access_token: t, expires_at: now() + 3600, user: { id: "u1", email: "ana@example.com" } }) });
+    };
+    if (body.op === "keep" && body.refresh_token === "r1") return give(t2);
+    if (body.op === "refresh") return give(t3);
+    if (body.op === "end") return route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' });
+    return route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"Not signed in"}' });
+  });
+
+  /* Someone signed in before the change: the old session moves into the cookie. */
+  await saveSession(page, old, "r1");
+  await page.goto("/");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("pluj_session") || "")).toContain('"mode":"cookie"');
+  expect(ops[0]).toEqual({ op: "keep", header: "1", sentToken: true });
+  await expect(page.getByRole("button", { name: /Log in \/ Sign up/ })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toMatch(/eyJ|refresh_token|access_token/);
+
+  /* A return visit: a new access token comes from the cookie. */
+  await page.reload();
+  await expect.poll(() => ops.filter((o) => o.op === "refresh").length).toBeGreaterThan(0);
+  expect(ops.find((o) => o.op === "refresh").sentToken).toBe(false);
+  await expect(page.getByRole("button", { name: /Log in \/ Sign up/ })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toMatch(/eyJ|refresh_token|access_token/);
+  expect(log.filter((l) => l.token === t3).length).toBeGreaterThan(0);              /* and it is the token in use */
+});

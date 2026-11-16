@@ -1656,6 +1656,11 @@ const SUPABASE_ANON = process.env.REACT_APP_SUPABASE_ANON_KEY
 const TURNSTILE_SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAAFup99LNcP2iBhm2";
 
 /* Detect if running in Claude artifact sandbox (no external fetch allowed) */
+/* Diagnostic logging for development only (security items 9 and 17, 15 Nov
+   2026): the production site does not print ids, counts or query hints to
+   the browser console. console.warn and console.error still do. */
+const devLog = process.env.NODE_ENV === "production" ? () => {} : (...a) => console.log(...a);
+
 const IS_PREVIEW = (() => {
   try {
     const origin = window.location.origin || "";
@@ -1728,8 +1733,10 @@ export const sb = (() => {
     const dead = _authToken;
     _authToken = null; _refreshToken = null;
     /* A saved session holding the same dead token is no use to any tab. */
-    try { const saved = readSaved(); if (saved && saved.access_token === dead) localStorage.removeItem("pluj_session"); }
-    catch { /* storage unavailable */ }
+    try {
+      const saved = readSaved();
+      if (saved && (saved.access_token === dead || saved.mode === "cookie")) localStorage.removeItem("pluj_session");
+    } catch { /* storage unavailable */ }
     try { window.dispatchEvent(new CustomEvent("pluj:session", { detail: { ended: true, reason } })); }
     catch { /* very old browser */ }
   }
@@ -1740,6 +1747,7 @@ export const sb = (() => {
      works once, end a perfectly good session. */
   function refreshAuth(used) {
     if (used !== undefined && used !== _authToken) return Promise.resolve(true);
+    if (_mode === "cookie") return renewFromCookie();
     if (!_authToken && !_refreshToken) return Promise.resolve(false);   /* a visitor: nothing to renew */
     if (_refreshing) return _refreshing;
     _refreshing = (async () => {
@@ -1781,6 +1789,91 @@ export const sb = (() => {
     return _refreshing;
   }
 
+  /* ── SIGN-IN KEPT IN A COOKIE (security item 6, 15 Nov 2026) ─────────────
+     The refresh token (the key that keeps a sign-in alive for up to 7 days)
+     lives in an HttpOnly cookie that only /api/session can read or write; no
+     script on the page, ours or anyone else's, can get at it. The page holds
+     the hour-long access token in memory, and localStorage keeps only
+     { mode: "cookie", user: { id, email } } so tabs know who is signed in.
+     Where /api/session is not there (local preview, browser tests, an outage)
+     everything falls back to the earlier localStorage behaviour instead of
+     signing anyone out. */
+  let _mode = "local";
+  async function sessionApi(op, extra) {
+    try {
+      const r = await fetch("/api/session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "x-pluj-session": "1" },
+        body: JSON.stringify({ op, ...(extra || {}) }),
+      });
+      const type = r.headers.get("content-type") || "";
+      if (!type.includes("application/json")) return { unavailable: true, status: r.status };
+      const data = await r.json().catch(() => null);
+      if (!data || r.status === 404 || r.status === 405) return { unavailable: true, status: r.status };
+      return { ok: r.ok, status: r.status, data };
+    } catch {
+      return { unavailable: true, status: 0 };
+    }
+  }
+  function sameUser(token, id) {
+    const c = jwtClaims(token);
+    return !!(c && id && c.sub === id);
+  }
+  /* Right after signing in: hand the new refresh token to the cookie. Returns
+     the note to save in localStorage, or null to keep the old behaviour. */
+  async function keepSession(session) {
+    if (!session || !session.refresh_token) return null;
+    const r = await sessionApi("keep", { refresh_token: session.refresh_token });
+    if (!r.ok || !r.data || !r.data.access_token || !r.data.user) return null;
+    _mode = "cookie";
+    _authToken = r.data.access_token;
+    _refreshToken = null;
+    return { mode: "cookie", user: { id: r.data.user.id, email: r.data.user.email || null } };
+  }
+  /* A new access token from the cookie: on page load, and when one expires. */
+  function renewFromCookie() {
+    if (_refreshing) return _refreshing;
+    _refreshing = (async () => {
+      try {
+        const before = _authToken;
+        const r = await sessionApi("refresh");
+        if (r.unavailable || r.status === 429 || r.status >= 500) return false;   /* keep it; try later */
+        if (r.ok && r.data && r.data.access_token) {
+          _mode = "cookie";
+          _authToken = r.data.access_token;
+          /* Another tab signed in as someone else since this tab loaded. */
+          if (before && !sameUser(r.data.access_token, jwtClaims(before) && jwtClaims(before).sub)) {
+            try { window.dispatchEvent(new CustomEvent("pluj:session", { detail: { ended: false, reason: "switched" } })); }
+            catch { /* very old browser */ }
+          }
+          return true;
+        }
+        if (before) sessionEnded("expired"); else {
+          try { const saved = readSaved(); if (saved && saved.mode === "cookie") localStorage.removeItem("pluj_session"); }
+          catch { /* storage unavailable */ }
+        }
+        return true;                                       /* retry once as a visitor */
+      } finally {
+        _refreshing = null;
+      }
+    })();
+    return _refreshing;
+  }
+  /* Page load with a cookie-mode note: get an access token. */
+  async function restoreSession() {
+    _mode = "cookie";
+    if (_authToken && usable(_authToken)) return true;
+    await renewFromCookie();
+    return !!_authToken;
+  }
+  async function endSession() {
+    if (_mode !== "cookie") return;
+    await sessionApi("end");
+    _mode = "local";
+  }
+  function sessionMode() { return _mode; }
+
   /* Keep tabs in step. Another tab renewing the session hands this one the new
      pair; another tab logging out ends this one too; another account logging
      in elsewhere is reported so the app can reload who is signed in. */
@@ -1789,6 +1882,18 @@ export const sb = (() => {
       if (e.key !== "pluj_session") return;
       let next = null;
       try { next = e.newValue ? JSON.parse(e.newValue) : null; } catch { next = null; }
+      if (next && next.mode === "cookie") {
+        _mode = "cookie";
+        /* Another tab signed in. Same person: nothing to do, the cookie is
+           shared. Someone else: drop this tab's token and let the app ask
+           again, which fetches the new person's token from the cookie. */
+        if (!sameUser(_authToken, next.user && next.user.id)) {
+          _authToken = null; _refreshToken = null;
+          try { window.dispatchEvent(new CustomEvent("pluj:session", { detail: { ended: false, reason: "switched" } })); }
+          catch { /* very old browser */ }
+        }
+        return;
+      }
       if (!next || !next.access_token) { if (_authToken) sessionEnded("signed-out-elsewhere"); return; }
       const was = jwtClaims(_authToken), now = jwtClaims(next.access_token);
       _authToken = next.access_token;
@@ -2056,7 +2161,7 @@ export const sb = (() => {
   }
 
   return { rest, rpc, signUp, signIn, signOut, getUser, from, channel, setAuth, getAuthToken, recover, updateUserPassword, verifyTokenHash,
-           refresh: refreshAuth };
+           refresh: refreshAuth, keepSession, restoreSession, endSession, sessionMode };
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -2263,6 +2368,21 @@ async function _findUserById(id) {
   return data || null;
 }
 
+/* Display names of the people you deal with (your hosts, your vendors, the
+   other side of a message thread), without their email, phone or date of
+   birth. party_names() answers only for people you have a booking, inquiry or
+   conversation with (15 Nov 2026 security review: reading their whole profile
+   row exposed contact details). Falls back to the plain read where the
+   function isn't available (older database, browser tests). */
+async function partyNames(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))].slice(0, 200);
+  if (!list.length) return [];
+  const { data, error } = await sb.rpc("party_names", { p_ids: list });
+  if (!error && Array.isArray(data)) return data;
+  const { data: rows } = await sb.from("profiles").select("id, display_name, full_name").in("id", list).get();
+  return rows || [];
+}
+
 async function saveUser(u) {
   /* Supabase Auth handles password — we just update the profile table */
   const { password, ...profile } = u;
@@ -2281,6 +2401,12 @@ async function saveUser(u) {
 }
 
 async function saveSession(session) {
+  /* Production: the refresh token goes into the HttpOnly cookie and only a
+     "who is signed in" note is saved (security item 6). */
+  if (!IS_PREVIEW) {
+    const note = await sb.keepSession(session);
+    if (note) { _saveSessionLocal(note); return; }
+  }
   /* Save session — window.storage in preview, localStorage in production */
   /* Tell the REST client which user it's acting as, so writes pass RLS. */
   if (!IS_PREVIEW) sb.setAuth(session?.access_token || null, session?.refresh_token || null);
@@ -2320,8 +2446,9 @@ async function clearSession() {
   if (IS_PREVIEW && typeof window !== "undefined" && window.storage) {
     try { const r = await window.storage.get("pluj_session"); s = r ? JSON.parse(r.value) : null; } catch {}
   } else { s = _loadSessionLocal(); }
-  if (s?.access_token && !IS_PREVIEW) await sb.signOut(s.access_token);
-  if (!IS_PREVIEW) sb.setAuth(null, null);
+  const token = IS_PREVIEW ? s?.access_token : (sb.getAuthToken() || s?.access_token);
+  if (token && !IS_PREVIEW) await sb.signOut(token);
+  if (!IS_PREVIEW) { await sb.endSession(); sb.setAuth(null, null); }
   _clearSessionLocal();
   if (IS_PREVIEW && typeof window !== "undefined" && window.storage) {
     try { await window.storage.delete("pluj_session"); } catch {}
@@ -2362,8 +2489,11 @@ function apiAuthHeaders() {
 }
 
 export async function loadSession() {
-  /* Returns the saved session object or null */
-  return _loadSessionLocal();
+  /* Returns the saved session object or null. In cookie mode the saved note
+     has no tokens, so the current access token comes from memory. */
+  const s = _loadSessionLocal();
+  if (s && s.mode === "cookie") return { ...s, access_token: sb.getAuthToken() };
+  return s;
 }
 
 async function getCurrentUser() {
@@ -2378,11 +2508,23 @@ async function getCurrentUser() {
     } catch { session = null; }
   }
 
+  if (!IS_PREVIEW && session && session.mode === "cookie") {
+    /* Signed in with the cookie: fetch an access token for this page. */
+    if (!(await sb.restoreSession())) return null;
+    session = { ...session, access_token: sb.getAuthToken() };
+  } else if (!IS_PREVIEW && session?.refresh_token) {
+    /* Signed in before 15 Nov 2026: move the refresh token out of
+       localStorage and into the cookie. If that isn't possible, carry on as
+       before. */
+    const note = await sb.keepSession(session);
+    if (note) { _saveSessionLocal(note); session = { ...note, access_token: sb.getAuthToken() }; }
+  }
+
   if (!session?.access_token) return null;
 
   /* On a fresh page load saveSession() isn't called again — rehydrate the
      REST client's auth token from the restored session so writes pass RLS. */
-  if (!IS_PREVIEW) sb.setAuth(session.access_token, session.refresh_token);
+  if (!IS_PREVIEW && session.mode !== "cookie") sb.setAuth(session.access_token, session.refresh_token);
 
   /* Preview mode — load from window.storage tables */
   if (IS_PREVIEW) {
@@ -2639,7 +2781,7 @@ async function getApprovedVendors() {
     const cards = data
       .filter(s => s.vendor_profiles && s.vendor_profiles.verification_status === "approved")
       .map(s => dbServiceToCard(s, s.vendor_profiles));
-    console.log(`[PLUJ] getApprovedVendors: ${data.length} service row(s) → ${cards.length} card(s)`);
+    devLog(`[PLUJ] getApprovedVendors: ${data.length} service row(s) → ${cards.length} card(s)`);
     if (cards.length) return cards;
     console.warn("[PLUJ] getApprovedVendors: service rows had no readable/approved vendor_profiles — trying legacy path.");
   } else if (error) {
@@ -2655,7 +2797,7 @@ async function getApprovedVendors() {
     .get();
   if (legErr) console.warn("[PLUJ] getApprovedVendors legacy read failed:", legErr, "— check vendor_profiles public read policy (run vendor-public-read.sql).");
   const cards = (legacy || []).map(dbVendorToCard);
-  console.log(`[PLUJ] getApprovedVendors: legacy path → ${cards.length} card(s)`);
+  devLog(`[PLUJ] getApprovedVendors: legacy path → ${cards.length} card(s)`);
   return cards;
 }
 
@@ -2871,7 +3013,7 @@ async function getPublicServices(vendorId) {
     .order("created_at", { ascending: true }).get();
   if (error) { console.warn("[PLUJ] getPublicServices failed for", vendorId, "→", error, "(vendor_services may need a public read policy — run vendor-public-read.sql)"); return []; }
   const list = (data || []).filter(s => s.active !== false);
-  console.log(`[PLUJ] getPublicServices: vendor ${vendorId} → ${list.length} active service(s)`);
+  devLog(`[PLUJ] getPublicServices: vendor ${vendorId} → ${list.length} active service(s)`);
   return list;
 }
 
@@ -3003,23 +3145,85 @@ export async function getLegalMissing(vendorId) {
 
 export const BIZ_TYPES = ["Sole proprietor", "LLC", "Corporation", "Partnership", "Nonprofit"];
 
+/* ── PHOTO UPLOADS (security item 13, 15 Nov 2026) ─────────────────────────
+   Every photo is checked and redrawn in the browser before it is uploaded:
+
+   1. The first bytes must really be a JPEG, PNG or WebP picture. The file's
+      name and the type the browser reports are only labels; the bytes are
+      what count. Anything else (a renamed document, a script, a program) is
+      refused here.
+   2. The picture is decoded and drawn onto a fresh canvas, and only that
+      drawing is uploaded, as a new JPEG. Nothing from the original file
+      survives except the pixels: no hidden data appended after the image, no
+      camera metadata such as the GPS location of a vendor's home.
+   3. Very large photos are scaled down to 2400 pixels on the long side, which
+      is plenty for the site and keeps every upload under the 4 MB the
+      storage bucket accepts.
+
+   The storage bucket itself only takes JPEG, PNG and WebP up to 4 MB, only
+   from vendor accounts, only into their own folder, and a scheduled check
+   (supabase/functions/scan-uploads) removes anything that is not a real
+   picture, in case someone uploads around this page. */
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;      /* what a person may pick */
+const PHOTO_MAX_SIDE  = 2400;
+const PHOTO_UPLOAD_LIMIT = 4 * 1024 * 1024;   /* what the bucket accepts */
+
+export function sniffImageType(bytes) {
+  const b = bytes || [];
+  if (b.length >= 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return "image/jpeg";
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 &&
+      b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) return "image/png";
+  if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+      b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  return null;
+}
+
+async function redrawPhoto(file) {
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  if (!sniffImageType(head)) return { blob: null, error: `${file.name} is not a JPEG, PNG or WebP photo.` };
+
+  let bmp;
+  try { bmp = await createImageBitmap(file); }
+  catch { return { blob: null, error: `${file.name} could not be opened as a photo.` }; }
+  const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";                 /* transparent PNGs get a white background, not black */
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(bmp, 0, 0, w, h);
+  if (bmp.close) bmp.close();
+
+  const toJpeg = (q) => new Promise((ok) => canvas.toBlob((b) => ok(b), "image/jpeg", q));
+  let blob = null;
+  for (const q of [0.86, 0.75, 0.6]) {
+    blob = await toJpeg(q);
+    if (blob && blob.size <= PHOTO_UPLOAD_LIMIT) break;
+  }
+  if (!blob) return { blob: null, error: `${file.name} could not be prepared for upload.` };
+  if (blob.size > PHOTO_UPLOAD_LIMIT) return { blob: null, error: `${file.name} is too large even after resizing.` };
+  return { blob, error: null };
+}
+
 /* Uploads an image to Supabase Storage bucket "vendor-photos" and returns its
    public URL. Requires the bucket to exist and be public (see setup SQL). */
 export async function uploadVendorPhoto(vendorId, file, accessToken) {
   if (IS_PREVIEW) return { url: null, error: "Photo upload isn't available in preview mode." };
-  if (file.size > 5 * 1024 * 1024) return { url: null, error: `${file.name} is larger than 5 MB.` };
-  const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const path = `${vendorId}/${Date.now()}_${Math.random().toString(16).slice(2,8)}.${ext}`;
+  if (file.size > PHOTO_MAX_BYTES) return { url: null, error: `${file.name} is larger than 5 MB.` };
+  const { blob, error: why } = await redrawPhoto(file);
+  if (!blob) return { url: null, error: why };
+  const path = `${vendorId}/${Date.now()}_${Math.random().toString(16).slice(2,8)}.jpg`;
   try {
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/vendor-photos/${path}`, {
       method: "POST",
       headers: {
         "apikey": SUPABASE_ANON,
         "Authorization": "Bearer " + (accessToken || SUPABASE_ANON),
-        "Content-Type": file.type || "image/jpeg",
+        "Content-Type": "image/jpeg",
         "x-upsert": "true",
       },
-      body: file,
+      body: blob,
     });
     if (!res.ok) {
       const t = await res.text().catch(()=> "");
@@ -3445,9 +3649,9 @@ async function getVendorRequests(vendorId) {
     .get();
   if (error) { console.error("[PLUJ] getVendorRequests failed:", error); return []; }
   const rows = data || [];
-  console.log(`[PLUJ] getVendorRequests: vendor_id=${vendorId} → ${rows.length} row(s)`);
+  devLog(`[PLUJ] getVendorRequests: vendor_id=${vendorId} → ${rows.length} row(s)`);
   if (rows.length === 0) {
-    console.log("[PLUJ] 0 requests. If you KNOW one exists, in Supabase run:\n" +
+    devLog("[PLUJ] 0 requests. If you KNOW one exists, in Supabase run:\n" +
       "  select id, vendor_id, status from booking_requests order by created_at desc limit 5;\n" +
       "and confirm a row's vendor_id EXACTLY equals the id above. If it differs, the request was addressed to a different id (RLS then hides it).");
   }
@@ -3457,8 +3661,7 @@ async function getVendorRequests(vendorId) {
   const nameById = {};
   if (userIds.length) {
     try {
-      const { data: people } = await sb.from("profiles")
-        .select("id, display_name, full_name").in("id", userIds).get();
+      const people = await partyNames(userIds);
       (people || []).forEach(p => { nameById[p.id] = p.display_name || p.full_name || null; });
     } catch { /* names are best-effort — the request still shows */ }
   }
@@ -3833,10 +4036,17 @@ function readEmailLinkFromUrl() {
     return { type: h.get("type") || "signup",
              error: d ? d.charAt(0).toUpperCase() + d.slice(1) + "." : "This link has expired or was already used." };
   }
+  /* A session handed over in the address itself (#access_token=...) is no
+     longer accepted (15 Nov 2026 security review). Anyone can build such a
+     link with THEIR OWN session and send it to someone else, who would then be
+     signed in to the sender's account without noticing and type their own
+     details into it. PLUJ's emails stopped sending these on 30 Sep, and the
+     tokens in them expired within the hour, so a real person only sees this
+     with a very old email. */
   const at = h.get("access_token");
   const ht = h.get("type");
   if (at && EMAIL_LINK_TYPES.includes(ht)) {
-    return { type: ht, accessToken: at, refreshToken: h.get("refresh_token") || null };
+    return { type: ht, error: "This link is from an older email." };
   }
   return null;
 }
@@ -4263,9 +4473,9 @@ async function getConversations(userId) {
   const others = [...new Set(rows.map(r => (r.a_id === userId ? r.b_id : r.a_id)))].filter(Boolean);
   const names = {};
   if (others.length) {
-    const [{ data: vps }, { data: profs }] = await Promise.all([
+    const [{ data: vps }, profs] = await Promise.all([
       sb.from("vendor_directory").select("id, business_name, biz_legal").in("id", others).get(),
-      sb.from("profiles").select("id, display_name, full_name").in("id", others).get(),
+      partyNames(others),
     ]);
     (profs || []).forEach(p => { names[p.id] = p.display_name || p.full_name || "Member"; });
     (vps   || []).forEach(v => { names[v.id] = v.business_name || v.biz_legal || names[v.id] || "Vendor"; });
@@ -4353,7 +4563,7 @@ export async function getVendorInquiries(vendorId) {
   const ids = [...new Set((data || []).map(r => r.user_id))].filter(Boolean);
   const names = {};
   if (ids.length) {
-    const { data: profs } = await sb.from("profiles").select("id, display_name, full_name").in("id", ids).get();
+    const profs = await partyNames(ids);
     (profs || []).forEach(p => { names[p.id] = p.display_name || p.full_name || "Host"; });
   }
   return (data || []).map(r => ({
@@ -10394,7 +10604,7 @@ function VendorProfile({ vendor, user, reviews, onBack, onAddReview, onVendorRep
         getPublicServices(vendorId).catch(() => []),
       ]);
       if (cancel) return;
-      console.log(`[PLUJ] VendorProfile load: rawId=${rawId} → vendorId=${vendorId} cardName="${vendor.name || ""}" cardService="${vendor.serviceName || ""}" | profile=${prof ? "OK" : "none"} services=${(svcs||[]).length}`);
+      devLog(`[PLUJ] VendorProfile load: rawId=${rawId} → vendorId=${vendorId} cardName="${vendor.name || ""}" cardService="${vendor.serviceName || ""}" | profile=${prof ? "OK" : "none"} services=${(svcs||[]).length}`);
       setFull(prof);
       const list = Array.isArray(svcs) ? svcs : [];
       setServices(list);
@@ -12951,20 +13161,7 @@ export function EmailLinkScreen({ link, onSession, onFinish, onRequestNew }) {
   const [pw2,   setPw2]   = useState("");
   const [who,   setWho]   = useState(null);
 
-  /* Old-style links (from emails sent before 30 Sep) arrive with the session
-     already in the URL: Supabase confirmed the address before redirecting.
-     Nothing to press for a signup — sign them in and say so. */
-  useEffect(() => {
-    if (link.accessToken && !recovery) {
-      (async () => {
-        const u = await onSession({ access_token: link.accessToken, refresh_token: link.refreshToken });
-        setWho(u); setStage("done");
-      })();
-    }
-  }, []);
-
   async function getSession() {
-    if (link.accessToken) return { access_token: link.accessToken, refresh_token: link.refreshToken };
     const { data, error } = await sb.verifyTokenHash(link.type, link.tokenHash);
     if (error || !data?.access_token) {
       throw new Error(typeof error === "string" ? error
