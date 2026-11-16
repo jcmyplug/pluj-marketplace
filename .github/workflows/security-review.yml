@@ -1,9 +1,14 @@
 name: Claude security review
 
 # Security item 19 (15 Nov 2026). Anthropic's Claude Code security reviewer
-# (github.com/anthropics/claude-code-security-review) reads every pull request
-# and comments on likely vulnerabilities: injection, auth and permission
-# mistakes, exposed secrets, XSS, unsafe uploads and so on.
+# (github.com/anthropics/claude-code-security-review) reads a pull request and
+# comments on likely vulnerabilities: injection, auth and permission mistakes,
+# exposed secrets, XSS, unsafe uploads and so on.
+#
+# ON REQUEST ONLY (16 Nov 2026): each review is paid from the Anthropic Console
+# credit, so it does not run by itself. It runs when someone adds the label
+# "security-review" to a pull request (on the pull request page: Labels ->
+# security-review). Adding the label again later reviews the newest code again.
 #
 # It needs one secret, CLAUDE_API_KEY (Repository settings -> Secrets and
 # variables -> Actions -> New repository secret), from console.anthropic.com.
@@ -16,6 +21,7 @@ name: Claude security review
 
 on:
   pull_request:
+    types: [labeled]
 
 permissions:
   contents: read
@@ -27,7 +33,9 @@ concurrency:
 
 jobs:
   security-review:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.label.name == 'security-review' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -53,6 +61,7 @@ jobs:
         if: steps.key.outputs.present == 'true'
         with:
           comment-pr: true
+          run-every-commit: true
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           exclude-directories: "node_modules,build,test-results,playwright-report"
 
