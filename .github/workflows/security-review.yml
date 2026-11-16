@@ -55,3 +55,20 @@ jobs:
           comment-pr: true
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           exclude-directories: "node_modules,build,test-results,playwright-report"
+
+      # The action reports success even when Claude could not run (16 Nov 2026:
+      # "Credit balance is too low"). Turn that into a visible failure so a
+      # green tick always means the review really happened.
+      - name: Did the review really run?
+        if: steps.key.outputs.present == 'true'
+        run: |
+          f="$RUNNER_WORKSPACE/../_actions/anthropics/claude-code-security-review/main/claudecode/claudecode-results.json"
+          if [ -f "$f" ] && grep -q '"error"' "$f"; then
+            if grep -q 'Credit balance is too low' "$f"; then
+              echo "::error::The Claude security review could not run: the Anthropic account behind CLAUDE_API_KEY has no credit. Add credit at console.anthropic.com (Billing)."
+            else
+              echo "::error::The Claude security review could not run. The step above shows why."
+            fi
+            exit 1
+          fi
+          echo "Claude security review finished."
