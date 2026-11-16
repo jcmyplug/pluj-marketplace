@@ -695,3 +695,8 @@ create or replace trigger trg_aa_stamp_created before insert on public.favorites
 create or replace trigger trg_aa_stamp_created before insert on public.inquiries       for each row execute function public.stamp_created_now();
 create or replace trigger trg_aa_stamp_created before insert on public.vendor_photos   for each row execute function public.stamp_created_now();
 create or replace trigger trg_aa_stamp_created before insert on public.vendor_services for each row execute function public.stamp_created_now();
+
+-- ── H2 part 2, applied after the site switched to party_names() ─────────────
+-- The people you deal with no longer read your whole profile row (email,
+-- phone, date of birth). Your own row and admins are unchanged.
+alter policy profiles_counterparty_select on public.profiles using (false);
