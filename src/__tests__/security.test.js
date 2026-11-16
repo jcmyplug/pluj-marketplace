@@ -17,7 +17,7 @@ describe("sniffImageType: the bytes decide, not the name", () => {
     expect(sniffImageType(bytes(0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 0x57, 0x45, 0x42, 0x50))).toBe("image/webp");
   });
   it("refuses anything else, whatever it is called", () => {
-    const text = (t) => new TextEncoder().encode(t);
+    const text = (t) => Uint8Array.from(t, (c) => c.charCodeAt(0));
     expect(sniffImageType(text("<html><script>alert(1)</script>"))).toBeNull();
     expect(sniffImageType(text("<svg onload=alert(1)>"))).toBeNull();
     expect(sniffImageType(text("%PDF-1.7"))).toBeNull();

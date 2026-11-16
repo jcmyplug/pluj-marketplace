@@ -3183,7 +3183,7 @@ async function redrawPhoto(file) {
   if (!sniffImageType(head)) return { blob: null, error: `${file.name} is not a JPEG, PNG or WebP photo.` };
 
   let bmp;
-  try { bmp = await createImageBitmap(file); }
+  try { bmp = await window.createImageBitmap(file); }
   catch { return { blob: null, error: `${file.name} could not be opened as a photo.` }; }
   const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
