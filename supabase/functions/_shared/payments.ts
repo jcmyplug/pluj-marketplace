@@ -253,6 +253,30 @@ export async function markPlanPaid(bookingId: string, paymentIntentId: string, a
   const pi = await stripe("GET", `/payment_intents/${paymentIntentId}`,
                           { expand: ["latest_charge.balance_transaction"] }, undefined, account);
   if (pi.status !== "succeeded") return pi;
+
+  /* 15 Nov 2026 security review: a correctly signed event is not enough on
+     its own. The money has to have landed on THIS booking's vendor account,
+     for THIS booking, in full. Anything else is recorded for the admins and
+     the booking is not marked paid. */
+  const { data: planRow } = await db().from("booking_payment_plans")
+    .select("vendor_id, currency, stripe_account_id").eq("booking_id", bookingId).maybeSingle();
+  const { data: vendorRow } = planRow
+    ? await db().from("vendor_profiles").select("stripe_account_id").eq("id", planRow.vendor_id).maybeSingle()
+    : { data: null };
+  const expectedAccount = planRow?.stripe_account_id || vendorRow?.stripe_account_id || null;
+  const refuse = async (why: string) => {
+    await tellAdmins("payment_problem", "⚠️ A payment did not match its booking",
+      `Stripe reported payment ${pi.id} for booking ${bookingId}, but ${why}. The booking was NOT marked paid. Check it in Stripe and Admin → Payments.`,
+      bookingId);
+    return pi;
+  };
+  if (!planRow) return refuse("the booking has no payment plan");
+  if (!expectedAccount || expectedAccount !== account) return refuse("it arrived on a different Stripe account than the vendor's");
+  if (pi.metadata?.booking_id && pi.metadata.booking_id !== bookingId) return refuse("Stripe has it recorded against another booking");
+  if (planRow.currency && pi.currency && String(pi.currency).toLowerCase() !== String(planRow.currency).toLowerCase()) {
+    return refuse(`it was in ${pi.currency}, not ${planRow.currency}`);
+  }
+
   const charge = pi.latest_charge || {};
   const details: any[] = charge.balance_transaction?.fee_details || [];
   const stripeFee = details.filter((d: any) => d.type === "stripe_fee").reduce((n: number, d: any) => n + (d.amount || 0), 0);
@@ -260,6 +284,10 @@ export async function markPlanPaid(bookingId: string, paymentIntentId: string, a
   const { data: rows } = await db().from("booking_payments").select("*").eq("booking_id", bookingId)
     .in("status", ["scheduled", "failed", "processing"]).order("due_at");
   if (!rows || !rows.length) return pi;
+  const owed = rows.reduce((n: number, r: any) => n + chargedCents(r), 0);
+  if ((pi.amount_received || 0) < owed) {
+    return refuse(`Stripe received ${money(pi.amount_received || 0)} and the booking owes ${money(owed)}`);
+  }
   const fees = split(stripeFee, rows);
   const appFees = split(pi.application_fee_amount || 0, rows);
   const paidAt = new Date((charge.created || pi.created) * 1000).toISOString();

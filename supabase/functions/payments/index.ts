@@ -337,8 +337,11 @@ Deno.serve(async (req) => {
   } catch (e) {
     if (e instanceof PaymentsError) return json({ error: e.message }, e.status);
     if (e instanceof StripeError) {
+      /* Stripe's own wording stays in the function log; the browser gets a
+         plain message (15 Nov 2026 security review: raw provider errors
+         can describe accounts and internals to whoever is calling). */
       console.error("[payments] Stripe error", e.status, e.message);
-      return json({ error: `Stripe: ${e.message}` }, 502);
+      return json({ error: "The payment service could not complete this. Please try again in a minute, or write to info@pluj.us if it keeps happening." }, 502);
     }
     console.error("[payments] unexpected", e);
     return json({ error: "Something went wrong. Please try again." }, 500);
