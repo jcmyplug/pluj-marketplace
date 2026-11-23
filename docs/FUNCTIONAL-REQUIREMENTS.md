@@ -37,9 +37,9 @@ it on.
 | Role | Can |
 |---|---|
 | **Visitor** (not signed in) | Browse and search listings, filter by occasion, date, guests, area and "Habla español", read revealed reviews, see public vendor details and badges, use Build my event up to the point of sending |
-| **Host** | All of the above, plus save favourites, send booking requests and inquiries, book instantly where allowed, message vendors they have a booking or inquiry with, review vendors after the event, cancel, report a problem, deactivate or delete their account |
+| **Host** | All of the above, plus save favourites, send booking requests and inquiries, book instantly where allowed, ask a PLUJ planner to plan the whole event, message vendors they have a booking or inquiry with, review vendors after the event, cancel, report a problem, deactivate or delete their account |
 | **Vendor** | Everything a host can do, plus: a business profile, legal information, listings with options, extras, hours and availability, accept or decline requests, switch on instant booking per listing, post event recaps crediting other pros, reply to reviews |
-| **Admin** | Approve or reject vendor applications, mark badge checks, block accounts, message any user, read error reports and the ops dashboard, send the waitlist emails, switch the site public or private |
+| **Admin** | Approve or reject vendor applications, mark badge checks, block accounts, message any user, work planner requests (Admin → Planner), read error reports and the ops dashboard, send the waitlist emails, switch the site public or private |
 
 A person is one account. A vendor account is a host account with a vendor
 profile attached.
@@ -208,6 +208,18 @@ night by `sql/tests/selftest.sql`.
     booking at all** — enforced by the database, so an accidental charge is
     impossible rather than unlikely. **[DB][test]**
 
+### PLUJ planner (23 Nov 2026)
+
+32. **A planner request is seen only by the host who sent it and by admins**;
+    the team's note is admin-only. Users cannot read or write the table at
+    all: every action is a checked database function. A host has at most 3
+    open requests and sends at most 5 a day; dates from today to 3 years out,
+    budget $100 to $10,000,000, a description of 20 to 4,000 characters, and a
+    phone number when they ask to be called or texted. The host is told when
+    the team moves it on, and can cancel while it is open. **[DB]**
+    (`sql/2026-11-23-planner-requests.sql`, checks in
+    `sql/tests/2026-11-23-planner-tests.sql`.)
+
 ## 4. The main flows
 
 **Browse → request.** Visitor searches by area, date, service, occasion and
@@ -219,6 +231,15 @@ instantly). Each vendor receives a separate request.
 step per category (venue, music, food, decor, logistics, rentals, A/V…), each
 offering only vendors who fit everything chosen so far. Picking a venue fixes
 the event address. Review, then send every request at once.
+
+**PLUJ planner.** In Build my event the host can instead choose "A PLUJ
+planner builds it": the same where/when/guests step, then the kind of event,
+total budget, a description and call / text / email → log in if needed (what
+they typed is kept) → sent. The team gets a bell notice and an email, works it
+in Admin → Planner (reached out, planning, booked, closed; private note;
+message the host), and the host follows it in My Requests and gets an email
+receipt in their language. Nothing is booked or charged from the request
+itself.
 
 **Vendor.** Sign up (terms scrolled, description) → add business details →
 add legal information → PLUJ approves → profile goes live → add listings →

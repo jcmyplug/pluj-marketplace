@@ -11,6 +11,7 @@ import {
   CATEGORIES,
   CORS_CONFIG,
   MessagesPanel,
+  PlannerRequestsAdmin,
   RLS,
   SECURITY_HEADERS,
   SiteSwitch,
@@ -975,6 +976,15 @@ function AdminPanel({ user, onClose, initialTab }) {
       .then(({ data }) => setOpenProblems((data || []).length)).catch(() => {});
   }, []);
   useEffect(() => { refreshProblems(); }, [atab, refreshProblems]);
+  /* New planner requests (Build My Event → A PLUJ planner builds it), for the
+     Planner tab badge. */
+  const [newPlans, setNewPlans] = useState(0);
+  const refreshPlans = React.useCallback(() => {
+    sb.rpc("admin_planner_requests")
+      .then(({ data }) => setNewPlans((Array.isArray(data) ? data : []).filter(r => r.status === "new").length))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { refreshPlans(); }, [atab, refreshPlans]);
 
   const pendingCount = vendorApps.filter(v => v.status === "pending").length;
 
@@ -996,6 +1006,7 @@ function AdminPanel({ user, onClose, initialTab }) {
   const tabs = [
     ["accounts","👥 Accounts", 0],
     ["messages","💬 Messages", 0],
+    ["planner", "🛎 Planner", newPlans],
     ["waitlist","📬 Waitlist", 0],
     ["vendors","🏪 Vendors", pendingCount],
     ["payments","💳 Payments", openProblems],
@@ -1054,6 +1065,7 @@ function AdminPanel({ user, onClose, initialTab }) {
           {atab === "accounts" && <AdminAccounts adminId={user.id} onChanged={refreshVendorApps} />}
           {atab === "messages" && <MessagesPanel user={user} isAdmin />}
           {atab === "waitlist" && <WaitlistAdmin />}
+          {atab === "planner"  && <PlannerRequestsAdmin adminId={user.id} onChanged={refreshPlans} />}
 
           {atab === "payments" && <AdminPayments onChanged={refreshProblems} />}
 

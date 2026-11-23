@@ -23,8 +23,28 @@
    anyway. This is a real tradeoff, not an oversight.
 */
 
+import { createHmac } from "node:crypto";
+
 const SB_URL  = process.env.SUPABASE_URL      || process.env.REACT_APP_SUPABASE_URL;
 const SB_ANON = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+/* WHY THE ADDRESS IS HASHED WITH A SECRET (16 Nov 2026)
+   check_rate_limit has to be callable with the public key, so anyone can call
+   it with any key they like. If the key were "api:session:<ip>", someone who
+   knew a visitor's address could call it 60 times and lock that visitor out
+   of /api/session for the window. The key is therefore an HMAC of the address
+   with a server-only secret: the same visitor always gets the same key, and
+   nobody outside can work out what it is. RATE_LIMIT_SALT is used if set in
+   Vercel; otherwise the Resend key, which is already server-only (an HMAC
+   does not reveal its key). Without either, the plain address is used. */
+const SALT = process.env.RATE_LIMIT_SALT || process.env.RESEND_API_KEY || "";
+
+export function rateKey(route, ip) {
+  const who = SALT
+    ? createHmac("sha256", SALT).update(String(ip)).digest("hex").slice(0, 32)
+    : String(ip);
+  return "api:" + route + ":" + who;
+}
 
 /* Vercel puts the real client address first in x-forwarded-for. Everything
    after it is proxy hops and is attacker-controlled, so only the first entry
@@ -44,7 +64,7 @@ export async function rateLimit(req, res, opts) {
 
   if (!SB_URL || !SB_ANON) return true;            // misconfigured: fail open
 
-  const key = "api:" + route + ":" + clientIp(req);
+  const key = rateKey(route, clientIp(req));
 
   try {
     const r = await fetch(SB_URL + "/rest/v1/rpc/check_rate_limit", {
