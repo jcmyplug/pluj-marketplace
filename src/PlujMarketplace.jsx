@@ -779,8 +779,20 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .build-ways .go { margin-top: auto; font-weight: 700; font-size: 14.5px; color: var(--cobalt); background: #fff; border-radius: 999px; padding: 10px 18px; }
 .build-ways button + button .go { background: transparent; color: #fff; box-shadow: inset 0 0 0 1.5px #fff; }
 .dir-grid.sub { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
-.dir-grid.sub button { grid-template-columns: 1fr; }
-.dir-grid.sub .dir-name { font-size: 18px; }
+/* Service cards (23 Nov 2026): the service's icon beside its name. On hover or
+   keyboard focus the circle fills and the icon tips, so the card answers the
+   pointer before the click. */
+.dir-grid.sub button { grid-template-columns: auto 1fr; grid-template-areas: "ic name" "ic subs"; column-gap: 14px; }
+.dir-grid.sub button .ic { grid-area: ic; width: 48px; height: 48px; }
+.dir-grid.sub .dir-name { grid-area: name; font-size: 18px; }
+.dir-grid.sub .dir-subs { grid-area: subs; }
+.dir-grid.sub button .ic svg { transition: transform 240ms var(--ease-out); }
+.dir-grid.sub button:focus-visible .ic { background: var(--cobalt); color: #fff; }
+.dir-grid.sub button:hover .ic svg, .dir-grid.sub button:focus-visible .ic svg { transform: scale(1.12) rotate(-6deg); }
+@media (prefers-reduced-motion: reduce) {
+  .dir-grid.sub button .ic svg { transition: none; }
+  .dir-grid.sub button:hover .ic svg, .dir-grid.sub button:focus-visible .ic svg { transform: none; }
+}
 @media (max-width: 720px) {
   .dir-head { grid-template-columns: 1fr; }
   .dir-head p { justify-self: start; }
@@ -909,6 +921,10 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .dir-name { font-size: 16px; }
   .dir-subs { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .dir-grid.sub .dir-name { font-size: 15px; }
+  /* Phones: a smaller icon beside the name, the description underneath. */
+  .dir-grid.sub button { grid-template-areas: "ic name" "subs subs"; align-items: center; column-gap: 10px; }
+  .dir-grid.sub button .ic { width: 38px; height: 38px; }
+  .dir-grid.sub button .ic svg { width: 20px; height: 20px; }
 }
 
 /* Phones: the logo mark alone, and the sticky search collapses to one row. */
@@ -6641,6 +6657,8 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
   const [actionMsg,   setActionMsg]   = useState("");
   const [modifying,   setModifying]   = useState(null);   // request being edited
   const [selectedReq, setSelectedReq] = useState(null);
+  /* Planner requests shown above the list (PlannerRequestsMine). */
+  const [plannerCount, setPlannerCount] = useState(0);
 
   /* ── Account lifecycle (requirement #42) ────────────────────────────
      Deactivation is reversible and keeps everything. Deletion is permanent,
@@ -7015,6 +7033,9 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
           {/* ── REQUESTS TAB ── */}
           {tab === "requests" && (
             <div>
+              {/* Events a PLUJ planner is building for them (only if any). */}
+              <PlannerRequestsMine user={user} onCount={setPlannerCount} />
+
               {/* List / Calendar toggle */}
               <div style={{ display:"flex", gap:6, marginBottom:14, background:"#F3F4F6", borderRadius:10, padding:3 }}>
                 {[["list","☰ List"],["calendar","📅 Calendar"]].map(([v,l]) => (
@@ -7039,7 +7060,7 @@ function AccountPanel({ user, justSent, allCards, onClose, onLogout, onListingSa
                 <div style={{ textAlign:"center", padding:"28px 0", color:C.lightGray }}>
                   <div style={{ fontSize:36, marginBottom:8 }}><IcoBadge n="inbox" size={52} /></div>
                   <p style={{ fontSize:13, fontWeight:600 }}>
-                    {user.type === "vendor" ? "No booking requests yet" : "No requests yet"}
+                    {user.type === "vendor" ? "No booking requests yet" : plannerCount > 0 ? "No vendor requests yet" : "No requests yet"}
                   </p>
                   <p style={{ fontSize:11, marginTop:4, lineHeight:1.6 }}>
                     {user.type === "vendor"
@@ -7725,6 +7746,10 @@ function bookingIdOf(n) { return (n && (n.reqId || n.request_id)) || null; }
 function notifTarget(n) {
   const t = String((n && n.type) || "");
   if (t === "vendor_application") return { admin: true, adminTab: "vendors" };
+  /* A host asked PLUJ to plan their event (or cancelled): Admin → Planner.
+     The host's own updates land on My Requests, where the request shows. */
+  if (t === "planner_request") return { admin: true, adminTab: "planner" };
+  if (t === "planner_update")  return { tab: "requests", id: null };
   /* Payment problems open Admin → Payments for admins; anyone else (e.g. the
      host told their report was reviewed) lands on My Requests. */
   if (t === "payment_problem") return { admin: true, adminTab: "payments", tab: "requests", id: bookingIdOf(n) };
@@ -8455,26 +8480,477 @@ export function EventsCalendar({ bookings, role }) {
   );
 }
 
-function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, favorites, onToggleFav, onReviewSend, onExit }) {
-  const [phase,   setPhase]   = useState("details"); // details | type | define | cats | review
+/* ─── PLUJ PLANNER: "a PLUJ planner builds it" (23 Nov 2026) ─────────────────
+   Instead of picking vendors one by one, a host can hand the whole event to
+   the PLUJ team. Build My Event's first step (where and when) is shared; this
+   form adds the kind of event, the total budget, what they have in mind and
+   how to reach them. It is saved with request_event_planner(), which checks
+   everything again, tells the team (bell + email) and emails the host a
+   receipt. The team works it in Admin → Planner; the host follows it in My
+   Requests. See sql/2026-11-23-planner-requests.sql. */
+const PLAN_DRAFT_KEY = "pluj_plan_draft";
+const PLAN_BUDGETS = [1000, 2500, 5000, 10000, 25000, 50000];
+const PLAN_STATUS = {
+  new:       ["Sent to PLUJ",       C.cobalt,   C.orangeSoft],
+  contacted: ["Planner reached out", C.cobalt,  C.orangeSoft],
+  planning:  ["Planning",            "#6D28D9", "#F5F3FF"],
+  booked:    ["Booked",              C.green,   C.greenSoft],
+  closed:    ["Closed",              C.midGray, C.bgAlt],
+  cancelled: ["Cancelled",           C.midGray, C.bgAlt],
+};
+const PLAN_CONTACTS = [["call", "phone", "Call me"], ["text", "chat", "Text me"], ["email", "mail", "Email me"]];
+
+/* Only what the host typed, kept in this browser while they log in or sign
+   up, and only for a week. Cleared once the request is sent. */
+function loadPlanDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(PLAN_DRAFT_KEY) || "null");
+    if (!d || typeof d !== "object" || !(Date.now() - Number(d.savedAt || 0) < 7 * 864e5)) return null;
+    const s = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+    return { city: s(d.city, 80), date: s(d.date, 10), endDate: s(d.endDate, 10), start: s(d.start, 5), end: s(d.end, 5),
+             guests: s(String(d.guests || ""), 6), eventType: s(d.eventType, 60), otherType: s(d.otherType, 60),
+             budget: s(String(d.budget || ""), 8), details: s(d.details, 4000),
+             contact: ["call", "text", "email"].includes(d.contact) ? d.contact : "", phone: s(d.phone, 30) };
+  } catch { return null; }
+}
+function savePlanDraft(d) { try { localStorage.setItem(PLAN_DRAFT_KEY, JSON.stringify({ ...d, savedAt: Date.now() })); } catch { /* private mode */ } }
+function clearPlanDraft() { try { localStorage.removeItem(PLAN_DRAFT_KEY); } catch { /* private mode */ } }
+const fmtDollars = n => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+function planWhen(r) {
+  const d = r.event_date || r.date;
+  if (!d) return "";
+  const day = new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric", year:"numeric" });
+  const t = fmtTimeRange(r.start_time || r.start, r.end_time || r.end);
+  return t ? `${day}, ${t}` : day;
+}
+
+function PlannerRequestForm({ details, initial, user, onNeedLogin, onOpenRequests, onBack, onExit }) {
+  const [eventType, setEventType] = useState(initial?.eventType || "");
+  const [otherType, setOtherType] = useState(initial?.otherType || "");
+  const [budget,    setBudget]    = useState(initial?.budget || "");
+  const [about,     setAbout]     = useState(initial?.details || "");
+  const [contact,   setContact]   = useState(initial?.contact || "");
+  const [phone,     setPhone]     = useState(initial?.phone || (user && user.phone) || "");
+  const [busy,      setBusy]      = useState(false);
+  const [err,       setErr]       = useState("");
+  const [sent,      setSent]      = useState(null);   // { contact }
+
+  /* Logged in from here: use the phone on their account if they left it blank. */
+  useEffect(() => { if (user && user.phone && !phone) setPhone(user.phone); }, [user?.id]);
+
+  const typeLabel = eventType === "Other" ? otherType.trim() : eventType;
+  const digits = phone.replace(/\D/g, "");
+  const needsPhone = contact === "call" || contact === "text";
+  const perGuest = Number(budget) > 0 && Number(details.guests) > 0 ? Number(budget) / Number(details.guests) : 0;
+  const missing =
+    !typeLabel ? "Choose the kind of event" :
+    !(Number(budget) >= 100) ? "Enter your budget" :
+    about.trim().length < 20 ? "Tell us about your event" :
+    !contact ? "Choose how we reach you" :
+    needsPhone && digits.length < 10 ? "Enter your phone number" : "";
+
+  const draft = () => ({ ...details, eventType, otherType, budget: String(budget || ""), details: about, contact, phone });
+
+  async function send() {
+    if (missing || busy) return;
+    if (!user) { savePlanDraft(draft()); onNeedLogin && onNeedLogin(); return; }
+    setBusy(true); setErr("");
+    if (IS_PREVIEW) { setBusy(false); setSent({ contact }); clearPlanDraft(); return; }
+    const { data, error } = await sb.rpc("request_event_planner", {
+      p_event_type: typeLabel, p_city: details.city, p_event_date: details.date,
+      p_end_date: details.endDate || null, p_start_time: details.start || null, p_end_time: details.end || null,
+      p_guests: Number(details.guests) || 0, p_budget: Math.round(Number(budget) || 0),
+      p_details: about.trim(), p_contact: contact, p_phone: phone.trim() || null, p_lang: getLang(),
+    });
+    setBusy(false);
+    if (error || !data) {
+      setErr(String((error && error.message) || "That didn't send. Please try again.").replace(/^.*?ERROR:\s*/, ""));
+      return;
+    }
+    clearPlanDraft();
+    setSent({ contact });
+  }
+
+  const label = { display:"block", fontSize:13, fontWeight:800, marginBottom:7 };
+  const chip = on => ({ padding:"8px 15px", borderRadius:99, fontSize:12.5, fontWeight:700, cursor:"pointer",
+                        border:`1.5px solid ${on ? C.orange : C.border}`, background: on ? "#EEF2FF" : "#fff",
+                        color: on ? C.orange : C.midGray, display:"inline-flex", alignItems:"center", gap:6 });
+  const input = filled => ({ width:"100%", height:44, padding:"0 12px", borderRadius:11, fontSize:14, boxSizing:"border-box",
+                             fontFamily:"inherit", border:`1.5px solid ${filled ? C.orange : C.border}`, background:"#fff" });
+
+  if (sent) {
+    const how = sent.contact === "call" ? "call you" : sent.contact === "text" ? "text you" : "email you";
+    return (
+      <div className="fade-up" style={{ maxWidth:560, margin:"0 auto", textAlign:"center" }} data-testid="planner-sent">
+        <div style={{ marginBottom:12 }}><IcoBadge n="checkCircle" size={64} /></div>
+        <h1 style={{ fontFamily:"var(--display)", fontSize:28, fontWeight:900, margin:"0 0 8px" }}>Your planner is on it</h1>
+        <p style={{ fontSize:14.5, color:C.midGray, margin:"0 auto 22px", lineHeight:1.6, maxWidth:"46ch" }}>
+          {`A PLUJ planner will ${how} within 1 business day. We also emailed you a copy. You can follow it in My Requests.`}
+        </p>
+        <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+          {onOpenRequests && (
+            <button type="button" onClick={onOpenRequests} className="btn"
+              style={{ padding:"12px 22px", borderRadius:12, background:C.orange, color:"#fff", fontSize:14, fontWeight:800, boxShadow:C.shadowButton }}>
+              See My Requests
+            </button>
+          )}
+          <button type="button" onClick={onExit} className="btn"
+            style={{ padding:"12px 22px", borderRadius:12, border:`1px solid ${C.border}`, background:"#fff", color:C.black, fontSize:14, fontWeight:700 }}>
+            Browse vendors
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-up" style={{ maxWidth:640, margin:"0 auto" }} data-testid="planner-form">
+      <div style={{ textAlign:"center", marginBottom:22 }}>
+        <button type="button" onClick={onBack} className="btn"
+          style={{ background:"none", border:"none", fontSize:13, color:C.midGray, fontWeight:600, marginBottom:8 }}>
+          ← Back to details
+        </button>
+        <h1 style={{ fontFamily:"var(--display)", fontSize:30, fontWeight:900, margin:"0 0 6px" }}>Your PLUJ planner</h1>
+        <p style={{ fontSize:14, color:C.midGray, margin:0 }}>
+          {`${details.city} · ${planWhen(details)} · ${details.guests} guests`}
+        </p>
+      </div>
+
+      {/* Kind of event */}
+      <p style={label}><Ico n="party" /> What are you planning?</p>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: eventType === "Other" ? 9 : 18 }}>
+        {EVENT_PACKAGES.map(p => (
+          <button type="button" key={p.id} onClick={() => setEventType(p.label)} aria-pressed={eventType === p.label}
+            className="btn" style={chip(eventType === p.label)}>
+            <Ico n={iconOf(p.icon)} /> {p.label}
+          </button>
+        ))}
+        <button type="button" onClick={() => setEventType("Other")} aria-pressed={eventType === "Other"}
+          className="btn" style={chip(eventType === "Other")}>
+          <Ico n="plus" /> Other
+        </button>
+      </div>
+      {eventType === "Other" && (
+        <input value={otherType} onChange={e => setOtherType(e.target.value.slice(0, 60))} maxLength={60}
+          placeholder="e.g. Anniversary dinner, church gala" aria-label="Kind of event"
+          style={{ ...input(!!otherType.trim()), marginBottom:18 }} />
+      )}
+
+      {/* Budget */}
+      <p style={label}><Ico n="dollar" /> What's your total budget?</p>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:9 }}>
+        {PLAN_BUDGETS.map(n => (
+          <button type="button" key={n} onClick={() => setBudget(String(n))} aria-pressed={String(budget) === String(n)}
+            className="btn" style={chip(String(budget) === String(n))}>
+            {fmtDollars(n)}
+          </button>
+        ))}
+      </div>
+      <div style={{ position:"relative", marginBottom:6 }}>
+        <span aria-hidden="true" style={{ position:"absolute", left:13, top:12, fontSize:14, color:C.midGray, fontWeight:700 }}>$</span>
+        <input inputMode="numeric" value={budget} aria-label="Total budget in dollars"
+          onChange={e => setBudget(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+          placeholder="or type your total budget"
+          style={{ ...input(Number(budget) > 0), paddingLeft:26 }} />
+      </div>
+      <p style={{ fontSize:12.5, color:C.midGray, margin:"0 0 18px", lineHeight:1.5 }}>
+        Everything included: venue, food, music, decor. Your planner works within it.
+        {perGuest > 0 && <> <span style={{ color:C.black, fontWeight:700 }}>{`About ${fmtDollars(perGuest)} per guest.`}</span></>}
+      </p>
+
+      {/* About the event */}
+      <label htmlFor="plan-about" style={label}><Ico n="pencil" /> Tell us about your event</label>
+      <textarea id="plan-about" value={about} onChange={e => setAbout(e.target.value.slice(0, 4000))} maxLength={4000} rows={6}
+        placeholder="The occasion, the style or theme, your must-haves, anything you already have (like the venue or the cake), and anything to avoid."
+        style={{ width:"100%", padding:"11px 12px", borderRadius:11, fontSize:14, lineHeight:1.5, boxSizing:"border-box",
+                 fontFamily:"inherit", resize:"vertical", minHeight:130,
+                 border:`1.5px solid ${about.trim().length >= 20 ? C.orange : C.border}` }} />
+      <p style={{ fontSize:12, color:C.midGray, margin:"4px 0 18px", textAlign:"right" }}>
+        {about.trim().length < 20 ? "A few sentences is perfect." : `${about.length} / 4000`}
+      </p>
+
+      {/* How to reach them */}
+      <p style={label}><Ico n="chat" /> How should your planner reach you?</p>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: needsPhone ? 9 : 18 }}>
+        {PLAN_CONTACTS.map(([id, icon, l]) => (
+          <button type="button" key={id} onClick={() => setContact(id)} aria-pressed={contact === id}
+            className="btn" style={chip(contact === id)}>
+            <Ico n={icon} /> {l}
+          </button>
+        ))}
+      </div>
+      {needsPhone && (
+        <input type="tel" inputMode="tel" autoComplete="tel" value={phone} aria-label="Phone number"
+          onChange={e => setPhone(e.target.value.replace(/[^0-9 ()+.\-]/g, "").slice(0, 30))}
+          placeholder="Phone number with area code"
+          style={{ ...input(digits.length >= 10), marginBottom:18 }} />
+      )}
+
+      {/* What happens next: a real sequence, so it is numbered. */}
+      <div style={{ background:C.mist, borderRadius:14, padding:"14px 16px", marginBottom:18 }}>
+        <p style={{ margin:"0 0 8px", fontSize:13, fontWeight:800, color:C.black }}>What happens next</p>
+        <ol style={{ margin:0, paddingLeft:18, fontSize:13, color:C.darkGray, lineHeight:1.65 }}>
+          <li>A PLUJ planner contacts you within 1 business day.</li>
+          <li>Together you set the plan: vendors, timeline and budget.</li>
+          <li>Nothing is booked or charged without your OK.</li>
+        </ol>
+      </div>
+
+      {err && (
+        <p role="alert" style={{ background:C.redSoft, color:"#B91C1C", borderRadius:10, padding:"10px 12px",
+                                 fontSize:13, fontWeight:600, margin:"0 0 12px" }}>{err}</p>
+      )}
+
+      <button type="button" onClick={send} disabled={!!missing || busy} className="btn" data-testid="planner-send"
+        style={{ width:"100%", padding:"14px 0", borderRadius:13, border:"none",
+                 background: missing ? "#E5E7EB" : C.orange, color: missing ? C.lightGray : "#fff",
+                 fontSize:15, fontWeight:800, boxShadow: missing ? "none" : C.shadowButton }}>
+        {busy ? "Sending…" : missing ? missing : user ? "Send to a PLUJ planner" : "Log in to send"}
+      </button>
+      {!user && !missing && (
+        <p style={{ fontSize:12.5, color:C.midGray, textAlign:"center", margin:"8px 0 0" }}>
+          A free PLUJ account lets your planner reach you. What you typed here is kept.
+        </p>
+      )}
+      <button type="button" onClick={onExit} className="btn"
+        style={{ width:"100%", marginTop:10, padding:"10px 0", borderRadius:11, border:`1px solid ${C.border}`,
+                 background:"#fff", color:C.midGray, fontSize:13, fontWeight:600 }}>
+        <Ico n="x" /> Exit
+      </button>
+    </div>
+  );
+}
+
+/* The host's own planner requests, at the top of My Requests. Nothing shows
+   until they have one. */
+function PlannerRequestsMine({ user, onCount }) {
+  const [rows, setRows] = useState([]);
+  const [msg,  setMsg]  = useState("");
+  const load = React.useCallback(() => {
+    if (IS_PREVIEW || !user) return;
+    sb.rpc("my_planner_requests").then(({ data }) => {
+      const list = Array.isArray(data) ? data : [];
+      setRows(list);
+      if (onCount) onCount(list.length);
+    }).catch(() => {});
+  }, [user?.id]);
+  useEffect(() => { load(); }, [load]);
+  if (!rows.length) return null;
+
+  async function cancel(r) {
+    if (!window.confirm(`Cancel your planner request for your ${String(r.event_type).toLowerCase()}?`)) return;
+    const { error } = await sb.rpc("cancel_planner_request", { p_id: r.id });
+    setMsg(error ? String(error.message || "Couldn't cancel.").replace(/^.*?ERROR:\s*/, "") : "Cancelled. The PLUJ team has been told.");
+    load();
+  }
+
+  return (
+    <div style={{ marginBottom:16 }} data-testid="planner-mine">
+      <p style={{ margin:"0 0 8px", fontSize:12, fontWeight:800, color:C.black, display:"flex", alignItems:"center", gap:6 }}>
+        <Ico n="concierge" /> PLUJ planner
+      </p>
+      {msg && <p style={{ fontSize:12, color:C.darkGray, margin:"0 0 8px" }}>{msg}</p>}
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {rows.map(r => {
+          const st = PLAN_STATUS[r.status] || PLAN_STATUS.new;
+          const open = ["new", "contacted", "planning"].includes(r.status);
+          return (
+            <div key={r.id} style={{ background:C.mist, border:`1px solid ${C.border}`, borderRadius:14, padding:"12px 14px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"flex-start" }}>
+                <p style={{ margin:0, fontSize:13, fontWeight:800, color:C.black }} data-no-translate={!EVENT_PACKAGES.some(p => p.label === r.event_type) || undefined}>{r.event_type}</p>
+                <span style={{ fontSize:10.5, fontWeight:800, color:st[1], background:st[2], borderRadius:99, padding:"3px 8px", whiteSpace:"nowrap" }}>{st[0]}</span>
+              </div>
+              <p style={{ margin:"4px 0 0", fontSize:11.5, color:C.midGray, lineHeight:1.5 }}>
+                {`${planWhen(r)} · ${r.city} · ${r.guests} guests · ${fmtDollars(r.budget)}`}
+              </p>
+              {open && (
+                <button type="button" onClick={() => cancel(r)} className="btn"
+                  style={{ marginTop:8, background:"none", border:"none", padding:0, fontSize:11.5, fontWeight:700, color:C.midGray, textDecoration:"underline" }}>
+                  Cancel request
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Admin → Planner: every request, newest first among the new ones. The team
+   moves each along (the host is told), keeps a private note, and can open a
+   PLUJ conversation with the host. */
+export function PlannerRequestsAdmin({ adminId, onChanged }) {
+  const [rows,   setRows]   = useState(null);
+  const [err,    setErr]    = useState("");
+  const [filter, setFilter] = useState("open");
+  const [notes,  setNotes]  = useState({});
+  const [msgFor, setMsgFor] = useState(null);
+  const [msg,    setMsg]    = useState("");
+  const [busy,   setBusy]   = useState("");
+  const [flash,  setFlash]  = useState("");
+
+  async function load() {
+    if (IS_PREVIEW) { setRows([]); return; }
+    const { data, error } = await sb.rpc("admin_planner_requests");
+    if (error) { setErr(error.message || "Couldn't load planner requests."); return; }
+    setErr(""); setRows(Array.isArray(data) ? data : []);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function update(r, status, note, quiet) {
+    setBusy(r.id); if (!quiet) setFlash("");
+    const { error } = await sb.rpc("admin_update_planner_request", { p_id: r.id, p_status: status || null, p_note: note == null ? null : note });
+    setBusy("");
+    if (error) { setFlash(error.message || "Couldn't save."); return; }
+    if (!quiet) setFlash(status ? `Marked "${(PLAN_STATUS[status] || [status])[0]}". The host was told.` : "Note saved.");
+    if (note != null) setNotes(n => { const c = { ...n }; delete c[r.id]; return c; });
+    await load();
+    onChanged && onChanged();
+  }
+
+  async function sendToHost(r) {
+    if (!msg.trim()) return;
+    setBusy(r.id); setFlash("");
+    const conv = await startConversation({ otherId: r.user_id, kind: "admin", selfId: adminId,
+                                           subject: `Your ${String(r.event_type).toLowerCase()}` });
+    if (!conv.ok) { setBusy(""); setFlash(conv.error || "Couldn't start the conversation."); return; }
+    const sent = await sendMessage(conv.id, adminId, msg.trim());
+    setBusy("");
+    if (!sent.ok) { setFlash(sent.error || "Couldn't send."); return; }
+    setMsg(""); setMsgFor(null);
+    setFlash("Message sent. They can reply in Messages.");
+    if (r.status === "new") update(r, "contacted", null, true);
+  }
+
+  const box  = { border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:12, background:"#fff" };
+  const pill = on => ({ border:`1px solid ${on ? C.cobalt : C.border}`, background: on ? C.orangeSoft : "#fff",
+                        color: on ? C.cobalt : C.darkGray, borderRadius:99, padding:"5px 11px", fontSize:12, fontWeight:700, cursor:"pointer" });
+  const row  = (k, v) => v ? (
+    <div style={{ display:"flex", gap:10, fontSize:12.5, padding:"3px 0" }}>
+      <span style={{ color:C.midGray, minWidth:78 }}>{k}</span>
+      <span style={{ color:C.black, fontWeight:600, minWidth:0, overflowWrap:"anywhere" }}>{v}</span>
+    </div>) : null;
+
+  if (err)   return <div style={{ ...box, color:C.red, fontSize:13 }}>{err}</div>;
+  if (!rows) return <div style={{ ...box, fontSize:13, color:C.midGray }}>Loading planner requests…</div>;
+
+  const isOpen = r => ["new", "contacted", "planning"].includes(r.status);
+  const list = rows.filter(r => filter === "all" ? true : filter === "open" ? isOpen(r) : filter === "booked" ? r.status === "booked" : !isOpen(r) && r.status !== "booked");
+  const counts = { open: rows.filter(isOpen).length, booked: rows.filter(r => r.status === "booked").length,
+                   closed: rows.filter(r => !isOpen(r) && r.status !== "booked").length, all: rows.length };
+
+  return (
+    <div data-testid="planner-admin">
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+        <span style={{ fontSize:16 }}><Ico n="concierge" /></span>
+        <h3 style={{ margin:0, fontSize:14, fontWeight:800 }}>Planner requests</h3>
+        <button type="button" onClick={load} className="btn" style={{ ...pill(false), marginLeft:"auto" }}><Ico n="refresh" /> Refresh</button>
+      </div>
+      <p style={{ margin:"0 0 12px", fontSize:12.5, color:C.midGray, lineHeight:1.5 }}>
+        Hosts who asked PLUJ to plan their whole event. They were told a planner contacts them within 1 business day.
+      </p>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+        {[["open","Open"],["booked","Booked"],["closed","Closed"],["all","All"]].map(([k, l]) => (
+          <button type="button" key={k} onClick={() => setFilter(k)} style={pill(filter === k)}>{l} {counts[k]}</button>
+        ))}
+      </div>
+      {flash && <p style={{ fontSize:12.5, fontWeight:700, color:C.black, margin:"0 0 10px" }}>{flash}</p>}
+      {!list.length && <div style={{ ...box, fontSize:13, color:C.midGray }}>
+        {rows.length ? "Nothing here." : "No requests yet. They arrive here from Build My Event → A PLUJ planner builds it."}</div>}
+
+      {list.map(r => {
+        const st = PLAN_STATUS[r.status] || PLAN_STATUS.new;
+        const noteVal = notes[r.id] !== undefined ? notes[r.id] : (r.admin_note || "");
+        const contactHow = r.contact === "call" ? "Call" : r.contact === "text" ? "Text" : "Email";
+        return (
+          <div key={r.id} style={{ ...box, borderColor: r.status === "new" ? C.orangeBorder : C.border }}>
+            <div style={{ display:"flex", gap:8, alignItems:"flex-start", marginBottom:6 }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={{ margin:0, fontSize:14, fontWeight:800, color:C.black }} data-no-translate>{r.event_type} · {r.guests} guests · {fmtDollars(r.budget)}</p>
+                <p style={{ margin:"2px 0 0", fontSize:12, color:C.midGray }} data-no-translate>{r.when_text} · {r.city}</p>
+              </div>
+              <span style={{ fontSize:11, fontWeight:800, color:st[1], background:st[2], borderRadius:99, padding:"3px 8px", whiteSpace:"nowrap" }}>{st[0]}</span>
+            </div>
+
+            <p data-no-translate style={{ margin:"8px 0", padding:"10px 12px", background:C.mist, borderRadius:10, fontSize:13, lineHeight:1.55,
+                                         color:C.black, whiteSpace:"pre-wrap", overflowWrap:"anywhere" }}>{r.details}</p>
+
+            {row("Host", r.host_name)}
+            {row("Email", r.host_email && <a href={`mailto:${r.host_email}`} style={{ color:C.cobalt }} data-no-translate>{r.host_email}</a>)}
+            {row("Phone", (r.phone || r.host_phone) && <a href={`tel:${String(r.phone || r.host_phone).replace(/[^0-9+]/g, "")}`} style={{ color:C.cobalt }} data-no-translate>{r.phone || r.host_phone}</a>)}
+            {row("Reach by", `${contactHow} · ${r.lang === "es" ? "Spanish" : "English"}`)}
+            {row("Sent", new Date(r.created_at).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }))}
+            {row("Handled by", r.assigned_name)}
+
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0 8px" }}>
+              {["contacted", "planning", "booked", "closed"].map(s => (
+                <button type="button" key={s} disabled={busy === r.id || r.status === s}
+                  onClick={() => update(r, s, null)} style={{ ...pill(r.status === s), opacity: busy === r.id ? 0.5 : 1 }}>
+                  {PLAN_STATUS[s][0]}
+                </button>
+              ))}
+              <button type="button" onClick={() => { setMsgFor(msgFor === r.id ? null : r.id); setMsg(""); }}
+                style={{ ...pill(msgFor === r.id), marginLeft:"auto" }}><Ico n="chat" /> Message host</button>
+            </div>
+
+            {msgFor === r.id && (
+              <div style={{ marginBottom:8 }}>
+                <textarea value={msg} onChange={e => setMsg(e.target.value.slice(0, 4000))} rows={3}
+                  placeholder="Hi! I'm your PLUJ planner. When is a good time to talk about your event?"
+                  style={{ width:"100%", boxSizing:"border-box", border:`1px solid ${C.border}`, borderRadius:10, padding:"9px 11px",
+                           fontSize:13, fontFamily:"inherit", resize:"vertical" }} />
+                <button type="button" disabled={!msg.trim() || busy === r.id} onClick={() => sendToHost(r)}
+                  style={{ marginTop:6, border:"none", background:C.cobalt, color:"#fff", borderRadius:99, padding:"8px 14px",
+                           fontSize:12.5, fontWeight:800, cursor:"pointer", opacity: !msg.trim() ? 0.5 : 1 }}>Send message</button>
+              </div>
+            )}
+
+            <label style={{ display:"block", fontSize:12, fontWeight:700, color:C.darkGray, margin:"4px 0 4px" }}>Team note (only admins see it)</label>
+            <textarea value={noteVal} onChange={e => setNotes(n => ({ ...n, [r.id]: e.target.value.slice(0, 4000) }))} rows={2}
+              placeholder="Calls, quotes, vendors you're holding…"
+              style={{ width:"100%", boxSizing:"border-box", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 11px",
+                       fontSize:12.5, fontFamily:"inherit", resize:"vertical" }} />
+            {notes[r.id] !== undefined && notes[r.id] !== (r.admin_note || "") && (
+              <button type="button" disabled={busy === r.id} onClick={() => update(r, null, notes[r.id])}
+                style={{ marginTop:6, border:`1px solid ${C.border}`, background:"#fff", color:C.black, borderRadius:99, padding:"6px 12px",
+                         fontSize:12, fontWeight:800, cursor:"pointer" }}>Save note</button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, favorites, onToggleFav, onReviewSend, onExit,
+                            user, onNeedLogin, onOpenRequests }) {
+  /* A planner request the host started before logging in (see
+     PlannerRequestForm): bring them back to it with everything they typed. */
+  const [draft0] = useState(loadPlanDraft);
+  const draftReady = !!(draft0 && draft0.city && draft0.date && draft0.start && draft0.end && Number(draft0.guests) > 0);
+  const [phase,   setPhase]   = useState(draftReady ? "plan" : "details"); // details | type | define | cats | review | plan
+  /* "self": pick each vendor (the steps below). "planner": hand the whole
+     event to a PLUJ planner (23 Nov 2026). */
+  const [mode,    setMode]    = useState(draft0 ? "planner" : "self");
   const [eventId, setEventId] = useState(null);
   const [social,  setSocial]  = useState("");
   const [catIdx,  setCatIdx]  = useState(0);
   const [answers, setAnswers] = useState({});        // catId -> 'yes' | 'no'
   /* Pre-collected, click-only event details (Step 0). */
-  const [wizCity,  setWizCity]  = useState("");
-  const [wizDate,  setWizDate]  = useState("");
-  const [wizStart, setWizStart] = useState("");
-  const [wizEnd,   setWizEnd]   = useState("");
+  const [wizCity,  setWizCity]  = useState(draft0?.city  || "");
+  const [wizDate,  setWizDate]  = useState(draft0?.date  || "");
+  const [wizStart, setWizStart] = useState(draft0?.start || "");
+  const [wizEnd,   setWizEnd]   = useState(draft0?.end   || "");
   /* Guest count is collected here rather than at checkout because every step
      after this one filters on it. A venue that holds 80 should never be
      offered to someone expecting 300, and it cannot be hidden if nobody has
      been asked. */
-  const [wizGuests, setWizGuests] = useState("");
+  const [wizGuests, setWizGuests] = useState(draft0?.guests || "");
   /* Empty means "finishes the same day". Storing the absence rather than a
      copy of the start date keeps same-day bookings writing end_date = null,
      which is exactly what the column means. */
-  const [wizEndDate, setWizEndDate] = useState("");
+  const [wizEndDate, setWizEndDate] = useState(draft0?.endDate || "");
   const endSameDay = !wizEndDate || wizEndDate === wizDate;
 
   /* Each step of the builder starts at its top. The page used to stay where
@@ -8548,16 +9024,64 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
     </div>
   );
 
+  /* ── PLANNER: a PLUJ planner builds the whole event ── */
+  if (phase === "plan") {
+    return (
+      <PlannerRequestForm
+        details={{ city: wizCity, date: wizDate, endDate: endSameDay ? "" : wizEndDate,
+                   start: wizStart, end: wizEnd, guests: wizGuests }}
+        initial={draft0}
+        user={user}
+        onNeedLogin={onNeedLogin}
+        onOpenRequests={onOpenRequests}
+        onBack={() => setPhase("details")}
+        onExit={() => { clearPlanDraft(); onExit(); }} />
+    );
+  }
+
   /* ── STEP 0: event details (location / date / time) — all click-based ── */
   if (phase === "details") {
     const ready = wizCity && wizDate && wizStart && wizEnd && Number(wizGuests) > 0;
+    const planner = mode === "planner";
     return (
       <div className="fade-up" style={{ maxWidth:640, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:22 }}>
           <h1 style={{ fontFamily:"var(--display)", fontSize:30, fontWeight:900, margin:"0 0 6px" }}>
             Build My Event
           </h1>
-          <p style={{ fontSize:14, color:C.midGray, margin:0 }}>First, the where and when. Just tap — no typing needed.</p>
+          <p style={{ fontSize:14, color:C.midGray, margin:0 }}>
+            {planner ? "First, the where and when. Then tell us your vision." : "First, the where and when. Just tap — no typing needed."}
+          </p>
+        </div>
+
+        {/* Do it yourself, or hand it to a PLUJ planner. */}
+        <p id="build-mode-label" style={{ fontSize:13, fontWeight:800, margin:"0 0 7px" }}>How do you want to build it?</p>
+        <div role="radiogroup" aria-labelledby="build-mode-label"
+          style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(min(100%, 250px), 1fr))", gap:10, marginBottom:22 }}>
+          {[
+            ["self",    "wand",      "I'll pick my vendors",     "Choose each vendor yourself, step by step."],
+            ["planner", "concierge", "A PLUJ planner builds it", "Tell us your vision and budget. We take care of everything."],
+          ].map(([id, icon, title, desc]) => {
+            const on = mode === id;
+            return (
+              <button type="button" role="radio" aria-checked={on} key={id} onClick={() => setMode(id)} className="btn"
+                data-testid={`build-mode-${id}`}
+                style={{ textAlign:"left", display:"flex", gap:12, alignItems:"flex-start", padding:"14px 16px",
+                         borderRadius:16, border:`1.5px solid ${on ? C.orange : C.border}`,
+                         background: on ? "#EEF2FF" : "#fff",
+                         boxShadow: on ? "0 0 0 3px rgba(30,64,255,0.10)" : "none" }}>
+                <span style={{ width:42, height:42, borderRadius:12, flexShrink:0, display:"grid", placeItems:"center",
+                               background: on ? C.orange : "#ECEFFF", color: on ? "#fff" : C.cobalt,
+                               transition:"background 180ms ease, color 180ms ease" }}>
+                  <Icon name={icon} size={23} stroke={1.7} />
+                </span>
+                <span style={{ minWidth:0 }}>
+                  <span style={{ display:"block", fontSize:14.5, fontWeight:800, color:C.black }}>{title}</span>
+                  <span style={{ display:"block", fontSize:12.5, color:C.midGray, marginTop:3, lineHeight:1.45 }}>{desc}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Location */}
@@ -8651,7 +9175,8 @@ function BuildEventWizard({ vendorsFor, cart, addToCart, rmFromCart, onView, fav
           </>
         )}
 
-        <button onClick={() => setPhase("type")} disabled={!ready} className="btn"
+        <button onClick={() => setPhase(planner ? "plan" : "type")} disabled={!ready} className="btn"
+          data-testid="build-continue"
           style={{ width:"100%", padding:"14px 0", borderRadius:13, border:"none",
                    background: ready ? C.orange : "#E5E7EB", color: ready ? "#fff" : C.lightGray,
                    fontSize:15, fontWeight:800, cursor: ready ? "pointer" : "default",
@@ -10269,10 +10794,121 @@ const ICON_PATHS = {
   alert:      <><path d="M12 4.2 2.9 19.6h18.2z"/><path d="M12 10.2v4.2M12 17.1v.2"/></>,
   bouquet:    <><circle cx="12" cy="6.4" r="2.4"/><circle cx="8" cy="9" r="2.4"/><circle cx="16" cy="9" r="2.4"/><path d="M8.2 13.2h7.6l-2.3 7.8h-3z"/><path d="M10.2 11.2l1.3 2M13.8 11.2l-1.3 2"/></>,
   refresh:    <><path d="M19.6 12a7.6 7.6 0 1 1-2.2-5.4"/><path d="M19.8 4.4v4.2h-4.2"/></>,
+  /* 23 Nov 2026: one icon per service (subcategory), so the service cards and
+     pills read at a glance. These two are drawn here like the ones above; the
+     rest below are from Lucide (lucide.dev, ISC License, Copyright (c) Lucide
+     Contributors), the same 24-unit grid, round ends and currentColor, drawn
+     at this set's stroke width. */
+  drone:      <><rect x="9.4" y="9.9" width="5.2" height="4.2" rx="1.3"/><path d="M9.4 10.6 7 8.2M14.6 10.6 17 8.2M9.4 13.4 7 15.8M14.6 13.4 17 15.8"/><circle cx="5.4" cy="6.6" r="2.3"/><circle cx="18.6" cy="6.6" r="2.3"/><circle cx="5.4" cy="17.4" r="2.3"/><circle cx="18.6" cy="17.4" r="2.3"/></>,
+  barber:     <><rect x="8.4" y="5" width="7.2" height="14" rx="2"/><path d="M7 3.4h10M7 20.6h10"/><path d="M8.4 9.6l7.2-3.4M8.4 13.6l7.2-3.4M8.4 17.6l7.2-3.4"/></>,
+  warehouse:  <><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12"/><path d="M6 14h12"/><rect width="12" height="12" x="6" y="10"/></>,
+  school:     <><path d="M14 22v-4a2 2 0 1 0-4 0v4"/><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10"/><path d="M18 5v17"/><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6"/><path d="M6 5v17"/><circle cx="12" cy="9" r="2"/></>,
+  tower:      <><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></>,
+  cupSoda:    <><path d="m6 8 1.75 12.28a2 2 0 0 0 2 1.72h4.54a2 2 0 0 0 2-1.72L18 8"/><path d="M5 8h14"/><path d="M7 15a6.47 6.47 0 0 1 5 0 6.47 6.47 0 0 0 5 0"/><path d="m12 8 1-6h2"/></>,
+  candy:      <><path d="m9.5 7.5-2 2a4.95 4.95 0 1 0 7 7l2-2a4.95 4.95 0 1 0-7-7Z"/><path d="M14 6.5v10"/><path d="M10 7.5v10"/><path d="m16 7 1-5 1.37.68A3 3 0 0 0 19.7 3H21v1.3c0 .46.1.92.32 1.33L22 7l-5 1"/><path d="m8 17-1 5-1.37-.68A3 3 0 0 0 4.3 21H3v-1.3a3 3 0 0 0-.32-1.33L2 17l5-1"/></>,
+  chefHat:    <><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"/><path d="M6 17h12"/></>,
+  ham:        <><path d="M13.144 21.144A7.274 10.445 45 1 0 2.856 10.856"/><path d="M13.144 21.144A7.274 4.365 45 0 0 2.856 10.856a7.274 4.365 45 0 0 10.288 10.288"/><path d="M16.565 10.435 18.6 8.4a2.501 2.501 0 1 0 1.65-4.65 2.5 2.5 0 1 0-4.66 1.66l-2.024 2.025"/><path d="m8.5 16.5-1-1"/></>,
+  beef:       <><circle cx="12.5" cy="8.5" r="2.5"/><path d="M12.5 2a6.5 6.5 0 0 0-6.22 4.6c-1.1 3.13-.78 3.9-3.18 6.08A3 3 0 0 0 5 18c4 0 8.4-1.8 11.4-4.3A6.5 6.5 0 0 0 12.5 2Z"/><path d="m18.5 6 2.19 4.5a6.48 6.48 0 0 1 .31 2 6.49 6.49 0 0 1-2.6 5.2C15.4 20.2 11 22 7 22a3 3 0 0 1-2.68-1.66L2.4 16.5"/></>,
+  coffee:     <><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></>,
+  iceCream:   <><path d="m7 11 4.08 10.35a1 1 0 0 0 1.84 0L17 11"/><path d="M17 7A5 5 0 0 0 7 7"/><path d="M17 7a2 2 0 0 1 0 4H7a2 2 0 0 1 0-4"/></>,
+  guitar:     <><path d="m11.9 12.1 4.514-4.514"/><path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z"/><path d="m6 16 2 2"/><path d="M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z"/><circle cx="11.5" cy="12.5" r=".5" fill="currentColor"/></>,
+  micVocal:   <><path d="m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12"/><path d="M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5"/><circle cx="16" cy="7" r="5"/></>,
+  drama:      <><path d="M10 11h.01"/><path d="M14 6h.01"/><path d="M18 6h.01"/><path d="M6.5 13.1h.01"/><path d="M22 5c0 9-4 12-6 12s-6-3-6-12c0-2 2-3 6-3s6 1 6 3"/><path d="M17.4 9.9c-.8.8-2 .8-2.8 0"/><path d="M10.1 7.1C9 7.2 7.7 7.7 6 8.6c-3.5 2-4.7 3.9-3.7 5.6 4.5 7.8 9.5 8.4 11.2 7.4.9-.5 1.9-2.1 1.9-4.7"/><path d="M9.1 16.5c.3-1.1 1.4-1.7 2.4-1.4"/></>,
+  magic:      <><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></>,
+  laugh:      <><circle cx="12" cy="12" r="10"/><path d="M18 13a6 6 0 0 1-6 5 6 6 0 0 1-6-5h12Z"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></>,
+  piano:      <><path d="M18.5 8c-1.4 0-2.6-.8-3.2-2A6.87 6.87 0 0 0 2 9v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.5C22 9.6 20.4 8 18.5 8"/><path d="M2 14h20"/><path d="M6 14v4"/><path d="M10 14v4"/><path d="M14 14v4"/><path d="M18 14v4"/></>,
+  listMusic:  <><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></>,
+  theater:    <><path d="M2 10s3-3 3-8"/><path d="M22 10s-3-3-3-8"/><path d="M10 2c0 4.4-3.6 8-8 8"/><path d="M14 2c0 4.4 3.6 8 8 8"/><path d="M2 10s2 2 2 5"/><path d="M22 10s-2 2-2 5"/><path d="M8 15h8"/><path d="M2 22v-1a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1"/><path d="M14 22v-1a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1"/></>,
+  flower2:    <><path d="M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1"/><circle cx="12" cy="8" r="2"/><path d="M12 10v12"/><path d="M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z"/><path d="M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z"/></>,
+  signpost:   <><path d="M10 9H4L2 7l2-2h6"/><path d="M14 5h6l2 2-2 2h-6"/><path d="M10 22V4a2 2 0 1 1 4 0v18"/><path d="M8 22h8"/></>,
+  gift:       <><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></>,
+  boxTruck:   <><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></>,
+  hardHat:    <><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M14 6a6 6 0 0 1 6 6v3"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><rect x="2" y="15" width="20" height="4" rx="1"/></>,
+  roller:     <><rect width="16" height="6" x="2" y="2" rx="2"/><path d="M10 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect width="4" height="6" x="8" y="16" rx="1"/></>,
+  parking:    <><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></>,
+  spray:      <><path d="M3 3h.01"/><path d="M7 5h.01"/><path d="M11 7h.01"/><path d="M3 7h.01"/><path d="M7 9h.01"/><path d="M3 11h.01"/><rect width="4" height="4" x="15" y="5"/><path d="m19 9 2 2v10c0 .6-.4 1-1 1h-6c-.6 0-1-.4-1-1V11l2-2"/><path d="m13 14 8-2"/><path d="m13 19 8-2"/></>,
+  tent:       <><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></>,
+  plates:     <><path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"/><path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7"/><path d="m2.1 21.8 6.4-6.3"/><path d="m19 5-7 7"/></>,
+  sofa:       <><path d="M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3"/><path d="M2 16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v9"/></>,
+  disc:       <><circle cx="12" cy="12" r="10"/><path d="M6 12c0-1.7.7-3.2 1.8-4.2"/><circle cx="12" cy="12" r="2"/><path d="M18 12c0 1.7-.7 3.2-1.8 4.2"/></>,
+  thermo:     <><path d="M12 9a4 4 0 0 0-2 7.5"/><path d="M12 3v2"/><path d="m6.6 18.4-1.4 1.4"/><path d="M20 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/><path d="M4 13H2"/><path d="M6.34 7.34 4.93 5.93"/></>,
+  toilet:     <><path d="M7 12h13a1 1 0 0 1 1 1 5 5 0 0 1-5 5h-.598a.5.5 0 0 0-.424.765l1.544 2.47a.5.5 0 0 1-.424.765H5.402a.5.5 0 0 1-.424-.765L7 18"/><path d="M8 18a5 5 0 0 1-5-5V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8"/></>,
+  plugZap:    <><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></>,
+  castle:     <><path d="M22 20v-9H2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2Z"/><path d="M18 11V4H6v7"/><path d="M15 22v-4a3 3 0 0 0-3-3a3 3 0 0 0-3 3v4"/><path d="M22 11V9"/><path d="M2 11V9"/><path d="M6 4V2"/><path d="M18 4V2"/><path d="M10 4V2"/><path d="M14 4V2"/></>,
+  dice:       <><rect width="12" height="12" x="2" y="10" rx="2" ry="2"/><path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"/><path d="M6 18h.01"/><path d="M10 14h.01"/><path d="M15 6h.01"/><path d="M18 9h.01"/></>,
+  beer:       <><path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/><path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z"/><path d="M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/></>,
+  pot:        <><path d="M2 12h20"/><path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"/><path d="m4 8 16-4"/><path d="m8.86 6.78-.45-1.81a2 2 0 0 1 1.45-2.43l1.94-.48a2 2 0 0 1 2.43 1.46l.45 1.8"/></>,
+  tv:         <><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></>,
+  bulb:       <><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></>,
+  projector:  <><path d="M5 7 3 5"/><path d="M9 6V3"/><path d="m13 7 2-2"/><circle cx="9" cy="13" r="3"/><path d="M11.83 12H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h2.17"/><path d="M16 16h2"/></>,
+  video:      <><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></>,
+  studioMic:  <><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></>,
+  clapper:    <><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></>,
+  image:      <><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></>,
+  rotate3d:   <><path d="M16.466 7.5C15.643 4.237 13.952 2 12 2 9.239 2 7 6.477 7 12s2.239 10 5 10c.342 0 .677-.069 1-.2"/><path d="m15.194 13.707 3.814 1.86-1.86 3.814"/><path d="M19 15.57c-1.804.885-4.274 1.43-7 1.43-5.523 0-10-2.239-10-5s4.477-5 10-5c4.838 0 8.873 1.718 9.8 4"/></>,
+  martini:    <><path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/></>,
+  platter:    <><path d="M12 3V2"/><path d="m15.4 17.4 3.2-2.8a2 2 0 1 1 2.8 2.9l-3.6 3.3c-.7.8-1.7 1.2-2.8 1.2h-4c-1.1 0-2.1-.4-2.8-1.2l-1.302-1.464A1 1 0 0 0 6.151 19H5"/><path d="M2 14h12a2 2 0 0 1 0 4h-2"/><path d="M4 10h16"/><path d="M5 10a7 7 0 0 1 14 0"/><path d="M5 14v6a1 1 0 0 1-1 1H2"/></>,
+  idCard:     <><path d="M16 10h2"/><path d="M16 14h2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><circle cx="9" cy="11" r="2"/><rect x="2" y="5" width="20" height="14" rx="2"/></>,
+  ticket:     <><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></>,
+  baby:       <><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/></>,
+  scissors:   <><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></>,
+  nailBrush:  <><path d="M10 2v2"/><path d="M14 2v4"/><path d="M17 2a1 1 0 0 1 1 1v9H6V3a1 1 0 0 1 1-1z"/><path d="M6 12a1 1 0 0 0-1 1v1a2 2 0 0 0 2 2h2a1 1 0 0 1 1 1v2.9a2 2 0 1 0 4 0V17a1 1 0 0 1 1-1h2a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1"/></>,
+  shirt:      <><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></>,
+  bus:        <><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/></>,
+  busFront:   <><path d="M4 6 2 7"/><path d="M10 6h4"/><path d="m22 7-2-1"/><rect width="16" height="16" x="4" y="3" rx="2"/><path d="M4 11h16"/><path d="M8 15h.01"/><path d="M16 15h.01"/><path d="M6 19v2"/><path d="M18 21v-2"/></>,
+  carSide:    <><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></>,
+  carFront:   <><path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8"/><path d="M7 14h.01"/><path d="M17 14h.01"/><rect width="18" height="8" x="3" y="10" rx="2"/><path d="M5 18v2"/><path d="M19 18v2"/></>,
+  palette:    <><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></>,
+  mask:       <><path d="M18 11c-1.5 0-2.5.5-3 2"/><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2z"/><path d="M6 11c1.5 0 2.5.5 3 2"/></>,
+  rabbit:     <><path d="M13 16a3 3 0 0 1 2.24 5"/><path d="M18 12h.01"/><path d="M18 21h-8a4 4 0 0 1-4-4 7 7 0 0 1 7-7h.2L9.6 6.4a1 1 0 1 1 2.8-2.8L15.8 7h.2c3.3 0 6 2.7 6 6v1a2 2 0 0 1-2 2h-1a3 3 0 0 0-3 3"/><path d="M20 8.54V4a2 2 0 1 0-4 0v3"/><path d="M7.612 12.524a3 3 0 1 0-1.6 4.3"/></>,
+  gamepad:    <><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></>,
+  shapes:     <><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></>,
 };
 export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo:"camera", production:"flower",
   rentals:"chair", av:"speaker", staff:"cocktail", beauty:"lipstick", transport:"car", kids:"balloons",
   logistics:"clipboard", other:"dots", build:"wand", all:"sparkle" };
+/* The icon for each service (subcategory id in CAT_SUBS). Anything missing
+   falls back to its category's icon, so a new service never shows a blank. */
+export const SUB_ICON = {
+  /* Places & Venues */
+  venues:"columns", restaurants:"cutlery", parks:"tree", hotels:"bed", rooftops:"tower",
+  warehouses:"warehouse", estates:"house", community:"school",
+  /* Food & Drinks */
+  "food-trucks":"truck", catering:"cloche", "drink-trucks":"cupSoda", "mobile-bars":"cocktail",
+  desserts:"candy", "private-chef":"chefHat", grazing:"ham", cultural:"globe", bbq:"beef",
+  cakes:"cake", "coffee-bars":"coffee", "treat-carts":"iceCream",
+  /* Music & Entertainment */
+  djs:"headphones", "live-bands":"guitar", singers:"micVocal", performers:"drama", entertainers:"magic",
+  comedians:"laugh", "kids-ent":"balloons", instrumentalists:"piano", "mc-hosts":"mic",
+  karaoke:"listMusic", "tribute-acts":"star", speakers:"presentation",
+  /* Decor & Design */
+  decor:"sparkle", flowers:"bouquet", balloons:"balloons", draping:"theater", tablescapes:"flower2",
+  signage:"signpost", "special-fx":"party", invitations:"mail", favors:"gift",
+  /* Planning & Logistics */
+  "event-planner":"calendar", "event-manager":"clipboard", "truck-rental":"boxTruck", drivers:"carFront",
+  contractors:"hardHat", decorators:"roller", security:"shield", valet:"parking", cleanup:"spray",
+  officiants:"ring",
+  /* Rentals */
+  "tables-chairs":"chair", tents:"tent", linens:"plates", lounge:"sofa", "dance-floors":"disc",
+  climate:"thermo", restrooms:"toilet", power:"plugZap", inflatables:"castle", games:"dice",
+  "bar-rentals":"beer", "catering-equipment":"pot",
+  /* Audio & Visual */
+  sound:"speaker", stages:"theater", "video-walls":"tv", lighting:"bulb", projectors:"projector",
+  cameras:"video", microphones:"studioMic",
+  /* Photo & Video */
+  photographers:"camera", videographers:"clapper", "photo-booths":"image", "booth-360":"rotate3d", drone:"drone",
+  /* Staff & Service */
+  bartenders:"martini", servers:"platter", "event-staff":"idCard", attendants:"ticket", childcare:"baby",
+  /* Beauty & Style */
+  hair:"scissors", makeup:"lipstick", nails:"nailBrush", barbers:"barber", attire:"shirt",
+  /* Transportation */
+  limos:"car", "party-buses":"bus", "classic-cars":"carSide", shuttles:"busFront", carriages:"crown",
+  /* Kids & Family */
+  "face-painting":"palette", characters:"mask", "balloon-artists":"balloons", "petting-zoos":"rabbit",
+  "game-trucks":"gamepad", "kids-crafts":"shapes",
+  other:"plus",
+};
+export function subIcon(sub, catId) { return SUB_ICON[sub && sub.id] || CAT_ICON[catId] || "dots"; }
 /* Emoji that may still arrive as text (older saved notifications, labels
    built from data) and the monoline icon that replaces each one. */
 const EMOJI_ICON = {
@@ -15525,7 +16161,8 @@ export default function PlujApp() {
               <ul className="dir-grid sub" style={{ marginBottom:40 }}>
                 {subs.map(s => (
                   <li key={s.id}>
-                    <button onClick={()=>setActiveSub(s.id)}>
+                    <button onClick={()=>setActiveSub(s.id)} data-testid={`sub-${s.id}`}>
+                      <span className="ic" aria-hidden="true"><Icon name={subIcon(s, activeCat)} size={24} stroke={1.6} /></span>
                       <span className="dir-name">{s.l}</span>
                       <span className="dir-subs">{s.d}</span>
                     </button>
@@ -15561,7 +16198,7 @@ export default function PlujApp() {
                 {subs.map(s=>(
                   <button key={s.id} onClick={()=>setActiveSub(s.id)} className={activeSub===s.id ? "on" : ""}
                     aria-pressed={activeSub===s.id}>
-                    {s.l}
+                    <Ico n={subIcon(s, activeCat)} /> {s.l}
                   </button>
                 ))}
               </div>
@@ -15597,6 +16234,11 @@ export default function PlujApp() {
               onToggleFav={handleToggleFav}
               onReviewSend={(details)=>{ setBuildDetails(details); setCartOpen(true); }}
               onExit={()=>pickCat("all")}
+              /* "A PLUJ planner builds it": the request needs an account, and
+                 afterwards the host can jump to where they follow it. */
+              user={user && user.type !== "guest" ? user : null}
+              onNeedLogin={()=>setAuthModal(true)}
+              onOpenRequests={()=>{ setAccountTab("requests"); setAccountConvId(null); setAccountOpen(true); }}
             />
           )}
 

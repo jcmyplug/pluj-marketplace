@@ -29,6 +29,21 @@ describe("analytics events", () => {
   });
 });
 
+describe("service icons", () => {
+  it("every service (subcategory) has its own icon, and every icon exists", () => {
+    const s = read("src/PlujMarketplace.jsx");
+    const paths = s.slice(s.indexOf("const ICON_PATHS = {"), s.indexOf("export const CAT_ICON"));
+    const icons = new Set([...paths.matchAll(/^ {2}([A-Za-z0-9]+):/gm)].map((m) => m[1]));
+    const map = s.slice(s.indexOf("export const SUB_ICON = {"), s.indexOf("export function subIcon"));
+    const pairs = [...map.matchAll(/"?([a-z0-9-]+)"?:"([A-Za-z0-9]+)"/g)].map((m) => [m[1], m[2]]);
+    const subsSrc = s.slice(s.indexOf("const FOOD_SUBS"), s.indexOf("export const CAT_SUBS"));
+    const subs = [...subsSrc.matchAll(/\{ id:"([a-z0-9-]+)", *l:"/g)].map((m) => m[1]);
+    const mapped = new Set(pairs.map(([k]) => k));
+    expect(subs.filter((id) => !mapped.has(id))).toEqual([]);
+    expect(pairs.filter(([, v]) => !icons.has(v)).map(([k, v]) => `${k} -> ${v}`)).toEqual([]);
+  });
+});
+
 describe("Spanish dictionary", () => {
   const dict = JSON.parse(read("src/i18n-es.json"));
   it("templates keep their placeholders", () => {
