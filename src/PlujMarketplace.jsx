@@ -1081,7 +1081,6 @@ const LOGISTICS_SUBS = [
   { id:"security",      l:"Security",                e:"🛡️", c:"#FFF1F2", a:"#BE123C", d:"Event security & VIP detail" },
   { id:"valet",         l:"Valet & Parking",         e:"🅿️", c:"#F5F3FF", a:"#7C3AED", d:"Valet attendants & lot management" },
   { id:"cleanup",       l:"Cleanup Crews",           e:"🧹", c:"#ECFDF5", a:"#059669", d:"Pre/post event cleaning" },
-  { id:"officiants",    l:"Officiants & Ceremony",   e:"💍", c:"#FDF4FF", a:"#9333EA", d:"Officiants and ceremony coordinators" },
 ];
 const PLACES_SUBS = [
   { id:"venues",      l:"Event Venues",        e:"🏛️", c:"#F5F3FF", a:"#7C3AED", d:"Halls, ballrooms & event spaces" },
@@ -1090,7 +1089,7 @@ const PLACES_SUBS = [
   { id:"hotels",      l:"Hotels & Ballrooms",  e:"🏨", c:"#EFF6FF", a:"#1D4ED8", d:"Hotel event & banquet rooms" },
   { id:"rooftops",    l:"Rooftops & Lofts",    e:"🌆", c:"#FDF2F8", a:"#BE185D", d:"Rooftop decks & loft spaces" },
   { id:"warehouses",  l:"Warehouses & Studios",e:"🏭", c:"#FEFCE8", a:"#A16207", d:"Industrial & blank-canvas venues" },
-  { id:"estates",     l:"Private Estates",     e:"🏡", c:"#FFF1F2", a:"#BE123C", d:"Mansions, ranches & backyards" },
+  { id:"estates",     l:"Private Estates",     e:"🏡", c:"#FFF1F2", a:"#BE123C", d:"Houses, mansions, ranches, pools, lakes & backyards" },
   { id:"community",   l:"Community Halls",     e:"🏫", c:"#ECFDF5", a:"#059669", d:"Rec centers & community rooms" },
 ];
 const RENTALS_SUBS = [
@@ -1129,6 +1128,16 @@ const STAFF_SUBS = [
   { id:"event-staff",   l:"Event Staff",         e:"🧑‍💼", c:"#F5F3FF", a:"#7C3AED", d:"Greeters, ushers & check-in" },
   { id:"attendants",    l:"Attendants & Coat Check", e:"🧥", c:"#FFF1F2", a:"#BE123C", d:"Coat check, restroom & gift attendants" },
   { id:"childcare",     l:"Event Childcare",     e:"🧸", c:"#ECFDF5", a:"#059669", d:"Sitters and kids' rooms at events" },
+  /* Wedding specialists (23 Nov 2026), so a host planning a wedding finds
+     every person the day needs in one place. "officiants" moved here from
+     Planning & Logistics (no listing used it yet, so nothing had to move). */
+  { id:"officiants",         l:"Wedding Officiants",              e:"💍", c:"#FDF4FF", a:"#9333EA", d:"Ministers, judges & celebrants for any ceremony" },
+  { id:"wedding-planners",   l:"Wedding Planners & Coordinators", e:"🗓️", c:"#FFF1F7", a:"#BE185D", d:"Full planning, month-of & day-of coordination" },
+  { id:"bridal-attendants",  l:"Bridal Attendants",               e:"👰", c:"#FDF2F8", a:"#BE185D", d:"Dress, bustle & touch-up help all day" },
+  { id:"ceremony-musicians", l:"Ceremony Musicians",              e:"🎻", c:"#F5F3FF", a:"#7C3AED", d:"Harpists, string quartets & soloists for the aisle" },
+  { id:"seamstresses",       l:"Seamstresses & Alterations",      e:"🧵", c:"#FEFCE8", a:"#A16207", d:"Hems, bustles & last-minute fittings" },
+  { id:"henna",              l:"Henna & Mehndi Artists",          e:"✋", c:"#FFF7ED", a:"#C2410C", d:"Bridal & guest henna designs" },
+  { id:"interpreters",       l:"Ceremony Interpreters",           e:"🗣️", c:"#EFF6FF", a:"#1D4ED8", d:"Bilingual ceremonies: Spanish, ASL & more" },
 ];
 const BEAUTY_SUBS = [
   { id:"hair",          l:"Hair Stylists",       e:"💇", c:"#FDF2F8", a:"#BE185D", d:"Bridal, party & on-site styling" },
@@ -1496,12 +1505,12 @@ export function matchesEventType(v, typeId) {
 const EVENT_PACKAGES = [
   { id:"wedding", icon:"💍", label:"Wedding", color:"#FDF4FF", accent:"#9333EA",
     desc:"Ceremony, reception & everything in between",
-    checklist:["Venue","DJ","Catering","Cake","Décor","Event Planner","Rentals (Linens, Chairs, Tables)","Audio & Visual","Photography","Live Band","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
-    subs:["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","officiants","bartenders","servers","invitations","cakes","attire"] },
+    checklist:["Venue","Officiant","Wedding Planner","Photography","Catering","DJ","Cake","Flowers","Décor","Hair & Makeup","Attire","Live Band","Rentals (Linens, Chairs, Tables)","Audio & Visual","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
+    subs:["venues","officiants","wedding-planners","photographers","catering","djs","cakes","flowers","decor","hair","makeup","attire","videographers","live-bands","ceremony-musicians","bridal-attendants","seamstresses","henna","interpreters","desserts","event-planner","event-manager","tables-chairs","linens","sound","lighting","cameras","cleanup","drivers","limos","entertainers","restrooms","security","photo-booths","bartenders","servers","invitations","mc-hosts"] },
   { id:"wedding-events", icon:"💐", label:"Wedding Events", color:"#FFF1F7", accent:"#BE185D",
     desc:"Bridal showers, engagement parties, rehearsal dinners & more",
     checklist:["Venue","Catering","Cake / Desserts","Décor & Florals","Bar Service","Photography","DJ / Live Music","Rentals (Linens, Chairs, Tables)","Invitations","Favors & Gifts","Event Planner","Hair & Makeup"],
-    subs:["venues","restaurants","catering","desserts","cakes","decor","flowers","balloons","mobile-bars","bartenders","photographers","photo-booths","djs","live-bands","tables-chairs","linens","invitations","favors","event-planner","hair","makeup","servers"] },
+    subs:["venues","restaurants","catering","desserts","cakes","decor","flowers","balloons","mobile-bars","bartenders","photographers","photo-booths","djs","live-bands","tables-chairs","linens","invitations","favors","event-planner","wedding-planners","hair","makeup","henna","servers"] },
   { id:"quince", icon:"👑", label:"Quinceañera / Sweet 16", color:"#FDF2F8", accent:"#BE185D",
     desc:"Elegant milestone celebrations",
     checklist:["Venue","DJ","Catering","Cake","Décor","Event Planner","Rentals (Linens, Chairs, Tables)","Audio & Visual","Photography","Live Band","Clean Up","Drivers & Transport","Animation / Entertainer","Portable Restrooms","Security","Registry for Gifts"],
@@ -1541,8 +1550,8 @@ const EVENT_PACKAGES = [
 ];
 
 const RECS = {
-  "Wedding": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","officiants","bartenders","servers","invitations","cakes","attire"],
-  "Wedding Events": ["venues","restaurants","catering","desserts","cakes","decor","flowers","balloons","mobile-bars","bartenders","photographers","photo-booths","djs","live-bands","tables-chairs","linens","invitations","favors","event-planner","hair","makeup","servers"],
+  "Wedding": ["venues","officiants","wedding-planners","photographers","catering","djs","cakes","flowers","decor","hair","makeup","attire","videographers","live-bands","ceremony-musicians","bridal-attendants","seamstresses","henna","interpreters","desserts","event-planner","event-manager","tables-chairs","linens","sound","lighting","cameras","cleanup","drivers","limos","entertainers","restrooms","security","photo-booths","bartenders","servers","invitations","mc-hosts"],
+  "Wedding Events": ["venues","restaurants","catering","desserts","cakes","decor","flowers","balloons","mobile-bars","bartenders","photographers","photo-booths","djs","live-bands","tables-chairs","linens","invitations","favors","event-planner","wedding-planners","hair","makeup","henna","servers"],
   "Quinceañera / Sweet 16": ["venues","djs","catering","desserts","decor","event-planner","tables-chairs","linens","sound","lighting","cameras","live-bands","cleanup","drivers","entertainers","restrooms","security","photographers","videographers","photo-booths","hair","makeup","limos","bartenders","servers","invitations","cakes","attire","mc-hosts"],
   "Corporate Event": ["venues","djs","live-bands","catering","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","videographers","event-staff","bartenders","shuttles","speakers","signage","mc-hosts"],
   "Birthday Party": ["venues","djs","live-bands","catering","food-trucks","mobile-bars","decor","valet","sound","lighting","cameras","cleanup","entertainers","desserts","restrooms","tables-chairs","power","security","photographers","photo-booths","bartenders","cakes","party-buses","karaoke"],
@@ -10801,9 +10810,12 @@ const ICON_PATHS = {
      at this set's stroke width. */
   drone:      <><rect x="9.4" y="9.9" width="5.2" height="4.2" rx="1.3"/><path d="M9.4 10.6 7 8.2M14.6 10.6 17 8.2M9.4 13.4 7 15.8M14.6 13.4 17 15.8"/><circle cx="5.4" cy="6.6" r="2.3"/><circle cx="18.6" cy="6.6" r="2.3"/><circle cx="5.4" cy="17.4" r="2.3"/><circle cx="18.6" cy="17.4" r="2.3"/></>,
   barber:     <><rect x="8.4" y="5" width="7.2" height="14" rx="2"/><path d="M7 3.4h10M7 20.6h10"/><path d="M8.4 9.6l7.2-3.4M8.4 13.6l7.2-3.4M8.4 17.6l7.2-3.4"/></>,
+  /* 23 Nov 2026: a hotel with three stars, for Hotels & Ballrooms. */
+  hotel:      <><path d="M12.00 1.00L12.70 2.63L14.47 2.80L13.14 3.97L13.53 5.70L12.00 4.80L10.47 5.70L10.86 3.97L9.53 2.80L11.30 2.63z"/><path d="M6.40 3.25L6.95 4.54L8.35 4.67L7.30 5.59L7.60 6.96L6.40 6.24L5.20 6.96L5.50 5.59L4.45 4.67L5.85 4.54z"/><path d="M17.60 3.25L18.15 4.54L19.55 4.67L18.50 5.59L18.80 6.96L17.60 6.24L16.40 6.96L16.70 5.59L15.65 4.67L17.05 4.54z"/><path d="M7 21V10.9l1.7-1.5h6.6l1.7 1.5V21"/><path d="M5 21h14"/><path d="M9.4 12.4h1.3M13.3 12.4h1.3M9.4 15h1.3M13.3 15h1.3"/><path d="M10.6 21v-3.4h2.8V21"/></>,
+  /* A rooftop terrace (umbrella, railing, stair tower), for Rooftops & Lofts. */
+  rooftop:    <><path d="M5 13.6V21h14v-7.4"/><rect x="3" y="11" width="18" height="2.6" rx=".9"/><path d="M4.6 11V8.8h7V11M6.9 8.8V11M9.3 8.8V11"/><path d="M8.1 8.8V4.8M4.8 4.8 8.1 2l3.3 2.8z"/><rect x="14.4" y="3.6" width="5" height="7.4" rx="1"/><path d="M16.2 6.1h1.4M16.2 8.3h1.4"/><path d="M7.4 21v-2.6h3.2V21M8.4 18.4v-2h1.2v2M13.4 21v-2.6h3.2V21M14.4 18.4v-2h1.2v2"/></>,
   warehouse:  <><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12"/><path d="M6 14h12"/><rect width="12" height="12" x="6" y="10"/></>,
   school:     <><path d="M14 22v-4a2 2 0 1 0-4 0v4"/><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10"/><path d="M18 5v17"/><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6"/><path d="M6 5v17"/><circle cx="12" cy="9" r="2"/></>,
-  tower:      <><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></>,
   cupSoda:    <><path d="m6 8 1.75 12.28a2 2 0 0 0 2 1.72h4.54a2 2 0 0 0 2-1.72L18 8"/><path d="M5 8h14"/><path d="M7 15a6.47 6.47 0 0 1 5 0 6.47 6.47 0 0 0 5 0"/><path d="m12 8 1-6h2"/></>,
   candy:      <><path d="m9.5 7.5-2 2a4.95 4.95 0 1 0 7 7l2-2a4.95 4.95 0 1 0-7-7Z"/><path d="M14 6.5v10"/><path d="M10 7.5v10"/><path d="m16 7 1-5 1.37.68A3 3 0 0 0 19.7 3H21v1.3c0 .46.1.92.32 1.33L22 7l-5 1"/><path d="m8 17-1 5-1.37-.68A3 3 0 0 0 4.3 21H3v-1.3a3 3 0 0 0-.32-1.33L2 17l5-1"/></>,
   chefHat:    <><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"/><path d="M6 17h12"/></>,
@@ -10863,6 +10875,14 @@ const ICON_PATHS = {
   rabbit:     <><path d="M13 16a3 3 0 0 1 2.24 5"/><path d="M18 12h.01"/><path d="M18 21h-8a4 4 0 0 1-4-4 7 7 0 0 1 7-7h.2L9.6 6.4a1 1 0 1 1 2.8-2.8L15.8 7h.2c3.3 0 6 2.7 6 6v1a2 2 0 0 1-2 2h-1a3 3 0 0 0-3 3"/><path d="M20 8.54V4a2 2 0 1 0-4 0v3"/><path d="M7.612 12.524a3 3 0 1 0-1.6 4.3"/></>,
   gamepad:    <><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></>,
   shapes:     <><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></>,
+  /* 23 Nov 2026, wedding specialists (Lucide, ISC). */
+  bookHeart:   <><path d="M16 8.2A2.22 2.22 0 0 0 13.8 6c-.8 0-1.4.3-1.8.9-.4-.6-1-.9-1.8-.9A2.22 2.22 0 0 0 8 8.2c0 .6.3 1.2.7 1.6A226.652 226.652 0 0 0 12 13a404 404 0 0 0 3.3-3.1 2.413 2.413 0 0 0 .7-1.7"/><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></>,
+  calendarHeart: <><path d="M3 10h18V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M21.29 14.7a2.43 2.43 0 0 0-2.65-.52c-.3.12-.57.3-.8.53l-.34.34-.35-.34a2.43 2.43 0 0 0-2.65-.53c-.3.12-.56.3-.79.53-.95.94-1 2.53.2 3.74L17.5 22l3.6-3.55c1.2-1.21 1.14-2.8.19-3.74Z"/></>,
+  heartHandshake: <><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/><path d="m18 15-2-2"/><path d="m15 18-2-2"/></>,
+  seam:        <><path d="M5.42 9.42 8 12"/><circle cx="4" cy="8" r="2"/><path d="m14 6-8.58 8.58"/><circle cx="4" cy="16" r="2"/><path d="M10.8 14.8 14 18"/><path d="M16 12h-2"/><path d="M22 12h-2"/></>,
+  hand:        <><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></>,
+  music:       <><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></>,
+  languages:   <><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></>,
 };
 export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo:"camera", production:"flower",
   rentals:"chair", av:"speaker", staff:"cocktail", beauty:"lipstick", transport:"car", kids:"balloons",
@@ -10871,7 +10891,7 @@ export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo
    falls back to its category's icon, so a new service never shows a blank. */
 export const SUB_ICON = {
   /* Places & Venues */
-  venues:"columns", restaurants:"cutlery", parks:"tree", hotels:"bed", rooftops:"tower",
+  venues:"columns", restaurants:"cutlery", parks:"tree", hotels:"hotel", rooftops:"rooftop",
   warehouses:"warehouse", estates:"house", community:"school",
   /* Food & Drinks */
   "food-trucks":"truck", catering:"cloche", "drink-trucks":"cupSoda", "mobile-bars":"cocktail",
@@ -10887,7 +10907,6 @@ export const SUB_ICON = {
   /* Planning & Logistics */
   "event-planner":"calendar", "event-manager":"clipboard", "truck-rental":"boxTruck", drivers:"carFront",
   contractors:"hardHat", decorators:"roller", security:"shield", valet:"parking", cleanup:"spray",
-  officiants:"ring",
   /* Rentals */
   "tables-chairs":"chair", tents:"tent", linens:"plates", lounge:"sofa", "dance-floors":"disc",
   climate:"thermo", restrooms:"toilet", power:"plugZap", inflatables:"castle", games:"dice",
@@ -10899,6 +10918,8 @@ export const SUB_ICON = {
   photographers:"camera", videographers:"clapper", "photo-booths":"image", "booth-360":"rotate3d", drone:"drone",
   /* Staff & Service */
   bartenders:"martini", servers:"platter", "event-staff":"idCard", attendants:"ticket", childcare:"baby",
+  officiants:"bookHeart", "wedding-planners":"calendarHeart", "bridal-attendants":"heartHandshake",
+  "ceremony-musicians":"music", seamstresses:"seam", henna:"hand", interpreters:"languages",
   /* Beauty & Style */
   hair:"scissors", makeup:"lipstick", nails:"nailBrush", barbers:"barber", attire:"shirt",
   /* Transportation */
@@ -10923,7 +10944,7 @@ const EMOJI_ICON = {
   "📦":"box", "🍼":"bottle", "📊":"presentation", "🎓":"gradcap", "🗺":"map", "⚖":"scale", "✏":"pencil",
   "✎":"pencil", "🔑":"key", "☰":"list", "🛒":"cart", "🌙":"moon", "💰":"dollar", "🆓":"tag", "📘":"book",
   "🚩":"flag", "🗑":"trash", "📎":"clip", "🤖":"shield", "📱":"phone", "🧭":"compass", "🏠":"house",
-  "🏬":"building", "🏨":"bed", "🍴":"cutlery", "🌳":"tree", "🏢":"building", "👑":"crown", "✕":"x", "✗":"x",
+  "🏬":"building", "🏨":"hotel", "🍴":"cutlery", "🌳":"tree", "🏢":"building", "👑":"crown", "✕":"x", "✗":"x",
   "⚠":"alert", "🔄":"refresh", "↻":"refresh", "💐":"bouquet", "✦":"sparkle",
 };
 const EMOJI_RE = new RegExp("(" + Object.keys(EMOJI_ICON).sort((a, b) => b.length - a.length).join("|") + ")\uFE0F?", "gu");
