@@ -10810,9 +10810,12 @@ const ICON_PATHS = {
      at this set's stroke width. */
   drone:      <><rect x="9.4" y="9.9" width="5.2" height="4.2" rx="1.3"/><path d="M9.4 10.6 7 8.2M14.6 10.6 17 8.2M9.4 13.4 7 15.8M14.6 13.4 17 15.8"/><circle cx="5.4" cy="6.6" r="2.3"/><circle cx="18.6" cy="6.6" r="2.3"/><circle cx="5.4" cy="17.4" r="2.3"/><circle cx="18.6" cy="17.4" r="2.3"/></>,
   barber:     <><rect x="8.4" y="5" width="7.2" height="14" rx="2"/><path d="M7 3.4h10M7 20.6h10"/><path d="M8.4 9.6l7.2-3.4M8.4 13.6l7.2-3.4M8.4 17.6l7.2-3.4"/></>,
+  /* 23 Nov 2026: a hotel with three stars, for Hotels & Ballrooms. */
+  hotel:      <><path d="M12.00 1.00L12.70 2.63L14.47 2.80L13.14 3.97L13.53 5.70L12.00 4.80L10.47 5.70L10.86 3.97L9.53 2.80L11.30 2.63z"/><path d="M6.40 3.25L6.95 4.54L8.35 4.67L7.30 5.59L7.60 6.96L6.40 6.24L5.20 6.96L5.50 5.59L4.45 4.67L5.85 4.54z"/><path d="M17.60 3.25L18.15 4.54L19.55 4.67L18.50 5.59L18.80 6.96L17.60 6.24L16.40 6.96L16.70 5.59L15.65 4.67L17.05 4.54z"/><path d="M7 21V10.9l1.7-1.5h6.6l1.7 1.5V21"/><path d="M5 21h14"/><path d="M9.4 12.4h1.3M13.3 12.4h1.3M9.4 15h1.3M13.3 15h1.3"/><path d="M10.6 21v-3.4h2.8V21"/></>,
+  /* A rooftop terrace (umbrella, railing, stair tower), for Rooftops & Lofts. */
+  rooftop:    <><path d="M5 13.6V21h14v-7.4"/><rect x="3" y="11" width="18" height="2.6" rx=".9"/><path d="M4.6 11V8.8h7V11M6.9 8.8V11M9.3 8.8V11"/><path d="M8.1 8.8V4.8M4.8 4.8 8.1 2l3.3 2.8z"/><rect x="14.4" y="3.6" width="5" height="7.4" rx="1"/><path d="M16.2 6.1h1.4M16.2 8.3h1.4"/><path d="M7.4 21v-2.6h3.2V21M8.4 18.4v-2h1.2v2M13.4 21v-2.6h3.2V21M14.4 18.4v-2h1.2v2"/></>,
   warehouse:  <><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12"/><path d="M6 14h12"/><rect width="12" height="12" x="6" y="10"/></>,
   school:     <><path d="M14 22v-4a2 2 0 1 0-4 0v4"/><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10"/><path d="M18 5v17"/><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6"/><path d="M6 5v17"/><circle cx="12" cy="9" r="2"/></>,
-  tower:      <><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></>,
   cupSoda:    <><path d="m6 8 1.75 12.28a2 2 0 0 0 2 1.72h4.54a2 2 0 0 0 2-1.72L18 8"/><path d="M5 8h14"/><path d="M7 15a6.47 6.47 0 0 1 5 0 6.47 6.47 0 0 0 5 0"/><path d="m12 8 1-6h2"/></>,
   candy:      <><path d="m9.5 7.5-2 2a4.95 4.95 0 1 0 7 7l2-2a4.95 4.95 0 1 0-7-7Z"/><path d="M14 6.5v10"/><path d="M10 7.5v10"/><path d="m16 7 1-5 1.37.68A3 3 0 0 0 19.7 3H21v1.3c0 .46.1.92.32 1.33L22 7l-5 1"/><path d="m8 17-1 5-1.37-.68A3 3 0 0 0 4.3 21H3v-1.3a3 3 0 0 0-.32-1.33L2 17l5-1"/></>,
   chefHat:    <><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"/><path d="M6 17h12"/></>,
@@ -10888,7 +10891,7 @@ export const CAT_ICON = { places:"pin", food:"cloche", music:"headphones", photo
    falls back to its category's icon, so a new service never shows a blank. */
 export const SUB_ICON = {
   /* Places & Venues */
-  venues:"columns", restaurants:"cutlery", parks:"tree", hotels:"bed", rooftops:"tower",
+  venues:"columns", restaurants:"cutlery", parks:"tree", hotels:"hotel", rooftops:"rooftop",
   warehouses:"warehouse", estates:"house", community:"school",
   /* Food & Drinks */
   "food-trucks":"truck", catering:"cloche", "drink-trucks":"cupSoda", "mobile-bars":"cocktail",
@@ -10941,7 +10944,7 @@ const EMOJI_ICON = {
   "📦":"box", "🍼":"bottle", "📊":"presentation", "🎓":"gradcap", "🗺":"map", "⚖":"scale", "✏":"pencil",
   "✎":"pencil", "🔑":"key", "☰":"list", "🛒":"cart", "🌙":"moon", "💰":"dollar", "🆓":"tag", "📘":"book",
   "🚩":"flag", "🗑":"trash", "📎":"clip", "🤖":"shield", "📱":"phone", "🧭":"compass", "🏠":"house",
-  "🏬":"building", "🏨":"bed", "🍴":"cutlery", "🌳":"tree", "🏢":"building", "👑":"crown", "✕":"x", "✗":"x",
+  "🏬":"building", "🏨":"hotel", "🍴":"cutlery", "🌳":"tree", "🏢":"building", "👑":"crown", "✕":"x", "✗":"x",
   "⚠":"alert", "🔄":"refresh", "↻":"refresh", "💐":"bouquet", "✦":"sparkle",
 };
 const EMOJI_RE = new RegExp("(" + Object.keys(EMOJI_ICON).sort((a, b) => b.length - a.length).join("|") + ")\uFE0F?", "gu");
